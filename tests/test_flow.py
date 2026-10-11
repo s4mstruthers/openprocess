@@ -651,3 +651,106 @@ def test_an_edited_input_file_is_not_served_from_the_cache(tmp_path):
     os.utime(tmp_path / "orders.log.txt", ns=(now.st_atime_ns, now.st_mtime_ns + 1_000_000))
     second = runner.run(wf, previous=first)
     assert len(second.value(log)) == 5 and second.result(log).key != first.result(log).key
+
+
+def test_results_carry_their_provenance_into_files(tmp_path):
+    """Every value a box gives knows the analysis, the box, its settings and the
+    result's key; a saved SVG carries it in <metadata>, a CSV in a file beside it."""
+    import json
+    from openprocess.flow.provenance import of, sidecar_path
+    from openprocess.flow.record import fingerprint
+    from openprocess.flow.types import Figure, Table
+
+    @box
+    def table() -> Table:
+        return Table("t", ["a", "b"], [[1, 2]])
+
+    @box
+    def picture(t: Table, width: int = 10) -> Figure:
+        return Figure("p", svg=f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="10"><rect/></svg>')
+
+    wf = Workflow("Provenance")
+    t, p = wf.add(table), wf.add(picture)
+    wf.connect(t, p)
+    runner = Runner()
+    run = runner.run(wf)
+    info = of(run.value(p))
+    assert info is not None and info.box == picture.spec.id and info.workflow == "Provenance"
+    assert info.key == run.result(p).key and info.settings == {"width": 10} and info.title == "Picture"
+    run.value(p).save(tmp_path / "p.svg")
+    text = (tmp_path / "p.svg").read_text(encoding="utf-8")
+    assert text.startswith("<svg") and "<metadata" in text and picture.spec.id in text and "</svg>" in text
+    run.value(t).to_csv(tmp_path / "t.csv")
+    sidecar = sidecar_path(tmp_path / "t.csv")
+    assert sidecar.name == "t.provenance.json" and json.loads(sidecar.read_text())["key"] == run.result(t).key
+    again = runner.run(wf)                                   # served from the cache: still known
+    assert again.result(p).cached and of(again.value(p)) is not None
+    assert fingerprint(run.value(t)) == fingerprint(again.value(t))
+
+
+def test_a_workflow_becomes_a_script_that_runs(tmp_path):
+    import os
+    import subprocess
+    import sys
+    from openprocess.flow.boxes.discover import alpha_miner
+    from openprocess.flow.boxes.input import typed_log
+    from openprocess.flow.script import script_text
+
+    wf = Workflow("Demo script")
+    a, b = wf.add(typed_log), wf.add(alpha_miner)
+    wf.connect(a, b)
+    text = script_text(wf, "analysis.py")
+    compile(text, "analysis.py", "exec")
+    assert "@workflow(name='Demo script')" in text and 'if __name__ == "__main__":' in text
+    (tmp_path / "analysis.py").write_text(text, encoding="utf-8")
+    env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]))
+    done = subprocess.run([sys.executable, str(tmp_path / "analysis.py")], capture_output=True, text=True,
+                          cwd=tmp_path, env=env, timeout=180)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "done" in done.stdout and any(p.suffix == ".pnml" for p in (tmp_path / "results").iterdir())
+
+
+def test_an_exported_experiment_imports_into_a_fresh_folder(tmp_path):
+    """The zip Export experiment writes opens again elsewhere: inputs under
+    inputs/, the folder's own boxes under boxes/ (found by function name, as
+    their ids hold the old folder's path), and the same numbers."""
+    import textwrap
+    from openprocess.flow.library import library_for
+    from openprocess.flow.record import export_experiment, import_experiment, is_experiment, load
+    from openprocess.mining import EventLog, parse_simple_log
+    from openprocess.mining.xes import write_xes
+
+    source = tmp_path / "source"
+    (source / "logs").mkdir(parents=True)
+    (source / "boxes").mkdir()
+    write_xes(EventLog.from_simple_log(parse_simple_log("[<a,b>^3, <a,c>]"), "Orders"), source / "logs" / "orders.xes")
+    (source / "boxes" / "mine.py").write_text(textwrap.dedent('''
+        from openprocess.flow import EventLog, Table, box
+
+        @box
+        def count_cases(log: EventLog) -> Table:
+            """How many cases the log has."""
+            return Table("cases", ["cases"], [[len(log)]])
+    '''), encoding="utf-8")
+    library = library_for(source)                      # the standard boxes plus the folder's own
+    wf = Workflow("Round trip", library)
+    opened, counted = wf.add("open_log", {"file": "logs/orders.xes"}), wf.add("count_cases")
+    wf.connect(opened, counted)
+    run = Runner(library, folder=source).run(wf)
+    assert run.status(counted) == "done" and run.value(counted).rows == [[4]]
+    archive = export_experiment(wf, run, tmp_path / "Round trip.zip", source, library)
+    assert is_experiment(archive) and not is_experiment(__file__)
+    elsewhere = tmp_path / "elsewhere"
+    flow_file = import_experiment(archive, elsewhere)
+    folder = flow_file.parent
+    assert folder == elsewhere / "Round trip"
+    assert all((folder / name).is_file() for name in ("inputs/orders.xes", "boxes/mine.py", "run.py", "README.md"))
+    fresh = library_for(folder)                        # as the app builds it for the new folder
+    workflow, record = load(flow_file, fresh)
+    assert str(workflow.nodes[opened.id].settings["file"]) == "inputs/orders.xes"
+    assert workflow.nodes[counted.id].box != counted.box and workflow.nodes[counted.id].box.endswith(".count_cases")
+    again = Runner(fresh, folder=folder).run(workflow)
+    assert again.status(counted.id) == "done" and again.value(counted.id).rows == [[4]]
+    assert record.results[counted.id] == __import__("openprocess.flow.record", fromlist=["fingerprint"]).fingerprint(
+        again.value(counted.id))                                     # reproducible, as the badge would say
+    assert import_experiment(archive, elsewhere).parent.name == "Round trip 2"

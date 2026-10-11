@@ -15,7 +15,7 @@ import sys
 from importlib.util import find_spec
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QPlainTextEdit, QScrollArea, QVBoxLayout, QWidget
 
 from ...flow.library import Library
 from .widgets import Card, Chip, PageHeader, button, flow, hbox, label
@@ -88,6 +88,9 @@ class ConnectionsPage(QWidget):
         super().__init__(parent)
         self.installing: set[str] = set()
         self.install_buttons: dict[str, object] = {}
+        #: pip's lines so far, by tool, while Install… runs; shown on the tool's card.
+        self.logs: dict[str, list[str]] = {}
+        self.log_views: dict[str, QPlainTextEdit] = {}
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -104,6 +107,15 @@ class ConnectionsPage(QWidget):
         scroll.setWidget(self.body)
         root.addWidget(scroll, 1)
         self.cards: dict[str, Card] = {}
+
+    def append_install_log(self, name: str, line: str) -> None:
+        """One more line from pip for ``name``'s install, kept and shown."""
+        line = line.rstrip("\n")
+        self.logs.setdefault(name, []).append(line)
+        view = self.log_views.get(name)
+        if view is not None:
+            view.appendPlainText(line)
+            view.verticalScrollBar().setValue(view.verticalScrollBar().maximum())
 
     def refresh(self, library: Library, folder=None) -> None:
         while self.body_layout.count():
@@ -152,6 +164,7 @@ class ConnectionsPage(QWidget):
 
         tool_cards = []
         self.install_buttons = {}
+        self.log_views = {}
         for tool in tools(library):
             name = tool["name"]
             if tool["installed"]:
@@ -170,6 +183,18 @@ class ConnectionsPage(QWidget):
                 text, status, tone = (f"Not installed, and this build has no pip: in a Python install, run "
                                       f"{tool['install']}."), "not installed", "warning"
             item = card(name, text, tool["boxes"], status, tone)
+            if name in self.installing:
+                # What pip is doing, live: the command, then its lines as they come.
+                from .. import theme
+                log = QPlainTextEdit("\n".join(self.logs.get(name, [])[-40:]))
+                log.setObjectName("installLog")
+                log.setReadOnly(True)
+                log.setFont(theme.mono_font(10))
+                log.setLineWrapMode(QPlainTextEdit.NoWrap)
+                log.setFixedHeight(96)
+                log.verticalScrollBar().setValue(log.verticalScrollBar().maximum())
+                item.add(log)
+                self.log_views[name] = log
             if not tool["installed"] and installable(name) and name not in self.installing:
                 install = button("Install…", lambda _checked=False, n=name: self.install_requested.emit(n),
                                  kind="primary", tooltip=f"Runs {tool['install']} in the background")

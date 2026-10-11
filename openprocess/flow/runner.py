@@ -317,6 +317,7 @@ class Runner:
             result.values, result.explanation = cached
             result.value = result.values.get("out", next(iter(result.values.values()), None))
             result.status, result.cached = DONE, True
+            self._stamp(result, workflow, node, spec, settings)
             return result
         # Run it
         result.status = RUNNING
@@ -341,7 +342,16 @@ class Runner:
         result.values, result.value, result.explanation = values, values.get("out", value), explanation
         result.status = DONE
         self.cache.put(result.key, values, explanation)
+        self._stamp(result, workflow, node, spec, settings)
         return result
+
+    @staticmethod
+    def _stamp(result: Result, workflow: Workflow, node: Node, spec: BoxSpec, settings: dict) -> None:
+        """Every value a box gives carries where it came from (:mod:`openprocess.flow.provenance`)."""
+        from .provenance import make, stamp
+        info = make(workflow, node, spec, settings, result.key)
+        for out in result.values.values():
+            stamp(out, info)
 
     @staticmethod
     def _outputs(spec: BoxSpec, value) -> dict[str, Any]:

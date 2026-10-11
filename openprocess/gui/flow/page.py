@@ -39,6 +39,8 @@ from ...flow.library import Library
 from ...flow.runner import (BLOCKED, DONE, FAILED, IDLE, RUNNING, WAITING, Cache, Result, Run, Runner,
                             columns_connected)
 from ...flow.types import EventLog, Figure, PetriNet, Scores, Table
+from ...flow.history import History as EditHistory
+from ...flow.script import script_text
 from ...flow.workflow import Edge, Workflow, group_to_python, to_python
 from .. import theme
 from ..studio import motion, style
@@ -118,6 +120,10 @@ class WorkflowPage(QWidget):
         super().__init__(parent)
         self.document = document
         self.workflow: Workflow = document.workflow
+        #: Every state the workflow was in, for ⌘Z and ⇧⌘Z (:mod:`openprocess.flow.history`);
+        #: ``history`` is the Runs tab's snapshots.
+        self.edits = EditHistory(self.workflow.to_dict())
+        self._restoring = False
         self.library = library
         self.folder = Path(folder) if folder else None
         self.runner = Runner(library, Cache(), folder=self.folder)
@@ -175,12 +181,15 @@ class WorkflowPage(QWidget):
         self.more_menu.addAction("Export experiment…", self.export_experiment).setToolTip(
             "A zip with the workflow, its inputs, your boxes, every result and a README: "
             "supplementary material for a paper")
+        self.more_menu.addAction("Export as Python script…", self.export_script).setToolTip(
+            "A .py file with the same boxes, settings and connections: python runs it and writes the "
+            "results beside it")
         self.more_menu.addAction("Export report…", self.export_report).setToolTip(
             "One HTML page: every box's result, how it got there, the code it ran, the papers it "
             "follows, what it read, and how to cite. For a supervisor, a reviewer, a hand-in")
         self.more_menu.addSeparator()
         self.more_menu.addAction("Save", self.save).setToolTip("Save the workflow and its record")
-        self.more_button = button("⋯", self._show_more_menu, tooltip="Re-run, Record, Export experiment, Export report, Save")
+        self.more_button = button("⋯", self._show_more_menu, tooltip="Re-run, Record, Export experiment, Export as Python script, Export report, Save")
         self.more_button.setObjectName("moreButton")
         self.more_button.setFixedWidth(40)
         self.header.actions.addWidget(self.more_button)
@@ -192,7 +201,7 @@ class WorkflowPage(QWidget):
         self.view = WorkflowView(self.scene)
         self.scene.selected.connect(self._select)
         self.scene.edited.connect(self._edited)
-        self.scene.moved.connect(lambda _id: self._mark_edited())
+        self.scene.moved.connect(lambda _id: self._mark_edited("move"))
         self.scene.add_here.connect(self.quick_add)
         self.scene.menu.connect(self._menu)
         self.scene.refused.connect(lambda text: self.status.emit(text))
@@ -247,6 +256,8 @@ class WorkflowPage(QWidget):
         QShortcut(QKeySequence(Qt.Key_Backspace), self.view, self.scene.remove_selected)
         QShortcut(QKeySequence("Ctrl+D"), self.view, lambda: self.scene.duplicate(self.selected) if self.selected else None)
         QShortcut(QKeySequence("Ctrl+G"), self.view, self.group_selected)
+        QShortcut(QKeySequence.Undo, self.view, self.undo)
+        QShortcut(QKeySequence.Redo, self.view, self.redo)
         QShortcut(QKeySequence("Ctrl+Shift+G"), self.view, lambda: self.scene.ungroup(self.selected)
                   if self.selected in self.workflow.groups else None)
         self._refresh_custom_bar()
@@ -607,9 +618,46 @@ class WorkflowPage(QWidget):
         self.refresh_title()
         self.run_from(changed if changed else None)
 
-    def _mark_edited(self) -> None:
+    def _mark_edited(self, kind: str = "change") -> None:
+        self.document.dirty = True
+        if not self._restoring:
+            self.edits.record(self.workflow.to_dict(), kind)
+        self.edited.emit()
+
+    # -- undo and redo ---------------------------------------------------------------------------
+    def undo(self) -> None:
+        """⌘Z: the state before the last change, run again (the cache serves what did not change)."""
+        self._restore(self.edits.undo(), "undo", "Undid")
+
+    def redo(self) -> None:
+        self._restore(self.edits.redo(), "redo", "Redid")
+
+    def _restore(self, entry, verb: str, past: str) -> None:
+        if entry is None:
+            self.status.emit(f"Nothing to {verb}")
+            return
+        label, data = entry
+        try:
+            fresh = Workflow.from_dict(data, self.library)
+        except Exception as error:  # noqa: BLE001 - a box gone missing since, say
+            self.status.emit(f"Could not {verb}: {error}")
+            return
+        self._restoring = True
+        try:
+            self._pending.clear()
+            self.workflow.name = fresh.name
+            self.workflow.nodes, self.workflow.edges, self.workflow.groups = fresh.nodes, fresh.edges, fresh.groups
+            if self.selected is not None and self.selected not in self.workflow.nodes:
+                self.selected = None
+            self.scene.rebuild()
+            self.select(self.selected)
+        finally:
+            self._restoring = False
         self.document.dirty = True
         self.edited.emit()
+        self.refresh_title()
+        self.run_from(None)
+        self.status.emit(f"{past} {label}")
 
     def _setting_changed(self, node_id: str, name: str, value) -> None:
         self._pending.setdefault(node_id, {})[name] = value
@@ -924,6 +972,34 @@ class WorkflowPage(QWidget):
         """The user dragged a result's places or transitions: kept with the workflow."""
         self._mark_edited()
 
+    def save_table(self, table: Table) -> None:
+        """Save as CSV… under a table: the file, and where it came from beside it."""
+        from ..studio.widgets import suggested_path
+        path, _ = QFileDialog.getSaveFileName(self, "Save table", suggested_path(f"{table.name}.csv"), "CSV (*.csv)")
+        if path:
+            try:
+                table.to_csv(path)
+            except OSError as error:
+                QMessageBox.warning(self, "Could not save the table", str(error))
+                return
+            self.status.emit(f"Saved {Path(path).name}, with where it came from in "
+                             f"{Path(path).stem}.provenance.json beside it")
+
+    def export_script(self) -> None:
+        """⋯ ▸ Export as Python script…: the analysis as a .py that runs on its own."""
+        from ..studio.widgets import suggested_path
+        path, _ = QFileDialog.getSaveFileName(self, "Export as Python script",
+                                              suggested_path(f"{self.workflow.name}.py"), "Python script (*.py)")
+        if not path:
+            return
+        try:
+            Path(path).write_text(script_text(self.workflow, Path(path).name), encoding="utf-8")
+        except OSError as error:
+            QMessageBox.warning(self, "Could not export", str(error))
+            return
+        self.status.emit(f"Wrote {Path(path).name}: python {Path(path).name} runs the same analysis and "
+                         "writes the results beside it")
+
     def save_figure(self, figure: Figure) -> None:
         from ..studio.widgets import suggested_path
         path, _ = QFileDialog.getSaveFileName(self, "Save figure", suggested_path(f"{figure.name}.svg"),
@@ -958,6 +1034,10 @@ class WorkflowPage(QWidget):
         else:
             point: QPointF = what
             menu.addAction("Add box here…", lambda: self.quick_add(point))
+            undo = menu.addAction(f"Undo {self.edits.undo_label}" if self.edits.can_undo else "Undo", self.undo)
+            undo.setEnabled(self.edits.can_undo)
+            redo = menu.addAction(f"Redo {self.edits.redo_label}" if self.edits.can_redo else "Redo", self.redo)
+            redo.setEnabled(self.edits.can_redo)
             selected = [i for i in self.scene.selectedItems() if hasattr(i, "node")]
             if len(selected) >= 2 and self.scene.view_group is None:
                 menu.addAction(f"Group {len(selected)} boxes", self.group_selected)

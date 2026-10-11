@@ -310,7 +310,9 @@ def export_experiment(workflow: Workflow, run: Run | None, target: str | Path,
     lines = [f"# {name}", "", f"Exported {record.saved} with OpenProcess {record.versions.get('openprocess', '')}, "
              f"Python {record.versions.get('python', '')}.", "",
              "Run it again with `openprocess run " + f"{name}.cpnflow --check`: it fails if any result differs "
-             "from the recorded one. `requirements.lock` is the environment it ran in.", "", "## Boxes", ""]
+             "from the recorded one. `requirements.lock` is the environment it ran in. `run.py` is the same "
+             "analysis as a plain Python script (`python run.py`). Or drop this zip on OpenProcess: it unpacks "
+             "it into a folder and runs it.", "", "## Boxes", ""]
     for node in workflow.order():
         spec = workflow.spec(node)
         settings = ", ".join(f"{k} = {v}" for k, v in node.settings.items()) or "no settings"
@@ -335,6 +337,8 @@ def export_experiment(workflow: Workflow, run: Run | None, target: str | Path,
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as zipped:
         zipped.writestr(f"{name}.cpnflow", json.dumps(data, indent=2, ensure_ascii=False, default=str))
         zipped.writestr("requirements.lock", requirements_lock(record))
+        from .script import script_text
+        zipped.writestr("run.py", script_text(workflow, "run.py"))
         zipped.writestr("CITATIONS.bib", "\n\n".join(e.bibtex() for e in entries) + "\n")
         zipped.writestr("README.md", "\n".join(lines) + "\n")
         for item in record.inputs:
@@ -368,6 +372,62 @@ def _describe(value) -> str:
     return type(value).__name__ if value is not None else "done"
 
 
+def is_experiment(path) -> bool:
+    """Whether ``path`` is a zip :func:`export_experiment` wrote: one ``.cpnflow`` at the top."""
+    import zipfile
+    try:
+        with zipfile.ZipFile(path) as zipped:
+            return sum(1 for n in zipped.namelist() if n.endswith(".cpnflow") and "/" not in n) == 1
+    except (OSError, zipfile.BadZipFile):
+        return False
+
+
+def import_experiment(archive, into) -> Path:
+    """Unpack an exported experiment into a new folder under ``into`` (named
+    after the zip) and give back its workflow file, ready to open: the file
+    settings point at ``inputs/``, the folder's ``boxes/`` holds the custom
+    boxes (a box is found by its function name there), and the recorded
+    results are kept for the reproducibility check."""
+    import zipfile
+    archive = Path(archive)
+    with zipfile.ZipFile(archive) as zipped:
+        names = zipped.namelist()
+        flows = [n for n in names if n.endswith(".cpnflow") and "/" not in n]
+        if len(flows) != 1:
+            raise ValueError(f"{archive.name} is not an exported experiment (one .cpnflow at the top is needed)")
+        folder = Path(into) / archive.stem
+        counter = 2
+        while folder.exists():
+            folder = Path(into) / f"{archive.stem} {counter}"
+            counter += 1
+        folder.mkdir(parents=True)
+        for name in names:
+            parts = Path(name).parts
+            if name.endswith("/") or not parts or ".." in parts or Path(name).is_absolute():
+                continue
+            target = folder / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(zipped.read(name))
+    flow_file = folder / flows[0]
+    data = json.loads(flow_file.read_text(encoding="utf-8"))
+    moved: dict[tuple[str, str], str] = {}
+    for item in data.get("record", {}).get("inputs", []):
+        new = f"inputs/{Path(item['file']).name}"
+        if (folder / new).is_file():
+            moved[(item["node"], item["setting"])] = new
+            item["file"] = new
+    for item in data.get("record", {}).get("custom_boxes", []):
+        new = f"boxes/{Path(item['file']).name}"
+        if (folder / new).is_file():
+            item["file"] = new
+    for box in data.get("boxes", []):
+        for setting in list(box.get("settings", {})):
+            if (box["id"], setting) in moved:
+                box["settings"][setting] = moved[(box["id"], setting)]
+    flow_file.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    return flow_file
+
+
 def _as_file(value, stem: str):
     """(name, bytes or text) for a result worth a file of its own."""
     if isinstance(value, Table):
@@ -396,5 +456,9 @@ def _as_file(value, stem: str):
     return None
 
 
-__all__ = ["FORMAT", "Record", "check", "differences", "environment", "export_experiment", "fingerprint",
-           "load", "make_record", "requirements_lock", "save", "sha256_file", "sha256_text", "versions"]
+#: (name, bytes or text) for a result worth a file of its own; the script an experiment carries uses it.
+as_file = _as_file
+
+__all__ = ["FORMAT", "Record", "as_file", "check", "differences", "environment", "export_experiment",
+           "fingerprint", "import_experiment", "is_experiment", "load", "make_record", "requirements_lock",
+           "save", "sha256_file", "sha256_text", "versions"]

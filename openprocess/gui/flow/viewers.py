@@ -18,14 +18,18 @@ hundred lines.
 
 from __future__ import annotations
 
+import functools
+
 from html import escape
 from pathlib import Path
 
 from PySide6.QtCore import QRegularExpression, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QSyntaxHighlighter, QTextCharFormat
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QKeySequence, QShortcut, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtWidgets import (
-    QAbstractItemView, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame, QHBoxLayout, QLabel,
-    QLayout, QLineEdit, QPlainTextEdit, QProgressBar, QSizePolicy, QSpinBox, QTableWidget, QTableWidgetItem,
+    QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame, QHBoxLayout,
+    QLabel,
+    QLayout, QLineEdit, QPlainTextEdit, QProgressBar, QSizePolicy, QSpinBox, QStyledItemDelegate, QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 
@@ -46,6 +50,60 @@ from ..studio.widgets import Card, StatTile, button, footprint_table, hbox, labe
 # ---------------------------------------------------------------------------
 # Small helpers
 # ---------------------------------------------------------------------------
+def cell_text(value) -> str:
+    """A cell's text: floats to four decimals, None blank."""
+    return f"{value:.4f}" if isinstance(value, float) else "" if value is None else str(value)
+
+
+class _Numbers(QStyledItemDelegate):
+    """Shows a number the way :func:`cell_text` does; the cell itself holds the
+    number, so a header click sorts 10 after 9 (not after 1)."""
+
+    def displayText(self, value, locale) -> str:  # noqa: N802
+        return cell_text(value) if isinstance(value, (int, float)) and not isinstance(value, bool) \
+            else super().displayText(value, locale)
+
+
+def table_rows(table: QTableWidget, selection: bool = False) -> tuple[list[str], list[list[str]]]:
+    """The header and the rows as shown (sorted as the user sorted them);
+    ``selection`` keeps only the selected rows, or all when none is."""
+    columns = range(table.columnCount())
+    header = [table.horizontalHeaderItem(c).text() if table.horizontalHeaderItem(c) else "" for c in columns]
+    rows = list(range(table.rowCount()))
+    if selection:
+        chosen = sorted({index.row() for index in table.selectedIndexes()})
+        rows = chosen or rows
+    return header, [[cell_text(table.item(r, c).data(Qt.DisplayRole)) if table.item(r, c) else ""
+                     for c in columns] for r in rows]
+
+
+def table_text(table: QTableWidget, selection: bool = False, csv: bool = False) -> str:
+    """The table as text: tab-separated (for a spreadsheet or a message), or CSV."""
+    header, rows = table_rows(table, selection)
+    if csv:
+        import csv as _csv
+        import io
+        buffer = io.StringIO()
+        writer = _csv.writer(buffer)
+        writer.writerow(header)
+        writer.writerows(rows)
+        return buffer.getvalue()
+    return "\n".join("\t".join(cells) for cells in [header] + rows) + "\n"
+
+
+def copy_table(table: QTableWidget, selection: bool = False, csv: bool = False) -> str:
+    """Put the table (or its selected rows) on the clipboard; returns the text."""
+    text = table_text(table, selection, csv)
+    QApplication.clipboard().setText(text)
+    return text
+
+
+def _copy_selected_rows(shortcut: QShortcut) -> None:
+    table = shortcut.parentWidget()
+    if isinstance(table, QTableWidget):
+        copy_table(table, selection=True)
+
+
 def _table(columns: list[str], rows: list[list], max_rows: int = 500) -> QTableWidget:
     table = QTableWidget(min(len(rows), max_rows), len(columns))
     table.setHorizontalHeaderLabels([str(c) for c in columns])
@@ -54,13 +112,25 @@ def _table(columns: list[str], rows: list[list], max_rows: int = 500) -> QTableW
     table.setSelectionBehavior(QAbstractItemView.SelectRows)
     table.setAlternatingRowColors(True)
     table.setShowGrid(False)
+    table.setItemDelegate(_Numbers(table))
     for r, row in enumerate(rows[:max_rows]):
         for c, value in enumerate(row):
-            text = f"{value:.4f}" if isinstance(value, float) else "" if value is None else str(value)
-            item = QTableWidgetItem(text)
+            item = QTableWidgetItem()
             if isinstance(value, (int, float)) and not isinstance(value, bool):
+                item.setData(Qt.DisplayRole, value)                # the number itself: sorts as one
                 item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            else:
+                item.setText(cell_text(value))
             table.setItem(r, c, item)
+    # Sorting is switched on once the cells are in (switched on before, Qt would
+    # move the rows about while they are filled); a header click sorts.
+    table.setSortingEnabled(True)
+    table.horizontalHeader().setSortIndicatorShown(True)
+    table.horizontalHeader().setToolTip("Click a column to sort by it; again for the other way")
+    table.setToolTip("Select rows and press Ctrl+C (⌘C) to copy them, tab-separated")
+    shortcut = QShortcut(QKeySequence.Copy, table)
+    shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+    shortcut.activated.connect(functools.partial(_copy_selected_rows, shortcut))
     table.resizeColumnsToContents()
     table.horizontalHeader().setStretchLastSection(True)
     height = table.horizontalHeader().height() + sum(table.rowHeight(i) for i in range(table.rowCount())) + 6
@@ -296,7 +366,13 @@ def result_widget(value, page=None, node=None) -> QWidget:
             add(label(value.note, "muted", wrap=True))
     elif isinstance(value, Table):
         add(label(value.name, "cardTitle"))
-        add(_table(value.columns, value.rows))
+        table = _table(value.columns, value.rows)
+        add(table)
+        if page is not None:
+            copy = button("Copy as CSV", lambda: (copy_table(table, csv=True),
+                                                  page.status.emit("Copied the table as CSV")),
+                          tooltip="The whole table, as CSV, on the clipboard; ⌘C copies the selected rows")
+            add(hbox(copy, button("Save as CSV…", lambda: page.save_table(value)), None))
         if value.samples:
             add(label(f"{len(value.samples)} samples behind these rows (for Compare samples and Plot).", "muted",
                       wrap=True))

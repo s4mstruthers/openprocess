@@ -336,7 +336,11 @@ class Workflow:
                 node = wf.add(item["box"], settings, tuple(item.get("position", (0, 0))), id=item["id"],
                               title=item.get("title", ""))
             except KeyError:
-                raise WorkflowError(f"The workflow uses a box that is not available: {item['box']}")
+                stand_in = _stand_in(wf.library, item["box"])
+                if stand_in is None:
+                    raise WorkflowError(f"The workflow uses a box that is not available: {item['box']}")
+                node = wf.add(stand_in, settings, tuple(item.get("position", (0, 0))), id=item["id"],
+                              title=item.get("title", ""))
             layout = item.get("layout") or {}
             if isinstance(layout, dict):
                 node.layout = {str(k): (float(v[0]), float(v[1])) for k, v in layout.items()
@@ -347,6 +351,19 @@ class Workflow:
             group = wf.group(item["boxes"], item.get("name", "Group"), id=item.get("id"))
             group.position = tuple(item.get("position", group.position))
         return wf
+
+
+def _stand_in(library, box_id: str) -> str | None:
+    """A folder box's id holds a hash of its file's absolute path, so the same
+    file in a folder that was moved, copied or imported elsewhere has another
+    id: the folder's box with that function name stands in."""
+    if not box_id.startswith("openprocess_boxes_") or library is None:
+        return None
+    function = box_id.rsplit(".", 1)[-1]
+    for spec in library:
+        if spec.custom and spec.id.rsplit(".", 1)[-1] == function:
+            return spec.id
+    return None
 
 
 def _json_value(value):

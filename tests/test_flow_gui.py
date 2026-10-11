@@ -325,7 +325,7 @@ def test_the_page_opens_calm_and_the_panel_comes_with_a_click(app):
               if b.isVisible() and b.objectName() != "reproBadge"]
     assert header == ["Canvas", "Summary", "Runs", "+ Add box", "Run ▶", "⋯"]
     assert [a.text() for a in page.more_menu.actions() if a.text()] == [
-        "Re-run", "Record…", "Export experiment…", "Export report…", "Save"]
+        "Re-run", "Record…", "Export experiment…", "Export as Python script…", "Export report…", "Save"]
     assert not page.panel.isVisible() and not hasattr(page, "box_tree")
     log, miner = page.workflow.order()[:2]
     page.select(log.id)
@@ -1244,3 +1244,96 @@ def test_a_column_setting_is_a_dropdown_of_the_tables_columns(app):
     empty = SettingsWidget(pick.spec, {"x": "fitness"}, None, columns=[])
     assert empty.controls["x"].currentText() == "fitness"
     assert "Connect a table" in empty.controls["x"].lineEdit().placeholderText()
+
+
+def test_undo_and_redo_on_the_workflow_canvas(app):
+    """⌘Z puts the state before the last change back (a box added, a setting
+    changed) and ⇧⌘Z brings it again; opening an analysis is not a change."""
+    from openprocess.gui.flow.templates import TEMPLATES
+    from openprocess.gui.studio.app import StudioWindow
+
+    window = StudioWindow()
+    window.show()
+    window.action_new_workflow(TEMPLATES[1][1])
+    page = window.current_page()
+    _wait_run(app, page)
+    assert not page.edits.can_undo
+    messages = []
+    page.status.connect(messages.append)
+    count = len(page.workflow.nodes)
+    node = page.scene.add_node(page.library.resolve("alpha_miner").id, QPointF(400, 400))
+    _pump(app, 0.1)
+    assert len(page.workflow.nodes) == count + 1 and page.edits.undo_label == "adding a box"
+    page.undo()
+    _pump(app, 0.1)
+    assert node.id not in page.workflow.nodes and node.id not in page.scene.boxes
+    assert "Undid adding a box" in messages and page.edits.can_redo       # the run's progress follows it
+    page.redo()
+    _pump(app, 0.1)
+    assert node.id in page.workflow.nodes and node.id in page.scene.boxes and "Redid adding a box" in messages
+    _wait_run(app, page)
+    heuristics = _node(page, "heuristics_miner")
+    before = heuristics.settings["dependency"]
+    page._setting_changed(heuristics.id, "dependency", 0.5)
+    _pump(app, 0.6)                                                   # the 400 ms debounce
+    assert page.workflow.nodes[heuristics.id].settings["dependency"] == pytest.approx(0.5)
+    assert page.edits.undo_label == "a setting"
+    page.undo()
+    _pump(app, 0.1)
+    assert page.workflow.nodes[heuristics.id].settings["dependency"] == pytest.approx(before)
+    assert "Undid a setting" in messages
+    _wait_run(app, page)
+    page.undo()
+    assert messages.count("Undid adding a box") == 2 and node.id not in page.workflow.nodes
+    _wait_run(app, page)
+    page.redo(); page.redo(); page.redo()
+    assert messages[-1] == "Nothing to redo"
+    for d in window.documents:
+        d.dirty = False
+    window.close()
+
+
+def test_export_as_python_script_writes_a_file_that_compiles(app, tmp_path, monkeypatch):
+    from openprocess.gui.flow import page as page_module
+    from openprocess.gui.flow.templates import TEMPLATES
+    from openprocess.gui.studio.app import StudioWindow
+
+    window = StudioWindow()
+    window.show()
+    window.action_new_workflow(TEMPLATES[0][1])
+    page = window.current_page()
+    _wait_run(app, page)
+    target = tmp_path / "analysis.py"
+    monkeypatch.setattr(page_module.QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a, **k: (str(target), "")))
+    assert any(a.text() == "Export as Python script…" for a in page.more_menu.actions())
+    page.export_script()
+    text = target.read_text(encoding="utf-8")
+    compile(text, "analysis.py", "exec")
+    assert "@workflow(name=" in text and 'if __name__ == "__main__":' in text and "python analysis.py" in text
+    for d in window.documents:
+        d.dirty = False
+    window.close()
+
+
+def test_result_tables_sort_by_number_and_copy(app):
+    from PySide6.QtWidgets import QApplication
+    from openprocess.gui.flow.viewers import _table, copy_table, table_text
+
+    from PySide6.QtWidgets import QWidget
+    host = QWidget()                                      # keeps the table alive and owned while we look
+    table = _table(["name", "n"], [["b", 2], ["a", 10], ["c", 1.5]])
+    table.setParent(host)
+    host.show()
+    app.processEvents()
+    table.sortItems(1, Qt.DescendingOrder)
+    assert [table.item(r, 0).text() for r in range(3)] == ["a", "b", "c"]          # 10, 2, 1.5: by number
+    table.sortItems(0, Qt.AscendingOrder)
+    assert table_text(table) == "name\tn\na\t10\nb\t2\nc\t1.5000\n"
+    assert copy_table(table, csv=True).splitlines()[0] == "name,n"
+    assert QApplication.clipboard().text().startswith("name,n")
+    table.selectRow(1)
+    assert copy_table(table, selection=True) == "name\tn\nb\t2\n"
+    host.close()
+    host.deleteLater()
+    app.processEvents()

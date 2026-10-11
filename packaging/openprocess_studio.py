@@ -68,6 +68,37 @@ def self_test(model_path: str | None = None) -> int:
     print(f"workflows: {len(library)} boxes, the ready-made workflow runs, the code is there",
           flush=True)
 
+    # Installing a tool from Connections: the app runs pip in a copy of itself,
+    # and whatever the package then imports from the standard library must be
+    # in the app (0.10.6's first build had no pip and no unittest, so Plot
+    # failed after installing matplotlib).
+    import importlib
+    import subprocess
+
+    from openprocess import packages
+    if getattr(sys, "frozen", False):
+        pip = subprocess.run([sys.executable, packages.PIP_FLAG, "--version"], capture_output=True, text=True,
+                             timeout=180)
+        if pip.returncode != 0 or "pip" not in pip.stdout:
+            print(f"install: the app cannot run pip (exit {pip.returncode}): {pip.stderr.strip()[-400:]}", flush=True)
+            return 1
+        print(f"install: {pip.stdout.strip()}", flush=True)
+    tolerated = {"curses", "readline"} if sys.platform == "win32" else set()
+    missing = []
+    checked = 0
+    for name in packages.stdlib_modules():
+        if "." in name or name in tolerated:
+            continue
+        checked += 1
+        try:
+            importlib.import_module(name)
+        except Exception as error:  # noqa: BLE001 - whatever stops the import
+            missing.append(f"{name} ({type(error).__name__}: {error})")
+    if missing:
+        print(f"install: standard library modules the app lacks: {'; '.join(missing[:12])}", flush=True)
+        return 1
+    print(f"install: the standard library is there ({checked} modules import)", flush=True)
+
     if model_path:
         import time
 

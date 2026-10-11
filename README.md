@@ -786,8 +786,18 @@ extra) and *Predict the next activity*. Or start empty.
   `boxes/`, so it is listed under *Yours* and can be used in any workflow.
 - **Export experiment** (under ⋯) writes a zip with the workflow file and its record,
   the inputs, your boxes, every result as a file (CSV, PNML, SVG, XES), a
-  `requirements.lock` and a README that says what was run: supplementary
-  material for a paper, which `openprocess run --check` can verify.
+  `requirements.lock`, a `run.py` that runs the same analysis as a plain
+  script, and a README that says what was run: supplementary material for a
+  paper, which `openprocess run --check` can verify. Drop such a zip on
+  OpenProcess and it is unpacked into a folder of its own and run again.
+- **Export as Python script** (under ⋯) writes the analysis as a `.py` file:
+  the same boxes, settings and connections, run with `python analysis.py`,
+  the results written beside it.
+- **Every result knows where it came from**: a figure saved as SVG carries
+  the analysis, the box, its settings and the result's fingerprint in its
+  metadata; a CSV gets a `.provenance.json` beside it.
+- **⌘Z and ⇧⌘Z** undo and redo on the canvas: boxes, connections, moves,
+  settings, groups.
 - **The side panel** resizes by dragging the gap beside it; double-click the
   gap, or *View ▸ Reset Workflow Layout*, for its default width.
 - **Connections** (at the bottom of the sidebar, or *View ▸ Connections*)

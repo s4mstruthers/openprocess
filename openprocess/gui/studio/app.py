@@ -56,7 +56,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from PySide6.QtCore import (
-    QEvent, QFile, QFileSystemWatcher, QPoint, QRect, QRectF, QSettings, QSize, Qt, QTimer, QUrl, Signal,
+    QEvent, QFile, QFileSystemWatcher, QObject, QPoint, QRect, QRectF, QSettings, QSize, Qt, QTimer, QUrl, Signal,
 )
 from PySide6.QtGui import (
     QAction, QColor, QDesktopServices, QIcon, QKeySequence, QPainter, QPen, QPixmap, QShortcut,
@@ -115,10 +115,30 @@ AUTOSAVE_DELAY = 1000
 
 #: Name of the Bin on this system (macOS says Bin in British English, as here).
 BIN = "Recycle Bin" if sys.platform == "win32" else "Bin"
-def _run_pip(command: list[str]) -> tuple[int, str]:
-    """Run pip (``command``) and give back its exit code and output."""
-    completed = subprocess.run(command, capture_output=True, text=True)
-    return completed.returncode, (completed.stdout or "") + (completed.stderr or "")
+def _run_pip(command: list[str], on_line=None) -> tuple[int, str]:
+    """Run pip (``command``), handing each line to ``on_line`` as it comes;
+    gives back the exit code and the whole output."""
+    lines: list[str] = []
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                               errors="replace", bufsize=1)
+    assert process.stdout is not None
+    for line in process.stdout:
+        lines.append(line)
+        if on_line is not None:
+            on_line(line)
+    return process.wait(), "".join(lines)
+
+
+class _InstallLines(QObject):
+    """pip's lines, from the thread that reads them to the window."""
+
+    line = Signal(str, str)
+
+
+#: Where an imported experiment's folder goes: asked, next to the zip by default
+#: (a test puts a stand-in here).
+EXPERIMENT_FOLDER_CHOOSER = (lambda parent, title, default:
+                             QFileDialog.getExistingDirectory(parent, title, default))
 
 
 #: How Install… runs pip (a test puts a stand-in here).
@@ -894,8 +914,11 @@ class StudioWindow(QMainWindow):
         if answer != QMessageBox.Yes:
             return
         self.connections_page.installing.add(name)
+        self.connections_page.logs[name] = ["$ " + " ".join(command)]
         self.connections_page.refresh(self.library(), self.workspace.folder if self.workspace else None)
         self.statusBar().showMessage(f"Installing {package}…")
+        lines = _InstallLines(self)
+        lines.line.connect(self.connections_page.append_install_log)
 
         def done(result) -> None:
             code, output = result
@@ -904,6 +927,7 @@ class StudioWindow(QMainWindow):
             importlib.invalidate_caches()
             self.connections_page.refresh(self.library(), self.workspace.folder if self.workspace else None)
             if code == 0:
+                self.connections_page.logs.pop(name, None)
                 for page in self.pages.values():
                     if isinstance(page, WorkflowPage) and hasattr(page, "reload_library"):
                         page.reload_library()
@@ -915,7 +939,7 @@ class StudioWindow(QMainWindow):
                                     f"(exit code {code}).\n\n{tail}")
                 self.statusBar().showMessage(f"Could not install {package}", 8000)
 
-        run_in_background(lambda: PIP_RUNNER(command), done,
+        run_in_background(lambda: PIP_RUNNER(command, lambda text: lines.line.emit(name, text)), done,
                           lambda message: done((1, str(message))))
 
     # -- the command palette: ⌘K ------------------------------------------------------------
@@ -2259,8 +2283,9 @@ class StudioWindow(QMainWindow):
     def action_open(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Open", dialog_folder(),
-            "Supported files (*.xes *.gz *.csv *.pnml *.cpn);;Event logs (*.xes *.gz *.csv);;"
-            "Petri nets (*.pnml);;CPN Tools models (*.cpn);;All files (*)")
+            "Supported files (*.xes *.gz *.csv *.pnml *.cpn *.cpnflow *.zip);;Event logs (*.xes *.gz *.csv);;"
+            "Petri nets (*.pnml);;CPN Tools models (*.cpn);;Analyses (*.cpnflow);;"
+            "Exported experiments (*.zip);;All files (*)")
         self.open_files(paths)
 
     def action_open_cpn(self) -> None:
@@ -2321,6 +2346,11 @@ class StudioWindow(QMainWindow):
         into it (or ``folder``, a subfolder), or opened where they are, as the
         user says (once, or always for this folder): see :meth:`_bring_in`.
         """
+        from ...flow.record import is_experiment
+        experiments = [p for p in paths if p.lower().endswith(".zip") and is_experiment(p)]
+        paths = [p for p in paths if p not in experiments]
+        for archive in experiments:
+            self.import_experiment(archive)
         outside = [p for p in paths if self.workspace is not None and Path(p).is_file()
                    and not self.workspace.contains(p)]
         for path in paths:
@@ -2329,6 +2359,28 @@ class StudioWindow(QMainWindow):
         if outside:
             for path in self._bring_in(outside, folder):
                 self.open_path(path)
+
+    def import_experiment(self, archive: str) -> None:
+        """An exported experiment (a zip from ⋯ ▸ Export experiment): unpack it
+        into a folder of its own, work in that folder, and open the analysis,
+        which runs and is checked against its record."""
+        import zipfile
+        from ...flow.record import import_experiment
+        name = Path(archive).name
+        into = EXPERIMENT_FOLDER_CHOOSER(self, f"Where should the folder for {name} go?", str(Path(archive).parent))
+        if not into:
+            return
+        try:
+            flow_file = import_experiment(archive, into)
+        except (OSError, ValueError, zipfile.BadZipFile) as error:
+            QMessageBox.warning(self, "Could not import the experiment", str(error))
+            return
+        folder = flow_file.parent
+        if not self.open_workspace(str(folder)):
+            return
+        self.open_path(str(flow_file))
+        self.statusBar().showMessage(f"Unpacked {name} into the folder {folder.name} and opened its analysis: "
+                                     "it runs now, and the badge says whether it reproduces the record", 12000)
 
     def _import_choice(self, names: list[str], allow_open: bool) -> str | None:
         """Copy, move or open in place?  The folder's choice, the app's, or the user's."""
@@ -2698,13 +2750,20 @@ class StudioWindow(QMainWindow):
         except OSError:
             return ()
 
+    def _is_box_file(self, path: str) -> bool:
+        return (self.workspace is not None and path.endswith(".py")
+                and Path(path).parent == Path(self.workspace.folder) / "boxes")
+
     def _reload_boxes(self) -> None:
-        """The folder's boxes/ changed: open workflow pages get the new boxes."""
+        """The folder's boxes/ changed (a file saved, added or removed): open
+        workflow pages get the new boxes and run again; the message names the file."""
         if self.workspace is None:
             return
         signature = self._boxes_files(self.workspace.folder)
         if signature == self._boxes_signature:
             return
+        before, after = dict(self._boxes_signature), dict(signature)
+        changed = sorted([n for n, t in after.items() if before.get(n) != t] + [n for n in before if n not in after])
         self._boxes_signature = signature
         if self._library is not None:
             self._library.load_folder(Path(self.workspace.folder) / "boxes")
@@ -2713,7 +2772,12 @@ class StudioWindow(QMainWindow):
                 page = self.pages.get(document.id)
                 if page is not None:
                     page.reload_library()
-        self.statusBar().showMessage("Reloaded the folder's boxes", 6000)
+        self._watch_open_files()                     # an editor's safe save replaced the file: watch the new one
+        if before and changed:
+            names = ", ".join(changed[:3]) + (" …" if len(changed) > 3 else "")
+            self.statusBar().showMessage(
+                f"Reloaded {names}: the boxes it defines ran again" if len(changed) == 1
+                else f"Reloaded the folder's boxes ({names})", 6000)
 
     def action_new_workflow(self, build=None) -> None:
         """A new workflow from a template (or empty), on the first log of the folder."""
@@ -3132,6 +3196,7 @@ class StudioWindow(QMainWindow):
                 # A file copied into a brand-new subfolder before it was watched
                 # would be missed: look once more.
                 self._rescan_timer.start()
+        self._watch_open_files()                     # the folder's box files among them
 
     def _stop_watching(self) -> None:
         if self.watcher.directories():
@@ -3746,6 +3811,9 @@ class StudioWindow(QMainWindow):
         """Watch the open documents' files, so a change made elsewhere is noticed."""
         wanted = {str(Path(d.path)) for d in self.documents
                   if d.path and not d.missing and os.path.exists(d.path)}
+        # The folder's own boxes too: a box file saved in an editor is reloaded.
+        if self.workspace is not None and (Path(self.workspace.folder) / "boxes").is_dir():
+            wanted |= {str(p) for p in (Path(self.workspace.folder) / "boxes").glob("*.py")}
         current = set(self.watcher.files())
         if current - wanted:
             self.watcher.removePaths(sorted(current - wanted))
@@ -3765,7 +3833,11 @@ class StudioWindow(QMainWindow):
         """
         pending, self._changed_files = self._changed_files, set()
         again: set[str] = set()
+        if any(self._is_box_file(path) for path in pending):
+            self._rescan_timer.start()               # _reload_boxes: the file's boxes, loaded again
         for path in pending:
+            if self._is_box_file(path):
+                continue
             key = self._key(path)
             documents = [d for d in self.documents if d.path and self._key(d.path) == key]
             if not documents:

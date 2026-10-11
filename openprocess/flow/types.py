@@ -105,11 +105,15 @@ class Table:
         return len(self.rows)
 
     def to_csv(self, path) -> None:
+        """Write the table as CSV, with where it came from in a
+        ``.provenance.json`` beside it when the table knows."""
         import csv
+        from .provenance import of, write_sidecar
         with open(path, "w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
             writer.writerow(self.columns)
             writer.writerows(self.rows)
+        write_sidecar(path, of(self))
 
 
 
@@ -133,13 +137,18 @@ class Figure:
     caption: str = ""
 
     def save(self, path) -> None:
+        """Write the figure; where it came from goes with it (SVG: a
+        ``<metadata>`` block; PNG: a ``.provenance.json`` beside it)."""
+        from .provenance import of, with_metadata, write_sidecar
         path = str(path)
+        info = of(self)
         if self.svg is not None and path.lower().endswith(".svg"):
             with open(path, "w", encoding="utf-8") as handle:
-                handle.write(self.svg)
+                handle.write(with_metadata(self.svg, info))
         elif self.png is not None:
             with open(path, "wb") as handle:
                 handle.write(self.png)
+            write_sidecar(path, info)
         else:
             raise ValueError(f"This figure has no {path.rsplit('.', 1)[-1].upper()} form.")
 

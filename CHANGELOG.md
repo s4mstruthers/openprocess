@@ -6,6 +6,43 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.11.0
+
+- **Undo and redo on the canvas.** ⌘Z takes an analysis back to before the
+  last change (a box added or removed, a connection, a move, a setting, a
+  group), ⇧⌘Z brings it again, and the right-click menu says what each would
+  undo. The boxes run again, with the cache serving the ones that did not
+  change.
+- **Export as Python script** (under ⋯): a `.py` with the same boxes,
+  settings and connections, which `python analysis.py` runs on its own,
+  printing what each box gives and writing the results beside it. The
+  folder's own boxes come along from `boxes/`. The exported experiment zip
+  carries the same script as `run.py`.
+- **An exported experiment opens again.** Drop the zip on OpenProcess (or
+  File ▸ Open it): it is unpacked into a folder of its own, the app works in
+  that folder, and the analysis runs and is checked against its record. The
+  inputs are found under `inputs/`, the folder's boxes under `boxes/`.
+- **Every result knows where it came from.** A figure saved as SVG carries
+  the analysis, the box, its settings and the result's fingerprint in its
+  metadata; a table saved as CSV (and a figure as PNG) gets a
+  `.provenance.json` beside it. A figure in a paper points back at the
+  analysis that made it.
+- **Installing shows pip's own lines** as they come, on the tool's card,
+  with the command it runs: no more wondering whether it is stuck.
+- **Result tables sort and copy.** Click a column heading to sort (numbers
+  as numbers), ⌘C copies the selected rows for a spreadsheet, and *Copy as
+  CSV* and *Save as CSV…* sit under the table.
+- **Your own boxes reload when you save them.** A file under `boxes/` saved
+  in an editor is loaded again by itself, the message names the file, and
+  the boxes it defines run again.
+- **The downloaded app checks itself for installs.** The build's self-test
+  runs pip inside the app and imports the whole standard library, so a
+  release in which Install… or an installed package would fail is never
+  published.
+- A folder's own boxes keep working when the folder is moved, copied or
+  imported: a box is found by its function name in `boxes/` when its old id
+  no longer matches.
+
 ## 0.10.6
 
 - **The reproducibility badge is a quiet pill** beside the title: a soft tint

@@ -2445,8 +2445,10 @@ def test_a_tool_can_be_installed_from_connections(app, monkeypatch):
                         staticmethod(lambda *a, **k: studio_app.QMessageBox.Yes))
     ran = []
 
-    def pip(command):
+    def pip(command, on_line):
         ran.append(command)
+        on_line("Collecting fakestats\n")
+        on_line("Successfully installed fakestats\n")
         fake["installed"] = True
         return 0, "Successfully installed fakestats"
     monkeypatch.setattr(studio_app, "PIP_RUNNER", pip)
@@ -2456,13 +2458,19 @@ def test_a_tool_can_be_installed_from_connections(app, monkeypatch):
     window.show_connections()
     page = window.connections_page
     assert "fakestats" in page.install_buttons
+    arrived = []
+    original = page.append_install_log
+    monkeypatch.setattr(page, "append_install_log", lambda name, line: (arrived.append(line), original(name, line)))
     page.install_buttons["fakestats"].click()
     assert "fakestats" in page.installing                     # at once: Installing…
     assert "fakestats" not in page.install_buttons
+    assert "fakestats" in page.log_views and page.log_views["fakestats"].toPlainText().startswith("$ ")
     end = time.time() + 6
     while time.time() < end and page.installing:
         _pump(app, 0.05)
     assert ran == [[studio_app.sys.executable, "-m", "pip", "install", "fakestats"]]
+    assert [line.rstrip("\n") for line in arrived] == ["Collecting fakestats", "Successfully installed fakestats"]
+    assert "fakestats" not in page.logs                       # installed: the log is done with
     assert not page.installing and "fakestats" not in page.install_buttons   # installed: no button
     assert "Installed fakestats" in window.statusBar().currentMessage()
     window.close()
@@ -2576,3 +2584,75 @@ def test_a_chip_is_a_painted_pill(app):
     chip.set_state("good")
     app.processEvents()
     assert chip.grab().toImage().pixelColor(4, image.height() // 2).name() != "#fab219"
+
+
+def test_an_exported_experiment_opens_as_a_folder_of_its_own(app, tmp_path, monkeypatch):
+    """Drop (or Open…) the zip Export experiment wrote: it is unpacked into a
+    folder next to it, the app works in that folder, and the analysis runs."""
+    from openprocess.flow import Runner, Workflow
+    from openprocess.flow.record import export_experiment
+    from openprocess.gui.studio import app as studio_app
+    from openprocess.gui.studio.app import StudioWindow
+    from openprocess.gui.studio.documents import WorkflowDocument
+
+    wf = Workflow("Shared")
+    a, b = wf.add("typed_log"), wf.add("alpha_miner")
+    wf.connect(a, b)
+    archive = export_experiment(wf, Runner().run(wf), tmp_path / "Shared.zip", tmp_path)
+    home = tmp_path / "home"
+    home.mkdir()
+    asked = []
+    monkeypatch.setattr(studio_app, "EXPERIMENT_FOLDER_CHOOSER",
+                        lambda parent, title, default: (asked.append((title, default)), str(home))[1])
+    window = StudioWindow()
+    window.show()
+    window.open_files([str(archive)])
+    _pump(app, 0.5)
+    assert asked and "Shared.zip" in asked[0][0] and asked[0][1] == str(tmp_path)
+    assert window.workspace is not None and Path(window.workspace.folder).resolve() == (home / "Shared").resolve()
+    documents = [d for d in window.documents if isinstance(d, WorkflowDocument)]
+    assert len(documents) == 1 and documents[0].path.endswith("Shared.cpnflow")
+    page = window.pages[documents[0].id]
+    end = time.time() + 15
+    while time.time() < end and (page._running or page.run is None):
+        _pump(app, 0.05)
+    assert page.run is not None and all(page.run.status(n) == "done" for n in page.workflow.nodes.values())
+    assert (home / "Shared" / "run.py").is_file()
+    window.close()
+
+
+def test_a_saved_box_file_is_reloaded_by_itself(app, tmp_path):
+    """Save a file under boxes/ in an editor: the folder's boxes are loaded again
+    and the message names the file (the file itself is watched, not only the folder)."""
+    import os
+    import textwrap
+    from openprocess.gui.studio.app import StudioWindow
+
+    boxes = tmp_path / "boxes"
+    boxes.mkdir()
+    source = textwrap.dedent('''
+        from openprocess.flow import EventLog, Table, box
+
+        @box
+        def count_cases(log: EventLog) -> Table:
+            """How many cases the log has."""
+            return Table("cases", ["cases"], [[len(log)]])
+    ''')
+    file = boxes / "mine.py"
+    file.write_text(source, encoding="utf-8")
+    window = StudioWindow()
+    window.show()
+    assert window.open_workspace(str(tmp_path))
+    _pump(app, 0.3)
+    window._rescan_workspace()
+    assert str(file) in window.watcher.files()
+    window.library().resolve("count_cases")
+    file.write_text(source.replace("count_cases", "count_traces"), encoding="utf-8")
+    stat = file.stat()
+    os.utime(file, ns=(stat.st_atime_ns, stat.st_mtime_ns + 2_000_000_000))
+    window.statusBar().clearMessage()
+    window._file_changed(str(file))
+    _pump(app, 0.8)                                            # the file timer, then the rescan timer
+    window.library().resolve("count_traces")
+    assert "mine.py" in window.statusBar().currentMessage()
+    window.close()
