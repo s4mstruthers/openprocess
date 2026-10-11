@@ -27,6 +27,8 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
   Learn chips) are pills everywhere. They draw themselves now: a styled
   label's corners depended on when the style polished it, and the downloaded
   app showed square chips beside round ones.
+- A box with nothing plugged in (Plot, just added to the canvas) waits with
+  *Connect scores or tables* instead of failing with a traceback.
 - The downloaded app carries the whole standard library, so a package
   installed from Connections can import what it needs (matplotlib wanted
   `unittest`, and Plot failed after the install).

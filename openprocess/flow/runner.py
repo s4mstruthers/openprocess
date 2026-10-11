@@ -270,6 +270,14 @@ class Runner:
                     values.append(self._fit(value, port))
                     keys.append(upstream.key + ":" + output)
             inputs[port.name] = values if port.many else values[0]
+        # Nothing plugged in at all (every input optional, as Plot's are): the box
+        # would run on nothing and fail.  Wait instead, and say what to connect.
+        if spec.inputs and not any(fed[port.name] for port in spec.inputs):
+            labels = [port.label or port.name for port in spec.inputs]
+            result.status = IDLE
+            result.message = "Connect " + (labels[0] if len(labels) == 1 else
+                                           ", ".join(labels[:-1]) + " or " + labels[-1])
+            return result
         # A file not chosen yet (a box just added from the list): wait and say
         # so, rather than run and fail with a traceback about None.
         for setting in spec.settings:

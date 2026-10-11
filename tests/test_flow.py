@@ -207,6 +207,30 @@ def test_a_failing_box_stays_in_its_box():
     assert run.status(after) == "idle" and "failed" in run.result(after).message
 
 
+def test_a_box_with_nothing_plugged_in_waits_rather_than_fails():
+    """Every input optional and none connected (Plot, just added): idle with a
+    hint about what to connect, not a red Failed with a traceback.  A box with
+    no inputs at all still runs."""
+    @box
+    def make() -> PetriNet:
+        return PetriNet()
+
+    @box
+    def gather(nets: list[PetriNet] = (), more: list[PetriNet] = ()) -> PetriNet:
+        if not nets and not more:
+            raise ValueError("nothing to gather")
+        return PetriNet()
+
+    wf = Workflow("plug")
+    g = wf.add(gather)
+    run = Runner().run(wf)
+    assert run.status(g) == "idle" and run.result(g).message == "Connect nets or more"
+    m = wf.add(make)
+    wf.connect(m, g)
+    run = Runner().run(wf)
+    assert run.status(m) == "done" and run.status(g) == "done"
+
+
 def test_a_box_without_its_input_waits_with_a_message():
     wf = Workflow("waiting")
     q = wf.add(check_fit)
