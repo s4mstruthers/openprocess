@@ -489,17 +489,19 @@ links to the definitions it builds on; **Help ▸ Definitions** lists them all.
   for bounded nets; for unbounded ones, up to a trace length (and it says
   so).
 
-| Process map | Discovering a model |
+| Process map | Discover in Mine →: the miner is a box, its result beside the canvas |
 |---|---|
 | ![Process map](docs/screenshots/studio-process-map.png) | ![Discover](docs/screenshots/studio-discover.png) |
 
-| α-algorithm result | Conformance (alignments on the model) |
+| α-algorithm result | *How*: the eight steps, from the footprint to α(L) |
 |---|---|
-| ![Alpha](docs/screenshots/studio-alpha.png) | ![Conformance](docs/screenshots/studio-conformance.png) |
+| ![Alpha](docs/screenshots/studio-alpha.png) | ![The eight steps of the α-algorithm](docs/screenshots/studio-alpha-how.png) |
 
-| Comparing two logs | Linked dotted charts of three boarding strategies |
+| Check fit: every score, and how it was computed | Comparing two logs |
 |---|---|
-| ![Comparing two logs](docs/screenshots/compare.png) | ![Linked dotted charts](docs/screenshots/compare-dotted.png) |
+| ![Conformance](docs/screenshots/studio-conformance.png) | ![Comparing two logs](docs/screenshots/compare.png) |
+
+![Linked dotted charts of two logs, one scale and one colour per activity](docs/screenshots/compare-dotted.png)
 
 The app follows the system's light or dark appearance:
 
@@ -515,6 +517,8 @@ sidebar, **Learn ▸ Open Exercise Pack…**, or **Learn ▸ Open Demo Exercises
 (it asks where to put a copy, since your answers are saved next to the
 exercises): the window switches to a view made for working through a pack
 without distractions, and *Exit* brings your folder back exactly as it was.
+
+![An exercise in Learn: the worksheet with its answer boxes on the left, the exercise's log, given net and workflow on the right](docs/screenshots/learn-exercise.png)
 
 - **The worksheet** on the left is the question top to bottom, with an
   answer box wherever one is needed: yes/no, multiple choice, a set
@@ -703,7 +707,10 @@ generated from `openprocess/mining/definitions.py`; after editing a definition, 
 Likewise [`docs/references.md`](docs/references.md) — every source OpenProcess's
 notation and algorithms follow, also in the app under **Help ▸ References** —
 is generated from `openprocess/references.py` with
-`python -m openprocess.references > docs/references.md`.
+`python -m openprocess.references > docs/references.md`. The screenshots in
+this README come from the app itself: `python docs/make_screenshots.py`
+renders every page offscreen into `docs/screenshots/`, so run it after a
+change to the app's looks.
 
 The engines (`openprocess.mining`, `openprocess.ml`, `openprocess.sim`, `openprocess.analysis`)
 have **no dependencies**, so they work in a notebook or a script:
@@ -729,6 +736,10 @@ Miner, a fitness check), *Compare discovery* (three miners side by side),
 *Noise sweep* (one setting over a range, the scores stacked), *Fitness with
 confidence* (bootstrap intervals, a test and a plot; needs the `science`
 extra) and *Predict the next activity*. Or start empty.
+
+| The canvas: *Compare discovery*, three miners side by side | Summary: every box's key figure, and the process map |
+|---|---|
+| ![The canvas of a Compare discovery analysis, the Compare box's table beside it](docs/screenshots/workflow-canvas.png) | ![The Summary view: a tile per box, the process map under them](docs/screenshots/workflow-summary.png) |
 
 - **The page is the canvas.** Its header has **Canvas | Summary**, then
   **+ Add box**, **Run ▶**, and **⋯** for Re-run, Record, Export experiment

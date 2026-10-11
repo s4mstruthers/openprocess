@@ -52,6 +52,12 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
   drawing's own height, up to three quarters of the screen, and the page
   scrolled; it now takes the room the window has below the tiles, and the
   map fits itself to it.
+- A formula in a worksheet that wraps over two lines is typeset as one
+  formula; before, the words between it and the next formula were taken for
+  maths ("andthenetN"). A property's ⓘ card no longer scrolls by a few
+  pixels. On Windows and Linux the menu bar follows dark mode.
+- The README's screenshots show this version, made from the app itself by
+  `docs/make_screenshots.py`.
 
 ## 0.10.6
 
