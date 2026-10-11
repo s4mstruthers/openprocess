@@ -607,6 +607,15 @@ class GraphView(CanvasPanning, QGraphicsView):
             if len(points) < 20000:
                 painter.drawPoints(points)
 
+    def sizeHint(self) -> QSize:  # noqa: N802
+        # QGraphicsView asks for the drawing's own size (up to three quarters
+        # of the screen), and a page laid out by height for width (the
+        # Summary's row of tiles) grants it: a process map then towered over
+        # the window.  A view is a window on the graph, which fits itself to
+        # whatever it gets, so ask for a modest one and let the page's layout
+        # give it the room the window has.
+        return QSize(480, 320)
+
     def fit(self) -> None:
         self.auto_fit = True
         rect = self.graph.sceneRect()

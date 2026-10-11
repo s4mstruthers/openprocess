@@ -48,6 +48,10 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
   connected. Before, scores plugged into the box always gave their bars and
   the two settings changed nothing. A column a table lacks is named in the
   error, with the columns it has.
+- **The process map fits the window.** On the Summary page the map took the
+  drawing's own height, up to three quarters of the screen, and the page
+  scrolled; it now takes the room the window has below the tiles, and the
+  map fits itself to it.
 
 ## 0.10.6
 
