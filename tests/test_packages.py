@@ -59,3 +59,11 @@ def test_run_pip_hands_the_arguments_to_pip(monkeypatch, tmp_path):
     assert calls == [["install", "--target", str(tmp_path / "site"), "numpy"]]
     assert (tmp_path / "site").is_dir()                      # made for pip, so --target has somewhere to go
     assert packages.can_install() == (__import__("importlib").util.find_spec("pip") is not None)
+
+
+def test_the_whole_standard_library_is_listed_for_the_downloaded_app():
+    names = packages.stdlib_modules()
+    assert {"unittest", "unittest.mock", "json", "xml.etree.ElementTree", "sqlite3", "decimal"} <= set(names)
+    assert not any(n == "test" or n.startswith("test.") for n in names)          # CPython's own tests
+    assert "tkinter" not in names and "idlelib" not in names and "asyncio.__main__" not in names
+    assert len(names) == len(set(names))

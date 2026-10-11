@@ -23,9 +23,13 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
   *Keep in folder* for when you want one; ✕ closes it without a question and
   leaves nothing in the sidebar. Files you opened yourself still close to a
   lighter row, and deleting stays an explicit Move to Bin.
-- The status chips on cards (*not installed*, *none yet*, *ready*) are rounded
-  pills, like the reproducibility badge: a label's background is only rounded
-  when its rule also sets a border, so the rules now do.
+- The status chips on cards (*not installed*, *installing…*, *ready*, the
+  Learn chips) are pills everywhere. They draw themselves now: a styled
+  label's corners depended on when the style polished it, and the downloaded
+  app showed square chips beside round ones.
+- The downloaded app carries the whole standard library, so a package
+  installed from Connections can import what it needs (matplotlib wanted
+  `unittest`, and Plot failed after the install).
 - Releases are archived on Zenodo; the DOI goes into `CITATION.cff` and the
   app's citations once the first archive is there.
 

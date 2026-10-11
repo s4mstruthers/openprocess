@@ -2557,3 +2557,22 @@ def test_the_command_palette_finds_and_runs_anything(app, tmp_path):
     for document in window.documents:
         document.dirty = False
     window.close()
+
+
+def test_a_chip_is_a_painted_pill(app):
+    """The status chips on cards draw themselves: round ends wherever they are shown."""
+    from openprocess.gui.studio.widgets import Chip
+
+    chip = Chip("not installed", fill="#fab219", ink="white")
+    chip.show()
+    app.processEvents()
+    assert chip.height() >= 20 and chip.width() > 60
+    image = chip.grab().toImage()
+    inside = image.pixelColor(4, image.height() // 2).name()
+    corner = image.pixelColor(0, 0).name()
+    assert inside == "#fab219" and corner != "#fab219"          # fill inside, the window behind the corner
+    chip.setText("ready")
+    assert chip.sizeHint().width() < 70
+    chip.set_state("good")
+    app.processEvents()
+    assert chip.grab().toImage().pixelColor(4, image.height() // 2).name() != "#fab219"

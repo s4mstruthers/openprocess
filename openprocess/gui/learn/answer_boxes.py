@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 from ...learn import answers, notation
 from ...learn.checks import CORRECT, INCORRECT, PARTIAL, UNKNOWN
 from ..studio.markdown_view import MarkdownLabel
-from ..studio.widgets import button, hbox, label
+from ..studio.widgets import Chip, button, hbox, label
 
 #: What the card's caption says above each kind of box.
 CAPTIONS = {
@@ -781,7 +781,7 @@ class TaskCard(QFrame):
         if task.points != 1:
             caption += f"  ·  {task.points:g} points"
         self.caption = label(caption.upper(), "taskCaption")
-        self.chip = label("", "statusChip")
+        self.chip = Chip()
         self.chip.setHidden(True)
         layout.addLayout(hbox(self.caption, None, self.chip))
         layout.addWidget(editor)
@@ -852,9 +852,7 @@ class TaskCard(QFrame):
         if shown is not None:
             text, colour = shown
             self.chip.setText(("✓ " if colour == "good" else "") + text)
-            self.chip.setProperty("state", colour)
-            self.chip.style().unpolish(self.chip)
-            self.chip.style().polish(self.chip)
+            self.chip.set_state(colour)
         self.setProperty("state", (shown or ("", ""))[1])
         self.style().unpolish(self)
         self.style().polish(self)

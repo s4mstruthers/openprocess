@@ -18,7 +18,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QScrollArea, QVBoxLayout, QWidget
 
 from ...flow.library import Library
-from .widgets import Card, PageHeader, button, flow, hbox, label
+from .widgets import Card, Chip, PageHeader, button, flow, hbox, label
 
 #: (title, what it is, the input boxes' function names)
 INPUTS = [
@@ -125,12 +125,7 @@ class ConnectionsPage(QWidget):
             item.setMinimumWidth(200)
             item.setMaximumWidth(300)
             if status:
-                chip = label(status, "statusChip")
-                # The whole rule on the widget: a rounded pill needs its border (none)
-                # and radius in the same stylesheet as its background.
-                chip.setStyleSheet(f"QLabel#statusChip {{ background: {_tone(tone)}; color: white; border: none; "
-                                   "border-radius: 10px; padding: 3px 9px; font-size: 11px; font-weight: 600; }")
-                item.header.addWidget(chip)
+                item.header.addWidget(Chip(status, fill=_tone(tone), ink="white"))
             if boxes:
                 item.add(label("Boxes: " + ", ".join(boxes), "muted", wrap=True))
             self.cards[title] = item

@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFontMetricsF, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QButtonGroup, QComboBox, QFrame, QMenu, QHBoxLayout, QLabel, QLayout, QPushButton, QSizePolicy, QStyle, QStyledItemDelegate,
     QVBoxLayout, QWidget,
@@ -357,6 +357,73 @@ def fitness_status(value: float) -> str:
 
 
 # ---------------------------------------------------------------------------
+class Chip(QWidget):
+    """A small pill with a word or two in it: "not installed", "ready", "✓ correct".
+
+    Painted here rather than styled.  A label's background and corner radius
+    come from the style's box model, which polishes when it likes: the
+    downloaded app showed square chips beside round ones.  A pill must look
+    the same everywhere, so this one draws itself from its font metrics.
+    ``fill`` and ``ink`` are colours; :meth:`set_state` picks the soft tints of
+    the status colours instead (good, warning, critical, or muted).
+    """
+
+    def __init__(self, text: str = "", fill=None, ink=None, parent=None) -> None:
+        super().__init__(parent)
+        self._text = text
+        self._fill = QColor(fill) if fill is not None else QColor(style.tokens().text_muted)
+        self._ink = QColor(ink) if ink is not None else QColor("white")
+        font = QFont(self.font())
+        font.setPixelSize(11)
+        font.setWeight(QFont.DemiBold)
+        self.setFont(font)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+    def text(self) -> str:
+        return self._text
+
+    def setText(self, text: str) -> None:  # noqa: N802 - a label's name, so a chip can stand in for one
+        self._text = text
+        self.updateGeometry()
+        self.update()
+
+    def set_colours(self, fill, ink) -> None:
+        self._fill, self._ink = QColor(fill), QColor(ink)
+        self.update()
+
+    def set_state(self, state: str) -> None:
+        """The soft look of a status: a tint of its colour behind ink of the same."""
+        t = style.tokens()
+        if state == "good":
+            self.set_colours(style.qc(style.STATUS["good"], 0.13), style.STATUS["good"])
+        elif state == "warning":
+            self.set_colours(style.qc(style.STATUS["warning"], 0.25), t.text)
+        elif state == "critical":
+            self.set_colours(style.qc(style.STATUS["critical"], 0.12), style.STATUS["critical"])
+        else:
+            self.set_colours(style.qc(t.text, 0.08), t.text_secondary)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        metrics = QFontMetricsF(self.font())
+        return QSize(int(metrics.horizontalAdvance(self._text)) + 18, max(20, int(metrics.height()) + 6))
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return self.sizeHint()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        radius = rect.height() / 2
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(self._fill)
+        painter.drawRoundedRect(rect, radius, radius)
+        painter.setPen(QPen(self._ink))
+        painter.setFont(self.font())
+        painter.drawText(self.rect(), Qt.AlignCenter, self._text)
+        painter.end()
+
+
 # Activity chips
 # ---------------------------------------------------------------------------
 def paint_chips(painter: QPainter, rect: QRectF, sequence: list[tuple[str, str, str | None]],

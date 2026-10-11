@@ -41,6 +41,14 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 # scipy or matplotlib to a folder of the user's own (openprocess.packages).
 PIP_DATAS, PIP_BINARIES, PIP_HIDDEN = collect_all("pip")
 
+# A package installed that way imports what it likes from the standard library
+# (matplotlib wants unittest), and PyInstaller packs only what the app imports:
+# so the whole library is listed (openprocess.packages.stdlib_modules).
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from openprocess.packages import stdlib_modules
+STDLIB = stdlib_modules()
+
 # The Code tab reads a box's source with inspect.getsource, and the algorithm
 # it calls likewise: the bundle carries every .py file of the package next to
 # its compiled form, so the app shows the code it runs (0.7.1).
@@ -66,7 +74,7 @@ analysis = Analysis(
     # (PyInstaller's hook), which the update check needs to reach GitHub: the
     # bundled Python cannot use the system's.
     hiddenimports=["openprocess.analysis.state_space_process", "certifi", "openprocess.packages"]
-                  + collect_submodules("openprocess.flow.boxes") + PIP_HIDDEN,
+                  + collect_submodules("openprocess.flow.boxes") + PIP_HIDDEN + STDLIB,
     # Not needed by the app.  PM4Py is an optional extra (AGPL-3.0) and is
     # never bundled; the app hides its PM4Py options when it is missing.
     excludes=["pm4py", "tkinter", "pytest", "matplotlib", "numpy", "pandas", "scipy"],

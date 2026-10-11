@@ -25,6 +25,12 @@ PIP_FLAG = "--pip"
 #: the downloaded app cannot do: it installs ready-built wheels only, so that
 #: pip never has to start a Python (the app's own executable would open a window).
 SOURCE_ONLY = ("pm4py",)
+#: Standard library modules the downloaded app leaves out: test suites, IDEs
+#: and toys, and the "dead batteries" Python 3.13 removed.
+STDLIB_SKIP = frozenset({
+    "test", "idlelib", "tkinter", "turtle", "turtledemo", "lib2to3", "pydoc_data", "ensurepip", "venv",
+    "antigravity", "this", "aifc", "audioop", "cgi", "cgitb", "chunk", "crypt", "imghdr", "mailcap", "msilib",
+    "nis", "nntplib", "ossaudiodev", "pipes", "sndhdr", "spwd", "sunau", "telnetlib", "uu", "xdrlib"})
 
 
 def frozen() -> bool:
@@ -89,6 +95,33 @@ def where_text() -> str:
     return "into the app's own packages folder" if frozen() else "into this app's Python"
 
 
+def stdlib_modules() -> list[str]:
+    """Every standard library module, for the downloaded app to carry.
+
+    PyInstaller packs only what the app imports, but a package installed from
+    Connections imports what it likes (matplotlib wants ``unittest``), so the
+    build lists the whole library: the top-level modules this Python has, and
+    every submodule of its packages, found without importing the packages.
+    """
+    import pkgutil
+    names: list[str] = []
+    for name in sorted(getattr(sys, "stdlib_module_names", ())):
+        if name.startswith("_") or name in STDLIB_SKIP:
+            continue
+        try:
+            spec = find_spec(name)
+        except (ImportError, ValueError):
+            continue
+        if spec is None:
+            continue
+        names.append(name)
+        if spec.submodule_search_locations:
+            for info in pkgutil.walk_packages(spec.submodule_search_locations, name + ".", onerror=lambda _n: None):
+                if not info.name.endswith(".__main__"):
+                    names.append(info.name)
+    return names
+
+
 def run_pip(arguments: list[str]) -> int:
     """Run pip in this process (the downloaded app, launched with ``--pip``)."""
     try:
@@ -102,5 +135,5 @@ def run_pip(arguments: list[str]) -> int:
     return int(pip_main(list(arguments)) or 0)
 
 
-__all__ = ["PIP_FLAG", "SOURCE_ONLY", "activate", "can_install", "frozen", "install_command", "installable",
-           "name_of", "run_pip", "user_site", "where_text"]
+__all__ = ["PIP_FLAG", "SOURCE_ONLY", "STDLIB_SKIP", "activate", "can_install", "frozen", "install_command",
+           "installable", "name_of", "run_pip", "stdlib_modules", "user_site", "where_text"]
