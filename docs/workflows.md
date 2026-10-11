@@ -53,6 +53,7 @@ What the decorator reads, and nothing else:
 | the return type | the output; a `@dataclass` whose fields are OpenProcess types gives several outputs (one per field) |
 | `int`, `float`, `bool`, `str` with a default | a setting, the default as its value |
 | `Literal["a", "b"]` | a setting that is a choice |
+| `Column` | a setting that is a column of a table connected to the box: in the app, a list of its columns to pick from (a name can still be typed) |
 | `Path` | a setting that is a file in the workflow's folder |
 | the docstring | the help text; a `name: text` line in it is the help of that setting |
 | `@box(name=…, group=…)` | the name on the canvas and the group under *+ Add box* (default: the function's name, and *Other*, which is listed under *Show all*) |

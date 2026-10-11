@@ -35,12 +35,13 @@ from .library import Library, library_for, standard_library
 from .record import check, differences, load, save
 from .runner import Cache, Result, Run, Runner
 from .sweep import Sweep
-from .types import (AlignmentResult, Any, CPNet, DFG, Dataset, EventLog, Figure, Footprint, Marking,
+from .types import (Column, AlignmentResult, Any, CPNet, DFG, Dataset, EventLog, Figure, Footprint, Marking,
                     PetriNet, Predictions, Predictor, ProcessTree, Regions, ReplayResult, Scores,
                     SimpleLog, Table, Text, TransitionSystem, register_type)
 from .workflow import Edge, Group, Node, Workflow, WorkflowError, to_python, workflow
 
 __all__ = [
+    "Column",
     "AlignmentResult", "Any", "Box", "BoxError", "BoxSpec", "CPNet", "Cache", "DFG", "Dataset", "Edge",
     "EventLog", "Explanation", "Figure", "Footprint", "Group", "Library", "Marking", "Node", "PetriNet",
     "Port", "Predictions", "Predictor", "ProcessTree", "Regions", "ReplayResult", "Result", "Run",

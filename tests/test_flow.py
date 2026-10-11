@@ -207,6 +207,32 @@ def test_a_failing_box_stays_in_its_box():
     assert run.status(after) == "idle" and "failed" in run.result(after).message
 
 
+def test_a_column_setting_lists_the_connected_tables_columns():
+    """``x: Column = ""`` is a setting (a plain string to the function), and the
+    app lists the columns of the tables connected to the box once they have run."""
+    from openprocess.flow.runner import columns_connected
+    from openprocess.flow.types import Column, Table
+
+    @box
+    def table() -> Table:
+        return Table("t", ["fitness", "precision"], [[1, 2]])
+
+    @box
+    def pick(tables: list[Table] = (), x: Column = "") -> Table:
+        return Table("p", [x or "all"], [])
+
+    spec = pick.spec
+    assert [p.name for p in spec.inputs] == ["tables"] and [s.kind for s in spec.settings] == ["column"]
+    assert spec.settings[0].coerce("fitness") == "fitness" and spec.settings[0].default == ""
+    wf = Workflow("columns")
+    t, p = wf.add(table), wf.add(pick)
+    wf.connect(t, p)
+    assert columns_connected(wf, None, p) == []                      # not run yet
+    run = Runner().run(wf)
+    assert run.status(p) == "done"
+    assert columns_connected(wf, run, p) == ["fitness", "precision"] and columns_connected(wf, run, t) == []
+
+
 def test_a_box_with_nothing_plugged_in_waits_rather_than_fails():
     """Every input optional and none connected (Plot, just added): idle with a
     hint about what to connect, not a red Failed with a traceback.  A box with

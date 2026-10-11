@@ -41,6 +41,25 @@ WAITING, RUNNING, DONE, FAILED, IDLE, BLOCKED, SKIPPED = (
     "waiting", "running", "done", "failed", "idle", "blocked", "skipped")
 
 
+def columns_connected(workflow: Workflow, run: "Run | None", node: Node) -> list[str]:
+    """The columns of the tables connected to ``node``, as of ``run``: what a
+    ``Column`` setting lists.  Empty until the boxes before it have run."""
+    if run is None:
+        return []
+    from .types import Table
+    out: list[str] = []
+    for sources in workflow.inputs_of(node).values():
+        for source_id, output in sources:
+            result = run.result(source_id)
+            if result is None or result.status != DONE:
+                continue
+            value = result.values.get(output, result.value)
+            for item in (value if isinstance(value, (list, tuple)) else [value]):
+                if isinstance(item, Table):
+                    out.extend(column for column in item.columns if column not in out)
+    return out
+
+
 @dataclass
 class Result:
     """What one box produced in one run (one per sweep variant)."""
@@ -384,5 +403,5 @@ def run_in_process(spec: BoxSpec, inputs: dict, settings: dict, timeout: float |
     return outcome[1], outcome[2]
 
 
-__all__ = ["BLOCKED", "Cache", "DONE", "FAILED", "IDLE", "RUNNING", "Result", "Run", "Runner",
+__all__ = ["columns_connected", "BLOCKED", "Cache", "DONE", "FAILED", "IDLE", "RUNNING", "Result", "Run", "Runner",
            "WAITING", "run_in_process", "settings_key"]

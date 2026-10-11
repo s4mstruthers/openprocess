@@ -658,9 +658,11 @@ class SettingsWidget(QWidget):
 
     changed = Signal(str, object)
 
-    def __init__(self, spec: BoxSpec, settings: dict, folder: Path | None = None, parent=None) -> None:
+    def __init__(self, spec: BoxSpec, settings: dict, folder: Path | None = None, parent=None,
+                 columns: list[str] | None = None) -> None:
         super().__init__(parent)
         self.spec, self.folder = spec, folder
+        self.columns = list(columns or [])          # of the tables connected to the box, for Column settings
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
@@ -706,6 +708,8 @@ class SettingsWidget(QWidget):
             control.valueChanged.connect(lambda v, s=setting: self.changed.emit(s.name, v))
         elif setting.kind == "path":
             control = self._path_control(setting, value)
+        elif setting.kind == "column":
+            control = self._column_control(setting, value)
         else:
             control = QLineEdit(str(value) if not swept else "")
             control.editingFinished.connect(lambda s=setting, c=control: self.changed.emit(s.name, c.text()))
@@ -756,6 +760,41 @@ class SettingsWidget(QWidget):
             return
         edit.setStyleSheet("")
         self.changed.emit(setting.name, sweep)
+
+    def _column_control(self, setting: Setting, value) -> QComboBox:
+        """A column of a connected table: the table's columns to pick from, once
+        the box before this one has run, or a name typed in.  The first entry
+        is no column at all (Plot without x and y draws bars, not a line)."""
+        control = QComboBox()
+        control.setEditable(True)
+        control.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        control.setMinimumContentsLength(12)
+        control.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        control.setMaxVisibleItems(14)
+        control.lineEdit().setPlaceholderText(
+            "Pick a column…" if self.columns else "Connect a table and run it; its columns are listed here")
+        control.addItem("—", "")
+        for name in self.columns:
+            control.addItem(name, name)
+        control.setCurrentText("" if value in (None, "") else str(value))
+        last = {"text": control.currentText()}
+
+        def report(text: str, s=setting):
+            if text == last["text"]:                # only a real change: see _path_control
+                return
+            last["text"] = text
+            self.changed.emit(s.name, text)
+
+        def picked(index: int, c=control):
+            text = c.itemData(index) if index >= 0 else c.currentText()
+            text = "" if text is None else str(text)
+            if c.currentText() != text:
+                c.setCurrentText(text)
+            report(text)
+
+        control.currentIndexChanged.connect(picked)
+        control.lineEdit().editingFinished.connect(lambda c=control: report(c.currentText().strip()))
+        return control
 
     def _path_control(self, setting: Setting, value) -> QComboBox:
         """The file field: a list of the folder's files to pick from, or a

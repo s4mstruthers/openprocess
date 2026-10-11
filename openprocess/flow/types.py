@@ -112,6 +112,17 @@ class Table:
             writer.writerows(self.rows)
 
 
+
+class Column(str):
+    """The name of a column of a table connected to the box.
+
+    A setting typed ``Column`` (``x: Column = ""``) is a plain string to the
+    function.  In the app it is a list of the connected table's columns to
+    pick from, once the box before it has run; a name can still be typed.
+    It is a setting, not an input: the table is the input.
+    """
+
+
 @dataclass
 class Figure:
     """A picture: SVG text, or PNG bytes, as a box made it."""
@@ -286,6 +297,7 @@ for _cls, _key, _name, _colour in (
     register_type(_cls, _key, _name, _colour)
 
 __all__ = [
+    "Column",
     "AlignmentResult", "Any", "CPNet", "DFG", "Dataset", "EventLog", "Figure", "Footprint", "OCDFG", "OCEL",
     "Marking", "PetriNet", "Predictions", "Predictor", "ProcessTree", "Regions", "ReplayResult",
     "Scores", "SimpleLog", "Table", "Text", "TransitionSystem", "TypeInfo", "TYPES",

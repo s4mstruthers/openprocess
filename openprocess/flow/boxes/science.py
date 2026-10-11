@@ -17,7 +17,7 @@ from ...mining.log import EventLog
 from ...mining.petrinet import PetriNet
 from ..box import box
 from ..convert import convert
-from ..types import Figure, Scores, Table
+from ..types import Column, Figure, Scores, Table
 
 
 @box(name="Describe log", group="Science", needs="pandas")
@@ -109,7 +109,7 @@ def correlate(table: Table) -> Table:
 
 @box(name="Plot", group="Science", needs="matplotlib")
 def plot(scores: list[Scores] = (), tables: list[Table] = (),
-         x: str = "", y: str = "") -> Figure:
+         x: Column = "", y: Column = "") -> Figure:
     """Bars per model for scores, histograms for bootstrap tables, or a line
     of column *y* against column *x* of a table (a sweep). The figure is a
     matplotlib figure, converted to SVG; its code is this box's code.

@@ -1220,3 +1220,27 @@ def test_a_page_opened_from_a_box_is_a_view_until_kept(app, tmp_path, monkeypatc
     for d in window.documents:
         d.dirty = False
     window.close()
+
+
+def test_a_column_setting_is_a_dropdown_of_the_tables_columns(app):
+    from openprocess.flow import Column, Table, box
+    from openprocess.gui.flow.viewers import SettingsWidget
+
+    @box
+    def pick(tables: list[Table] = (), x: Column = "") -> Table:
+        return Table("p", [x], [])
+
+    widget = SettingsWidget(pick.spec, {"x": ""}, None, columns=["fitness", "precision"])
+    combo = widget.controls["x"]
+    assert [combo.itemText(i) for i in range(combo.count())] == ["—", "fitness", "precision"]
+    assert combo.currentText() == "" and combo.lineEdit().placeholderText() == "Pick a column…"
+    got = []
+    widget.changed.connect(lambda name, value: got.append((name, value)))
+    combo.setCurrentIndex(1)
+    assert got == [("x", "fitness")] and combo.currentText() == "fitness"
+    combo.setCurrentIndex(0)                                            # back to no column at all
+    assert got[-1] == ("x", "") and combo.currentText() == ""
+    # Nothing connected or not run yet: a name typed in still works, and the field says why the list is empty.
+    empty = SettingsWidget(pick.spec, {"x": "fitness"}, None, columns=[])
+    assert empty.controls["x"].currentText() == "fitness"
+    assert "Connect a table" in empty.controls["x"].lineEdit().placeholderText()

@@ -18,6 +18,7 @@ parameters whose type is a OpenProcess type             input connection points,
 the return type                                   the output; a dataclass of typed fields gives several
 ``int``, ``float``, ``bool``, ``str`` with a default  a setting, with the default as its value
 ``Literal["a", "b"]``                             a setting that is a choice
+``Column``                                        a setting that is a column of a connected table
 ``Path``                                          a setting that is a file in the folder
 the docstring                                     the help text
 ``inspect.getsource``                             the Code tab
@@ -44,7 +45,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Literal, Union, get_args, get_origin, get_type_hints
 
-from .types import TypeInfo, is_known, type_info
+from .types import Column, TypeInfo, is_known, type_info
 
 SETTING_TYPES = (int, float, bool, str)
 
@@ -106,7 +107,7 @@ class Setting:
     """A parameter that is not an input: shown as a control in the side panel."""
 
     name: str
-    kind: str                        # "int", "float", "bool", "str", "choice", "path"
+    kind: str                        # "int", "float", "bool", "str", "choice", "path", "column"
     default: Any
     choices: tuple = ()
     help: str = ""
@@ -273,12 +274,14 @@ def _setting_from(name: str, annotation, default, has_default: bool, doc_hints: 
         kind = "int"
     elif annotation is float:
         kind = "float"
+    elif annotation is Column:
+        kind = "column"
     elif annotation is str:
         kind = "str"
     else:
         raise BoxError(
             f"parameter {name!r} has type {_type_text(annotation)}, which is neither a OpenProcess "
-            f"type (an input) nor int, float, bool, str, Literal[...] or Path (a setting)")
+            f"type (an input) nor int, float, bool, str, Literal[...], Column or Path (a setting)")
     if not has_default:
         raise BoxError(f"setting {name!r} needs a default value (e.g. {name}: {kind} = ...)")
     if kind == "float" and isinstance(default, int) and not isinstance(default, bool):

@@ -27,6 +27,10 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
   Learn chips) are pills everywhere. They draw themselves now: a styled
   label's corners depended on when the style polished it, and the downloaded
   app showed square chips beside round ones.
+- **A column setting is a dropdown.** Plot's *x* and *y* list the columns of
+  the table connected to the box, once it has run; a name can still be
+  typed. A box author writes `x: Column = ""`, nothing more: the new
+  `Column` type is a plain string to the function.
 - A box with nothing plugged in (Plot, just added to the canvas) waits with
   *Connect scores or tables* instead of failing with a traceback.
 - The downloaded app carries the whole standard library, so a package
