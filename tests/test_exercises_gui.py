@@ -422,6 +422,12 @@ def test_question_markdown_has_maths_and_tables():
                          "$$\\bigcap_{R} R$$\n\nand $\\frobnicate$ stays as written.")
     assert "<table" in html and "<sub>" in html and "⋂" in html
     assert "frobnicate" in html and "MATHX" not in html
+    # A formula wrapped over a line break is one formula, and the prose between
+    # two formulas is prose: "$L = [...\n...]$ and the net $N$" once gave "andthenetN".
+    wrapped = markdown_html("The log $L = [\\langle a,b \\rangle^3, \\langle\na,e \\rangle]$ and the net $N$ are given.")
+    assert "and the net" in wrapped and "andthenet" not in wrapped and "\\langle" not in wrapped
+    apart = markdown_html("Costs $5 now.\n\nAnd $7 later.")
+    assert "$5" in apart and "$7" in apart
 
 
 def test_help_shows_references_and_the_authoring_guide(app):

@@ -521,6 +521,8 @@ def stylesheet() -> str:
         margin: 6px 5px; border-radius: 2px; }}
     QGraphicsView {{ background: {t.canvas}; border: none; }}
     QStatusBar {{ background: {t.page}; color: {t.text_muted}; border-top: 1px solid {t.border}; }}
+    QMenuBar {{ background: {t.page}; color: {t.text}; }}
+    QMenuBar::item:selected {{ background: {t.accent_soft}; color: {t.text}; border-radius: 4px; }}
     /* Pop-up menus: rounded like the cards (see widgets.round_menus, which
        gives them the see-through window the corners need). */
     QMenu {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: 10px;

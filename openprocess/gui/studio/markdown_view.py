@@ -23,7 +23,9 @@ from .mathtext import MATH_FONT, render
 # Markdown with maths
 # ---------------------------------------------------------------------------
 _DISPLAY = re.compile(r"\$\$(.+?)\$\$", re.S)
-_INLINE = re.compile(r"(?<![\\$])\$([^$\n]+?)\$")
+# A formula may wrap over a line break inside its paragraph (a worksheet's
+# long log), never over a blank line: that would pair the `$` of two formulas.
+_INLINE = re.compile(r"(?<![\\$])\$((?:[^$\n]|\n(?!\n))+?)\$")
 
 
 def _maths(source: str, size: int) -> str:

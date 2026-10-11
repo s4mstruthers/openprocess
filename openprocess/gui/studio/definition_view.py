@@ -138,10 +138,17 @@ class DefinitionPopup(QFrame):
         self.browser.setHtml(definition_html(definition, instance))
         self.back_button.setVisible(bool(self.history))
         document = self.browser.document()
-        document.setTextWidth(WIDTH - 8)
+        # The frame (the stylesheet's padding, known once the widget is
+        # polished) takes its share of the width and the height; counted
+        # short, the card scrolled by a few pixels.  The text wraps, so there
+        # is never anything to scroll sideways.
+        self.browser.ensurePolished()
+        frame = 2 * self.browser.frameWidth()
+        self.browser.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        document.setTextWidth(WIDTH - frame)
         screen = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
         limit = int(screen.availableGeometry().height() * 0.7) if screen else 560
-        self.browser.setFixedHeight(min(int(document.size().height()) + 12, limit))
+        self.browser.setFixedHeight(min(int(document.size().height()) + frame, limit))
         self.adjustSize()
 
     def _link(self, target: str) -> None:
