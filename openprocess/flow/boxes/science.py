@@ -110,11 +110,13 @@ def correlate(table: Table) -> Table:
 @box(name="Plot", group="Science", needs="matplotlib")
 def plot(scores: list[Scores] = (), tables: list[Table] = (),
          x: Column = "", y: Column = "") -> Figure:
-    """Bars per model for scores, histograms for bootstrap tables, or a line
-    of column *y* against column *x* of a table (a sweep). The figure is a
+    """Bars per model for scores, histograms for bootstrap tables, or column
+    *y* of a table against column *x*: bars when *x* holds names (a model per
+    bar), a line when it holds numbers (a sweep). Once *x* and *y* are set
+    they decide the figure, whatever else is connected. The figure is a
     matplotlib figure, converted to SVG; its code is this box's code.
 
-    x: a column of the table to put on the x axis (lines only)
+    x: a column of the table to put on the x axis
     y: the column to plot against it
     """
     import matplotlib
@@ -122,7 +124,24 @@ def plot(scores: list[Scores] = (), tables: list[Table] = (),
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(5.5, 3.2))
     scores, tables = list(scores), list(tables)
-    if scores:
+    if tables and x and y:
+        for table in tables:
+            for name in (x, y):
+                if name not in table.columns:
+                    raise ValueError(f"{table.name} has no column {name!r}; it has {', '.join(table.columns)}")
+        numeric = all(isinstance(v, (int, float)) and not isinstance(v, bool) for t in tables for v in t.column(x))
+        for table in tables:
+            values = [float(v) for v in table.column(y)]
+            if numeric:
+                ax.plot(table.column(x), values, marker="o", label=table.name)
+            else:
+                ax.bar([str(v) for v in table.column(x)], values, label=table.name)
+        ax.set_xlabel(x)
+        ax.set_ylabel(y)
+        if len(tables) > 1:
+            ax.legend(fontsize=8)
+        caption = f"{y} against {x}."
+    elif scores:
         metrics = [m for m in dict.fromkeys(k for s in scores for k in s.metrics)
                    if all(isinstance(s.metrics.get(m, 0.0), (int, float)) for s in scores)]
         width = 0.8 / max(1, len(metrics))
@@ -134,14 +153,6 @@ def plot(scores: list[Scores] = (), tables: list[Table] = (),
         ax.set_ylim(0, 1.05)
         ax.legend(fontsize=8)
         caption = f"{len(scores)} models, {len(metrics)} scores each."
-    elif tables and x and y:
-        for table in tables:
-            ax.plot(table.column(x), table.column(y), marker="o", label=table.name)
-        ax.set_xlabel(x)
-        ax.set_ylabel(y)
-        if len(tables) > 1:
-            ax.legend(fontsize=8)
-        caption = f"{y} against {x}."
     elif tables:
         for table in tables:
             if table.samples:
@@ -150,7 +161,7 @@ def plot(scores: list[Scores] = (), tables: list[Table] = (),
         ax.legend(fontsize=8)
         caption = f"{len(tables)} bootstrap distribution{'s' if len(tables) != 1 else ''}."
     else:
-        raise ValueError("Connect scores, or tables with samples or an x and y column")
+        raise ValueError("Connect scores, or tables with samples, or a table and set both x and y")
     fig.tight_layout()
     figure = convert(fig, Figure)
     plt.close(fig)

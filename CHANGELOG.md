@@ -42,6 +42,12 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 - A folder's own boxes keep working when the folder is moved, copied or
   imported: a box is found by its function name in `boxes/` when its old id
   no longer matches.
+- **Plot's *x* and *y* draw what they say.** Set them and the figure shows
+  column *y* of the connected table against column *x*, bars when *x* holds
+  names (a model per bar) and a line when it holds numbers, whatever else is
+  connected. Before, scores plugged into the box always gave their bars and
+  the two settings changed nothing. A column a table lacks is named in the
+  error, with the columns it has.
 
 ## 0.10.6
 

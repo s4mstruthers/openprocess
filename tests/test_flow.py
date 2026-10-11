@@ -513,6 +513,22 @@ def test_plot_scores_gives_svg():
     assert figure.svg and figure.svg.lstrip().startswith("<?xml") or "<svg" in figure.svg
 
 
+@pytest.mark.skipif(not has("matplotlib"), reason="matplotlib not installed")
+def test_plot_x_and_y_win_over_scores():
+    """Set x and y and the figure follows them, even with scores connected
+    (before, scores always gave bars and the settings changed nothing)."""
+    from openprocess.flow.boxes.science import plot
+    scores = [Scores("a", {"fitness": 0.9}), Scores("b", {"fitness": 0.7})]
+    table = Table("Compare", ["model", "precision"], [["a", 0.5], ["b", 0.8]])
+    assert plot(scores=scores, tables=[table]).caption == "2 models, 1 scores each."
+    figure = plot(scores=scores, tables=[table], x="model", y="precision")
+    assert figure.caption == "precision against model." and "<svg" in figure.svg
+    sweep = Table("Sweep", ["noise", "fitness"], [[0.0, 1.0], [0.1, 0.8]])
+    assert plot(tables=[sweep], x="noise", y="fitness").caption == "fitness against noise."
+    with pytest.raises(ValueError, match="no column 'recall'"):
+        plot(tables=[table], x="model", y="recall")
+
+
 # ---------------------------------------------------------------------------
 # Coloured nets
 # ---------------------------------------------------------------------------
