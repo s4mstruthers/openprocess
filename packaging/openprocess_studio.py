@@ -83,7 +83,10 @@ def self_test(model_path: str | None = None) -> int:
             print(f"install: the app cannot run pip (exit {pip.returncode}): {pip.stderr.strip()[-400:]}", flush=True)
             return 1
         print(f"install: {pip.stdout.strip()}", flush=True)
+    # Windows has no curses or readline, and it ships pty.py and tty.py, which
+    # want termios: those fail in any Python on Windows, not just in the app.
     tolerated = {"curses", "readline"} if sys.platform == "win32" else set()
+    posix_only = {"termios", "fcntl", "grp", "pwd", "posix", "resource", "syslog"}
     missing = []
     checked = 0
     for name in packages.stdlib_modules():
@@ -92,6 +95,10 @@ def self_test(model_path: str | None = None) -> int:
         checked += 1
         try:
             importlib.import_module(name)
+        except ModuleNotFoundError as error:
+            if sys.platform == "win32" and error.name in posix_only:
+                continue
+            missing.append(f"{name} ({type(error).__name__}: {error})")
         except Exception as error:  # noqa: BLE001 - whatever stops the import
             missing.append(f"{name} ({type(error).__name__}: {error})")
     if missing:
