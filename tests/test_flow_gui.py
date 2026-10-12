@@ -1337,3 +1337,41 @@ def test_result_tables_sort_by_number_and_copy(app):
     host.close()
     host.deleteLater()
     app.processEvents()
+
+
+def test_a_click_that_opens_the_panel_leaves_the_box_where_it_was(app):
+    """Opening the side panel narrows the canvas, which re-fits itself while
+    the mouse is still down on the box that was clicked.  The re-fit must wait
+    for the release: otherwise the box's drag anchor (a scene point taken at
+    the press) no longer sits under the pointer, and the first pixel of
+    movement flings the box across the canvas."""
+    from openprocess.flow.workflow import Workflow
+    from openprocess.gui.flow.page import WorkflowPage
+    from openprocess.gui.studio.documents import WorkflowDocument
+
+    wf = Workflow("click")
+    log = wf.add("typed_log", {"text": "[<a,b>^2, <a,c>]"}, (0, 0))
+    miner = wf.add("inductive_miner", {}, (300, 0))
+    wf.add("check_fit", {}, (600, 0))
+    wf.connect(log.id, miner.id, "log")
+    page = WorkflowPage(WorkflowDocument(wf), wf.library)
+    page.resize(1300, 700)
+    page.show()
+    _pump(app, 0.3)
+    view, scene = page.view, page.scene
+    assert not page.panel.isVisible() and view.auto_fit
+    zoom_before = view.zoom()
+    item = scene.boxes[miner.id]
+    centre = view.mapFromScene(item.mapToScene(item.rect().center()))
+    before = tuple(miner.position)
+    QTest.mousePress(view.viewport(), Qt.LeftButton, Qt.NoModifier, centre)
+    _pump(app, 0.3)                                   # the panel opens, the canvas narrows
+    assert page.panel.isVisible() and page.selected == miner.id
+    assert view.zoom() == zoom_before                 # ... but the view holds still while the button is down
+    QTest.mouseMove(view.viewport(), centre + QPoint(1, 0))
+    QTest.mouseRelease(view.viewport(), Qt.LeftButton, Qt.NoModifier, centre + QPoint(1, 0))
+    _pump(app, 0.3)
+    assert tuple(miner.position) == before
+    assert view.auto_fit and view.zoom() != zoom_before   # the fit came once the button was up
+    page.document.dirty = False
+    page.close()

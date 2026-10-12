@@ -582,6 +582,10 @@ class GraphView(CanvasPanning, QGraphicsView):
         #: While True, resizing the view re-fits the graph.  Any manual zoom
         #: turns it off, so the user's zoom level is respected.
         self.auto_fit = True
+        # A fit asked for while the left button is down on the canvas waits
+        # for the release: see :meth:`fit_waits`.
+        self._pressed = False
+        self._fit_pending = False
         self.zoom_controls = ZoomControls(self) if zoom_controls else None
         self._place_controls()
         self.init_canvas()
@@ -616,7 +620,26 @@ class GraphView(CanvasPanning, QGraphicsView):
         # give it the room the window has.
         return QSize(480, 320)
 
+    def fit_waits(self) -> bool:
+        """True when a fit must wait for the mouse button to come up.
+
+        Clicking a box opens the side panel; the canvas gets narrower and,
+        with ``auto_fit`` on, re-fits itself, all while the button is still
+        down on the box.  A moving item's drag anchor is a scene point taken
+        at the press, so once the view's transform has changed under the
+        pointer, the first pixel of movement moves the box by the whole
+        difference: it lands far across the canvas.  So while the left button
+        is down on this view, a fit is only noted, and done at the release.
+        """
+        if not self._pressed:
+            return False
+        self.auto_fit = True
+        self._fit_pending = True
+        return True
+
     def fit(self) -> None:
+        if self.fit_waits():
+            return
         self.auto_fit = True
         rect = self.graph.sceneRect()
         if rect.isEmpty():
@@ -666,6 +689,29 @@ class GraphView(CanvasPanning, QGraphicsView):
 
     def actual_size(self) -> None:
         self.zoom_by(1 / self.transform().m11(), around_centre=True)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.LeftButton:
+            self._pressed = True
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if self._pressed and not event.buttons() & Qt.LeftButton:   # released outside the window
+            self._pressed = False
+            self._fit_if_pending()
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        super().mouseReleaseEvent(event)
+        if event.button() == Qt.LeftButton and self._pressed:
+            self._pressed = False
+            self._fit_if_pending()
+
+    def _fit_if_pending(self) -> None:
+        if self._fit_pending:
+            self._fit_pending = False
+            if self.auto_fit:
+                self.fit()
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         key = event.key()

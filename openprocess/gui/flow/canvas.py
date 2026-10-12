@@ -900,6 +900,8 @@ class WorkflowView(GraphView):
         self.files_dropped.emit(paths, self.mapToScene(event.position().toPoint()))
 
     def fit(self) -> None:
+        if self.fit_waits():
+            return
         self.auto_fit = True
         rect = self.graph.itemsBoundingRect()
         if rect.isEmpty():

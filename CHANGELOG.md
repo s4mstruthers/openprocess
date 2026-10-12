@@ -58,6 +58,11 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
   pixels. On Windows and Linux the menu bar follows dark mode.
 - The README's screenshots show this version, made from the app itself by
   `docs/make_screenshots.py`.
+- **A click no longer flings a box across the canvas.** Clicking a box
+  opens the side panel, the canvas narrows and re-fits itself, and that
+  happened while the mouse was still down on the box, so the slightest
+  movement before letting go moved it far away. The canvas now waits for the
+  button to come up before it re-fits.
 
 ## 0.10.6
 
