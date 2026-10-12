@@ -48,7 +48,7 @@ from .sim.simulator import Simulator
 #: The one place the version number is written (pyproject.toml, the update
 #: check and packaging/build.py read it from here).  A release is tagged
 #: "v" + this, e.g. v0.2.0.
-__version__ = "0.11.0"
+__version__ = "0.11.1"
 
 __all__ = [
     "Arc", "BindingElement", "CPNet", "Marking", "Multiset", "Page", "Place",

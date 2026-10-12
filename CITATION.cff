@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use OpenProcess in teaching or research, please cite it as below."
 type: software
 title: "OpenProcess: process mining, Petri nets and workflows in one open app"
-version: 0.11.0
-date-released: 2026-10-11
+version: 0.11.1
+date-released: 2026-10-12
 repository-code: https://github.com/s4mstruthers/openprocess
 url: https://github.com/s4mstruthers/openprocess
 license: MIT
