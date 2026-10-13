@@ -56,6 +56,8 @@ REFERENCES: tuple[Reference, ...] = (
               "*Discovering Block-Structured Process Models from Event Logs Containing "
               "Infrequent Behaviour*. Business Process Management Workshops (BPM 2013), "
               "LNBIP 171, pp. 66–78. Springer, 2014.", "10.1007/978-3-319-06257-0_6"),
+    Reference("leemans2017", "S.J.J. Leemans. *Robust Process Mining with Guarantees*. PhD "
+              "thesis, Eindhoven University of Technology, 2017. ISBN 978-90-386-4257-4."),
     Reference("weijters2003", "A.J.M.M. Weijters and W.M.P. van der Aalst. *Rediscovering "
               "Workflow Models from Event-Based Data using Little Thumb*. Integrated "
               "Computer-Aided Engineering 10(2):151–162, 2003."),
@@ -175,8 +177,9 @@ TOPICS: tuple[tuple[str, tuple[Topic, ...]], ...] = (
         Topic("α-algorithm", "The eight steps from $T_L$ to $\\alpha(L)$, with $X_L$ and "
               "$Y_L$.", ("aalst2004", "aalst2013", "aalst2016"), "openprocess.mining.discovery.alpha"),
         Topic("Inductive Miner (IM) and IM – infrequent (IMf)",
-              "Cuts, base cases and fall-throughs on the directly-follows graph; IMf filters "
-              "infrequent behaviour.", ("leemans2013", "leemans2014"),
+              "Cuts, base cases and fall-throughs on the directly-follows graph; the strict "
+              "sequence cut; IMf filters infrequent behaviour.",
+              ("leemans2013", "leemans2014", "leemans2017"),
               "openprocess.mining.discovery.inductive"),
         Topic("Heuristics Miner",
               "Dependency measures $a \\Rightarrow b$, length-one and length-two loops, and "

@@ -319,9 +319,11 @@ def _step_html(step) -> str:
     if step.kind == "cut":
         groups = " &nbsp;|&nbsp; ".join(_set(g) for g in step.groups or [])
         where = " <span style='color:%s'>(on the filtered DFG)</span>" % muted if step.filtered else ""
+        # A sequence cut says when the strict step merged groups (Leemans 2017).
+        detail = f"<br><span style='color:{muted}'>{escape(step.detail)}</span>" if step.detail else ""
         return (f"<b style='color:{accent}; font-size: 15px'>{step.operator}</b> "
                 f"<b>{OPERATOR_NAMES.get(step.operator, '')} cut</b>{where}<br>"
-                f"<span style='font-family:{MATH_FONT}'>{groups}</span>")
+                f"<span style='font-family:{MATH_FONT}'>{groups}</span>{detail}")
     if step.kind == "base":
         leaf = "<i>τ</i>" if step.result == "τ" else _activity(step.result or "")
         return f"<b>base case</b> → {leaf}"

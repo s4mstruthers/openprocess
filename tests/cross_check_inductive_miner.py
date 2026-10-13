@@ -21,13 +21,20 @@ What it does, for the six textbook logs and (by default) 400 random ones:
    token-based precision) of the two models on the same log, so a difference
    can be read as "ours is less precise", "equal" or "more precise".
 
-Baseline, OpenProcess 0.11.1 against PM4Py 2.7.23, seed 2026, 400 random logs:
-406 logs, guarantees hold on 406, identical trees on 369 (all six textbook logs
-among them), 37 differ, of which 30 less precise, 4 equal, 3 more precise.
-Every one of the 37 is the same choice: after a sequence cut, groups that are
-always skipped *together* (``<b>, <b,b,a,c>``: ``a`` and ``c`` never appear
-without each other) are modelled as skippable *separately*,
-``→(…, ×(a,τ), ×(c,τ))``, where the reference gives ``→(…, ×(→(a,c),τ))``.
+Baseline against PM4Py 2.7.23, seed 2026, 400 random logs:
+
+* OpenProcess 0.11.1: guarantees hold on 406, identical trees on 369 (all six
+  textbook logs among them), 37 differ, of which 30 less precise.  Every one
+  of the 37 came from the sequence cut: groups that are only ever skipped
+  *together* (``<b>, <b,b,a,c>``: ``a`` and ``c`` never appear without each
+  other) were modelled as skippable *separately*, ``→(…, ×(a,τ), ×(c,τ))``,
+  where the reference gives ``→(…, ×(→(a,c),τ))``; and a cut was accepted
+  when *some* pair of activities reached across it rather than *every* pair.
+* After the strict sequence cut (Leemans 2017, p. 233) and the every-pair
+  test: guarantees hold on 406, identical trees on 401, 5 differ (2 less
+  precise, 2 equal, 1 more precise), all of them fall-throughs on logs that
+  have no cut at all, where the two implementations try the fall-throughs
+  in a different order.
 """
 
 from __future__ import annotations

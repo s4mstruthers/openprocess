@@ -148,6 +148,41 @@ def test_inductive_miner_on_course_log_matches_pm4py():
     assert "stow bag" in tree
 
 
+def test_sequence_cut_follows_the_definition_for_every_pair():
+    """Every activity of an earlier group must reach every activity of a later
+    one.  In [<b,b,c,c,c,c>, <b,a,d,d>] c reaches nothing and d is reached
+    only from a, so c and d (and a) must share a group: {b} | {a, c, d}, not
+    {b} | {a, c} | {d}, which the old any-pair test accepted."""
+    from openprocess.mining.dfg import dfg_from_simple_log
+    from openprocess.mining.discovery.inductive import maximal_sequence_cut
+    dfg = dfg_from_simple_log(parse_simple_log("[<b,b,c,c,c,c>^2, <b,a,d,d>^3]"))
+    assert maximal_sequence_cut(dfg) == [{"b"}, {"a", "c", "d"}]
+    tree = str(inductive_miner(parse_simple_log("[<b,b,c,c,c,c>^2, <b,a,d,d>^3]")).tree)
+    assert tree == "→(↺(b, τ), ×(→(a, ↺(d, τ)), ↺(c, τ)))"      # × is commutative
+
+
+def test_strict_sequence_cut_merges_groups_skipped_together():
+    """Leemans 2017, p. 233: a and c never occur without each other, so the
+    optional stretch is ×(τ, →(a, c)), not two separate choices ×(τ, a),
+    ×(τ, c) that would also allow <b, a> and <b, c>."""
+    from openprocess.mining.dfg import dfg_from_simple_log
+    from openprocess.mining.discovery.inductive import (maximal_sequence_cut,
+                                                        merge_skippable_groups, sequence_cut)
+    log = parse_simple_log("[<b>^4, <b,b,a,c>]")
+    dfg = dfg_from_simple_log(log)
+    assert maximal_sequence_cut(dfg) == [{"b"}, {"a"}, {"c"}]
+    assert merge_skippable_groups(dfg, [{"b"}, {"a"}, {"c"}]) == [{"b"}, {"a", "c"}]
+    assert sequence_cut(dfg) == [{"b"}, {"a", "c"}]
+    result = inductive_miner(log)
+    assert str(result.tree) == "→(↺(b, τ), ×(τ, →(a, c)))"
+    assert any("skipped together" in s.text or "skipped together" in (s.detail or "")
+               for s in result.steps)
+    # The textbook log is a plain sequence cut: nothing to merge, nothing said.
+    plain = inductive_miner(parse_simple_log("[<a,b,c,d>^3, <a,c,b,d>^2, <a,e,d>]"))
+    assert str(plain.tree) == "→(a, ×(∧(b, c), e), d)"
+    assert not any("skipped together" in (s.detail or "") for s in plain.steps)
+
+
 def test_inductive_miner_always_fits_randomised():
     rng = random.Random(7)
     for _ in range(15):

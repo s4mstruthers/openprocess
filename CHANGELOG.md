@@ -8,6 +8,21 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
 ## 0.11.2
 
+- **The Inductive Miner's sequence cut now agrees with the reference
+  implementation.** Two changes to `sequence_cut`, both from Leemans'
+  thesis (*Robust Process Mining with Guarantees*, 2017), which is what
+  ProM and PM4Py follow: (1) a cut is accepted only when *every* activity of
+  an earlier group reaches *every* activity of a later one, as the
+  definition says, not when some pair does; (2) the *strict* step: groups
+  that can only be skipped together become one group, so an optional
+  stretch `a, c` is `×(τ, →(a, c))` rather than `×(τ, a), ×(τ, c)`, which
+  also allowed `<b, a>` and `<b, c>` that never happened. The How tab says
+  when the strict step merged groups, and Cite on the box lists the thesis.
+  The cross-check against PM4Py goes from 369 identical trees of 406 to
+  401; the five that remain are fall-throughs on logs with no cut, tried in
+  a different order, and the guarantees (a sound net, fitness 1) hold on
+  every log before and after. Models discovered from logs with skippable
+  stretches change; models of the textbook logs do not.
 - **Fixed: Describe log and Correlate failed with "No converter from
   EventLog to pandas.DataFrame" whenever pandas was installed.** A converter
   was registered under the class's defining module

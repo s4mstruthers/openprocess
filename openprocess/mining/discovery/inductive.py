@@ -1,7 +1,8 @@
 """The Inductive Miner (IM) and Inductive Miner – infrequent (IMf).
 
 Reading: Leemans, Fahland & van der Aalst, "Discovering block-structured
-process models from event logs" (course reading 4).
+process models from event logs" (course reading 4); the strict sequence cut
+is from Leemans, "Robust Process Mining with Guarantees" (PhD thesis, 2017).
 
 The idea: divide and conquer
 ----------------------------
@@ -22,6 +23,11 @@ The four cuts, in the order they are tried
     Every activity of an earlier group can reach every activity of a later
     group, and never the other way round.  Computed from the strongly
     connected components, merging components that are mutually unreachable.
+    Then the *strict* step (Leemans 2017, p. 233): groups that can only be
+    skipped together are merged, so an optional stretch ``a, c`` becomes
+    ``×(→(a,c), τ)`` rather than ``×(a,τ), ×(c,τ)``.  ProM and PM4Py do the
+    same, and ``tests/cross_check_inductive_miner.py`` checks that the trees
+    agree.
 ∧ parallel
     Between two different groups, *every* pair of activities directly
     follows each other in both directions, and every group contains a start
@@ -152,6 +158,15 @@ class _Miner:
             self.note(depth, f"{operator.value} cut{' (on filtered DFG)' if filtered else ''}: "
                              f"{described}", "cut", operator=operator.value,
                       groups=[sorted(g) for g in groups], filtered=filtered)
+            if operator is Operator.SEQUENCE:
+                maximal = maximal_sequence_cut(dfg) or []
+                if len(maximal) != len(groups):
+                    merged = [sorted(g) for g in groups
+                              if not any(set(g) == m for m in maximal)]
+                    self.records[-1].detail = (
+                        "strict sequence cut: groups that can only be skipped together are "
+                        "one group: " + " ".join("{" + ", ".join(g) + "}" for g in merged))
+                    self.steps.append("  " * (depth + 1) + self.records[-1].detail)
             sublogs = split_log(log, operator, groups, dfg)
             children = [self.mine(sub, depth + 1) for sub in sublogs]
             if operator is Operator.LOOP and len(children) > 2:
@@ -269,30 +284,58 @@ def xor_cut(dfg: DFG) -> list[set[str]] | None:
 
 
 def sequence_cut(dfg: DFG) -> list[set[str]] | None:
+    """The *strict* sequence cut: the maximal sequence cut, then the groups
+    that can only be skipped together merged into one (Leemans 2017, p. 233).
+
+    The maximal cut puts every activity in the finest possible position of
+    the sequence.  That is correct but can be needlessly general: in
+    ``[<b>^4, <b,b,a,c>]`` the maximal cut is ``{b} | {a} | {c}``, and since
+    ``a`` and ``c`` are absent from four of the five traces, each becomes
+    optional on its own, ``→(↺(b,τ), ×(a,τ), ×(c,τ))``, a model that also
+    allows ``<b,a>`` and ``<b,c>``, which never happened.  ``c`` can only be
+    reached through ``a``, so whenever ``a`` is skipped ``c`` is skipped too:
+    merging them gives ``{b} | {a, c}`` and ``→(↺(b,τ), ×(→(a,c),τ))``.
+    """
+    groups = maximal_sequence_cut(dfg)
+    return None if groups is None else merge_skippable_groups(dfg, groups)
+
+
+def maximal_sequence_cut(dfg: DFG) -> list[set[str]] | None:
+    """The sequence cut with as many groups as the reachability relation
+    allows, ordered first to last.
+
+    The definition (Leemans, Fahland & van der Aalst 2013; Leemans 2017,
+    p. 188): a partition ``Σ1, …, Σn`` such that for every earlier group
+    ``Σi`` and later group ``Σj``, *every* ``a ∈ Σi`` reaches *every*
+    ``b ∈ Σj`` through the directly-follows graph, and no ``b`` reaches
+    any ``a``.  Two activities therefore belong to the same group exactly
+    when they reach each other (a loop) or when neither reaches the other
+    (two branches of a choice, or two concurrent activities): one of them
+    could not be put strictly before the other.
+
+    Computed as the thesis does it: start with one group per activity and
+    merge any two groups that hold such a pair, until nothing merges.  The
+    groups are then totally ordered by reachability.
+    """
     reach = _reachability(dfg)
-    nodes = sorted(dfg.activities)
-    # Strongly connected components: a and b together iff each reaches the other.
-    groups: list[set[str]] = []
-    for node in nodes:
-        for group in groups:
-            other = next(iter(group))
-            if (other in reach[node] and node in reach[other]):
-                group.add(node)
-                break
-        else:
-            groups.append({node})
+    groups: list[set[str]] = [{a} for a in sorted(dfg.activities)]
+    if not groups:
+        return None
 
-    def reaches(g1: set[str], g2: set[str]) -> bool:
-        return any(b in reach[a] for a in g1 for b in g2)
+    def must_share_a_group(g1: set[str], g2: set[str]) -> bool:
+        for a in g1:
+            for b in g2:
+                forward, backward = b in reach[a], a in reach[b]
+                if forward == backward:          # both ways (a loop) or neither
+                    return True
+        return False
 
-    # Merge groups that are mutually unreachable (neither can reach the other):
-    # they must sit in the same position of the sequence.
     merged = True
     while merged:
         merged = False
         for i in range(len(groups)):
             for j in range(i + 1, len(groups)):
-                if not reaches(groups[i], groups[j]) and not reaches(groups[j], groups[i]):
+                if must_share_a_group(groups[i], groups[j]):
                     groups[i] |= groups.pop(j)
                     merged = True
                     break
@@ -300,18 +343,84 @@ def sequence_cut(dfg: DFG) -> list[set[str]] | None:
                 break
     if len(groups) < 2:
         return None
-    # Order: g1 before g2 iff g1 reaches g2.  Sorting by "number of groups
-    # reachable from me" (descending) gives a topological order.
-    # (Scores are computed first: during list.sort() the list looks empty to
-    # a key function that refers back to it.)
+
+    # After the fixpoint, for any two groups every pair reaches in exactly one
+    # direction, so "how many groups does this one reach" orders them.
+    def reaches(g1: set[str], g2: set[str]) -> bool:
+        return any(b in reach[a] for a in g1 for b in g2)
+
     score = [sum(1 for other in groups if other is not g and reaches(g, other)) for g in groups]
     groups = [g for _, g in sorted(zip(score, groups), key=lambda item: -item[0])]
-    # Validate: every earlier group reaches every later one and never back.
+    # Validate the definition literally: every pair, forward only.
     for i in range(len(groups)):
         for j in range(i + 1, len(groups)):
-            if not reaches(groups[i], groups[j]) or reaches(groups[j], groups[i]):
-                return None
+            for a in groups[i]:
+                for b in groups[j]:
+                    if b not in reach[a] or a in reach[b]:
+                        return None
     return groups
+
+
+def merge_skippable_groups(dfg: DFG, groups: list[set[str]]) -> list[set[str]]:
+    """Merge the groups of a sequence cut that can only be skipped together.
+
+    Follows the function on page 233 of S.J.J. Leemans, *Robust Process
+    Mining with Guarantees* (PhD thesis, 2017), which is also what ProM's and
+    PM4Py's Inductive Miner do, so the trees agree.
+
+    A group ``p`` is *skippable* when some trace gets past it without
+    visiting it: an edge from a group before ``p`` to one after it, a start
+    activity after ``p``, or an end activity before ``p``.  A skippable
+    group then absorbs
+
+    * the groups just before it whose edges never go past ``p`` (they can
+      only leave the sequence through ``p`` or earlier, so skipping ``p``
+      means skipping them), and
+    * the groups just after it that are only ever entered from ``p`` or
+      later (they can only be reached through ``p``, so skipping ``p``
+      skips them as well).
+
+    The merged group takes ``p``'s position, so the sequence order is kept.
+    Groups that do not merge are returned as they were.
+    """
+    n = len(groups)
+    index = {a: i for i, g in enumerate(groups) for a in g}
+    # comes_from[i]: the earliest group an edge into group i comes from; before
+    # everything (-1) when the group holds a start activity.  goes_to[i]: the
+    # latest group an edge out of group i goes to; past everything (n) when
+    # the group holds an end activity.
+    comes_from = [-1 if any(a in dfg.start for a in g) else n for g in groups]
+    goes_to = [n if any(a in dfg.end for a in g) else -1 for g in groups]
+    for a, b in dfg.edges:
+        comes_from[index[b]] = min(comes_from[index[b]], index[a])
+        goes_to[index[a]] = max(goes_to[index[a]], index[b])
+
+    merged = [set(g) for g in groups]
+    where = dict(index)                      # activity -> its group's current position
+
+    def skippable(p: int) -> bool:
+        if any(where[a] < p < where[b] for a, b in dfg.edges):
+            return True
+        return any(where[a] > p for a in dfg.start) or any(where[a] < p for a in dfg.end)
+
+    def absorb(p: int, q: int) -> None:
+        merged[p] |= merged[q]
+        for a in merged[q]:
+            where[a] = p
+        merged[q] = set()
+
+    for p in range(n):
+        if not merged[p] or not skippable(p):
+            continue
+        q = p - 1
+        while q >= 0 and goes_to[q] <= p:
+            absorb(p, q)
+            q -= 1
+        q = p + 1
+        while q < n and comes_from[q] >= p:
+            absorb(p, q)
+            q += 1
+    return [g for g in merged if g]
 
 
 def parallel_cut(dfg: DFG) -> list[set[str]] | None:
