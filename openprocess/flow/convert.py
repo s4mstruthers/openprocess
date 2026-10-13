@@ -15,6 +15,7 @@ class and the target (a class, or a dotted name).
 from __future__ import annotations
 
 import importlib
+import importlib.util
 from typing import Any, Callable
 
 from ..mining.log import KEY_NAME, KEY_RESOURCE, KEY_TIME, EventLog, SimpleLog
@@ -25,9 +26,47 @@ _converters: dict[tuple[str, str], Callable] = {}
 
 
 def _name(target) -> str:
+    """The name a type is registered under: ``module.qualname`` for a class,
+    a dotted string as given.  Nothing is imported here, so registering a
+    converter for ``"pandas.core.frame.DataFrame"`` costs nothing when pandas
+    is absent, and importing this module never imports pandas."""
     if isinstance(target, str):
         return target
     return f"{target.__module__}.{target.__qualname__}"
+
+
+def _resolve(dotted: str):
+    """The class a dotted name points at, or None when it cannot be found.
+
+    Tries the longest module prefix first (``a.b.c.D`` as module ``a.b.c``,
+    attribute ``D``), then shorter ones, so both ``pandas.DataFrame`` and
+    ``pandas.core.frame.DataFrame`` resolve to the same class.  A name whose
+    top-level package is not installed resolves to None without importing
+    anything.
+    """
+    parts = dotted.split(".")
+    if len(parts) < 2 or importlib.util.find_spec(parts[0]) is None:
+        return None
+    for split in range(len(parts) - 1, 0, -1):
+        try:
+            obj = importlib.import_module(".".join(parts[:split]))
+        except ImportError:
+            continue
+        for attribute in parts[split:]:
+            obj = getattr(obj, attribute, None)
+            if obj is None:
+                break
+        else:
+            if isinstance(obj, type):
+                return obj
+    return None
+
+
+def _canonical(name: str) -> str:
+    """``name`` as the class it points at is defined (``module.qualname``),
+    or ``name`` itself when it points at nothing importable."""
+    resolved = _resolve(name)
+    return name if resolved is None else _name(resolved)
 
 
 def register(source, target, function: Callable) -> None:
@@ -39,20 +78,49 @@ def _class_names(value) -> list[str]:
     return [f"{cls.__module__}.{cls.__qualname__}" for cls in type(value).__mro__]
 
 
+def _find(value: Any, target) -> Callable | None:
+    """The registered converter from ``value``'s class (or a base class) to
+    ``target``, or None.
+
+    A class may be named by where it is imported from (``"pandas.DataFrame"``)
+    or where it is defined (``"pandas.core.frame.DataFrame"``, which pandas
+    2 reports as the class's module, while pandas 3 reports ``"pandas"``).
+    Both the source and the target are matched by resolving the names to the
+    class.  Only registered names in the same top-level package as the value
+    or the target are resolved, so looking up a pandas conversion imports
+    pandas and nothing else, and only once a conversion is asked for.
+    """
+    wanted = _name(target)
+    wanted_names = {wanted, _canonical(wanted)}
+    target_package = wanted.split(".")[0]
+    value_names = set(_class_names(value))
+    value_package = type(value).__module__.split(".")[0]
+
+    def matches(registered: str, names: set[str], package: str) -> bool:
+        if registered in names:
+            return True
+        return registered.split(".")[0] == package and _canonical(registered) in names
+
+    for (source, registered), function in _converters.items():
+        if matches(source, value_names, value_package) and \
+                matches(registered, wanted_names, target_package):
+            return function
+    return None
+
+
 def can_convert(value: Any, target) -> bool:
-    return any((name, _name(target)) in _converters for name in _class_names(value))
+    return _name(target) in _class_names(value) or _find(value, target) is not None
 
 
 def convert(value: Any, target):
     """Convert ``value`` to ``target`` (a class or a dotted name)."""
     wanted = _name(target)
-    for name in _class_names(value):
-        if name == wanted:
-            return value
-        function = _converters.get((name, wanted))
-        if function is not None:
-            return function(value)
-    raise TypeError(f"No converter from {type(value).__name__} to {wanted}")
+    if wanted in _class_names(value):
+        return value
+    function = _find(value, target)
+    if function is None:
+        raise TypeError(f"No converter from {type(value).__name__} to {wanted}")
+    return function(value)
 
 
 def converters() -> list[tuple[str, str]]:

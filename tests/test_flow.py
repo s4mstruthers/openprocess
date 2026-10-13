@@ -498,6 +498,26 @@ def test_bootstrap_fitness_has_an_interval():
     assert table.samples and len(table.samples) == 30 and table.rows[0][0] == "mean"
 
 
+def test_converter_matches_a_class_by_either_of_its_names():
+    """A target may be named by where it is imported from or where it is
+    defined; the registry matches both.  json.JSONDecoder lives in
+    json.decoder, so this needs no optional package."""
+    from openprocess.flow import convert as c
+    assert c._canonical("json.JSONDecoder") == "json.decoder.JSONDecoder"
+    assert c._canonical("json.decoder.JSONDecoder") == "json.decoder.JSONDecoder"
+    assert c._canonical("no_such_package.Thing") == "no_such_package.Thing"   # nothing imported
+    c.register(Table, "json.decoder.JSONDecoder", lambda table: len(table.rows))
+    try:
+        table = Table("t", ["a"], [[1], [2]])
+        assert c.can_convert(table, "json.JSONDecoder")
+        assert c.convert(table, "json.JSONDecoder") == 2
+        import json
+        assert c.convert(table, json.JSONDecoder) == 2
+        assert not c.can_convert(table, "json.JSONEncoder")
+    finally:
+        del c._converters[(c._name(Table), "json.decoder.JSONDecoder")]
+
+
 @pytest.mark.skipif(not has("pandas"), reason="pandas not installed")
 def test_describe_log_through_the_converter():
     from openprocess.flow.boxes.science import describe_log

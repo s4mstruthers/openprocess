@@ -726,7 +726,10 @@ print(report.sound, report.findings)
 
 [**docs/how-it-works.md**](docs/how-it-works.md) covers the architecture, the
 CPN ML subset, binding search, timed nets, the state space, the file format
-and the project layout.
+and the project layout. [**docs/design.md**](docs/design.md) is the *why*:
+the problem, the claim, the three ideas and the decisions that follow from
+them. `tests/cross_check_inductive_miner.py` compares the built-in Inductive
+Miner with PM4Py's on hundreds of logs and reports where they differ.
 
 ## Workflows
 

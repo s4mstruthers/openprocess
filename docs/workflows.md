@@ -249,6 +249,37 @@ A `.cpnflow` file is JSON:
 - `requirements_lock(record)` is a `requirements.lock` from the record's
   environment.
 
+### What "reproducible" promises
+
+The badge beside an analysis, `--check` and the record all mean one precise
+thing: **re-running the workflow gives results whose fingerprints equal the
+recorded ones.** A fingerprint is the SHA-256 of a result's content (a
+PNML string for a net, the rows for a table, the numbers of a score), so
+"reproduces" is "byte for byte the same", not "close enough". How far that
+promise travels depends on what else is the same:
+
+| Tier | What is the same | What the record gives you | What can still differ |
+|---|---|---|---|
+| **1. Same machine** | the folder, the installed packages, the OpenProcess version | the badge: *Reproducible*, or exactly which input, box file, seed or version changed since the record (`differences`) | nothing, for the built-in boxes: the engines are pure Python and every random choice is seeded |
+| **2. Same environment, another machine** | `requirements.lock` installed (from the export, or `--lock`), the inputs from the zip (their hashes are checked), the same Python minor version | `openprocess run --check` passes or names the box whose result differs | a box of your own that depends on something outside the record: the clock, the file system's order, an unpinned download |
+| **3. Another platform or version** | the same workflow and inputs, but another OS, Python or package version | the same: a pass is a pass; a failure names the box | floating-point results of numeric boxes (SciPy's tests, matplotlib's figures as SVG, a model trained with another BLAS) can differ in the last digits, and so can their fingerprints; the built-in miners and checks are integer and set arithmetic and do not |
+
+So a passing `--check` on the author's machine is tier 1; the claim a paper
+can make is tier 2, and that is what the experiment zip is for. For tier 3,
+compare the *values* the report shows rather than the fingerprints: a
+fitness of 0.8712 on one platform and 0.8712 on another is the same result
+even when an SVG of the plot is not.
+
+What is in the record, and what is not:
+
+- **In:** the SHA-256 of every input file and every box file in `boxes/`;
+  every seed; the OpenProcess, Python and package versions; the fingerprint
+  of every result; the platform.
+- **Not in:** the code of OpenProcess's own boxes and the libraries they
+  call (their *versions* are; that is what the lock pins), the hardware, and
+  anything a box reads that was not declared as a `Path` setting (such a box
+  is reproducible only by the discipline of its author).
+
 ### Headless, and in CI
 
 ```bash

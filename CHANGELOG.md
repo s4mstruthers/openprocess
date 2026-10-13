@@ -6,6 +6,35 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.11.2
+
+- **Fixed: Describe log and Correlate failed with "No converter from
+  EventLog to pandas.DataFrame" whenever pandas was installed.** A converter
+  was registered under the class's defining module
+  (`pandas.core.frame.DataFrame`) and asked for by its public name
+  (`pandas.DataFrame`); the registry now resolves both to the class, in
+  either direction, and still imports nothing until a conversion is asked
+  for. The same fix covers pandas 3, which reports its classes under
+  `pandas` rather than `pandas.core.frame`.
+- **What "reproducible" promises is written down**, in
+  [docs/workflows.md](docs/workflows.md#what-reproducible-promises): the
+  badge and `--check` mean fingerprints equal to the record's; three tiers
+  say how far that travels (same machine, same lockfile, another platform),
+  and what is and is not in the record.
+- **docs/design.md: why OpenProcess is built the way it is.** The problem,
+  the claim, the three ideas and the decisions that follow from them, with
+  the open decisions (the `.cpnflow` name, what the 1.0 freeze covers).
+- **A cross-check of the Inductive Miner against PM4Py**,
+  `tests/cross_check_inductive_miner.py`: both miners on the textbook logs
+  and 400 random ones, trees compared after sorting the commutative
+  operators, the IM guarantees checked on every log, and the precision of
+  both models wherever they differ. Baseline against PM4Py 2.7.23: the
+  guarantees hold on all 406 logs; 369 trees are identical; on 37 the
+  reference model is usually more precise, always for the same reason: after
+  a sequence cut, groups that are only ever skipped together are made
+  skippable separately. Not fixed yet; the script is there to show when it
+  is.
+
 ## 0.11.1
 
 - **A click no longer flings a box across the canvas.** Clicking a box
