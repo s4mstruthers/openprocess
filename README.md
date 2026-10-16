@@ -242,8 +242,9 @@ which space you were in.
   state; it stays in the folder.
 - **Flat lists, the same in both spaces.** The folder's own files first,
   then each subfolder's under a caption naming it ("Week 5 / Part 1").
-  Nothing to unfold except LOGS. An empty folder shows in both spaces until
-  it has files.
+  Click a caption to fold its files away or bring them back; the app
+  remembers which are folded, per folder. An empty folder shows in both
+  spaces until it has files.
 - **Organise from the app**: right-click for **New Folder…**, **Rename…**,
   **Show in Finder** and **Move to Bin** (recoverable from the Bin; never a
   hard delete). **Drag files onto a subfolder** to move them on disk. An open
@@ -334,7 +335,9 @@ Nets drawn as in the lectures and the book:
 - **Places** are circles with black tokens inside, drawn as dots up to 5 and
   as a number above that.
 - **Transitions** are boxes with their name inside. A **silent (τ)**
-  transition is a black bar.
+  transition is a black bar: the **τ** tool (toolbar or palette) adds one
+  with a click, and the Element tab's *Silent* box turns an ordinary
+  transition into τ and back.
 - **Arc weights** above 1 are written on the arc.
 - **Names** go inside the places and transitions, which grow to fit them.
   Tick **Names outside** in the toolbar to put them underneath instead; you
@@ -748,13 +751,12 @@ extra) and *Predict the next activity*. Or start empty.
   **+ Add box**, **Run ▶**, and **⋯** for Re-run, Record, Export experiment
   and Save. The sidebar beside it lists the folder's analyses and, folded
   under them, its logs.
-- **+ Add box** (or a double-click on the canvas) opens every box, by group:
-  the six core groups side by side (Input, Filter, Discover, Check, Compare,
-  Output) and one line for the rest (Science, Predict, Coloured nets, Sweep,
-  your own boxes) with *Show all*. Under *Input*, **the folder's own files**:
-  one click adds the box that reads the file, already set. Type to search
-  them all: "alpha" finds the α-algorithm, "boarding" the log; Enter adds the
-  first match.
+- **+ Add box** (or a double-click on the canvas) opens every box, one
+  section per group (Input, Filter, Discover, Check, Compare, Output, then
+  Science, Predict, Coloured nets, Sweep and your own boxes), in a list that
+  scrolls. Under *Input*, **the folder's own files**: one click adds the box
+  that reads the file, already set. Type to search them all: "alpha" finds
+  the α-algorithm, "boarding" the log; Enter adds the first match.
 - **Files flow into the canvas.** Drop a log, an OCEL 2.0 object-centric log
   (`.jsonocel`), a PNML file, a .cpn or a ts.txt on the canvas and it becomes
   its input box at that spot; an input

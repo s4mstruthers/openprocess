@@ -1,9 +1,10 @@
 """Icons and mouse cursors for the drawing tools.
 
-Each tool gets a picture of what it does -- a pointing hand for *Select*, a
-circle for *Place*, a square for *Transition*, an arrow for *Arc* -- on its
-button and as the mouse cursor over the canvas, so the active tool is
-obvious wherever you look.  Painted in code: the app ships no image files.
+Each tool gets a picture of what it does -- the mouse pointer for *Select*, a
+circle for *Place*, a square for *Transition*, a black bar for the silent
+*τ* transition, an arrow for *Arc* -- on its button and as the mouse cursor
+over the canvas, so the active tool is obvious wherever you look.  Painted
+in code: the app ships no image files.
 """
 
 from __future__ import annotations
@@ -14,22 +15,23 @@ from PySide6.QtGui import QColor, QCursor, QIcon, QPainter, QPainterPath, QPen, 
 from . import style
 
 
-def _hand(painter: QPainter, size: float, colour: QColor) -> None:
-    """A pointing hand (index finger up), drawn in a ``size`` square."""
+def _pointer(painter: QPainter, size: float, colour: QColor) -> None:
+    """The arrow of a mouse pointer, drawn in a ``size`` square: what every
+    drawing program shows for its Select tool."""
     s = size / 24.0
-    path = QPainterPath()
-    # Index finger.
-    path.addRoundedRect(QRectF(8.2 * s, 2.0 * s, 3.6 * s, 11.5 * s), 1.8 * s, 1.8 * s)
-    # Palm with the folded fingers.
-    path.addRoundedRect(QRectF(6.0 * s, 10.0 * s, 12.5 * s, 11.5 * s), 3.2 * s, 3.2 * s)
-    # Thumb.
-    path.addRoundedRect(QRectF(3.2 * s, 11.6 * s, 4.6 * s, 3.4 * s), 1.6 * s, 1.6 * s)
-    painter.setPen(QPen(colour, 1.4 * s))
+    path = QPainterPath(QPointF(6.0 * s, 3.0 * s))
+    path.lineTo(QPointF(6.0 * s, 19.5 * s))
+    path.lineTo(QPointF(10.2 * s, 15.6 * s))
+    path.lineTo(QPointF(13.0 * s, 21.4 * s))
+    path.lineTo(QPointF(15.8 * s, 20.0 * s))
+    path.lineTo(QPointF(13.0 * s, 14.4 * s))
+    path.lineTo(QPointF(18.6 * s, 14.0 * s))
+    path.closeSubpath()
+    pen = QPen(colour, 1.6 * s)
+    pen.setJoinStyle(Qt.RoundJoin)
+    painter.setPen(pen)
     painter.setBrush(QColor(255, 255, 255))
-    painter.drawPath(path.simplified())
-    painter.setPen(QPen(colour, 1.0 * s))
-    for x in (11.8, 14.8):                       # knuckle creases
-        painter.drawLine(QPointF(x * s, 10.8 * s), QPointF(x * s, 14.0 * s))
+    painter.drawPath(path)
 
 
 def _shape(painter: QPainter, kind: str, size: float, colour: QColor) -> None:
@@ -46,6 +48,11 @@ def _shape(painter: QPainter, kind: str, size: float, colour: QColor) -> None:
         painter.drawEllipse(QPointF(12 * s, 12 * s), 2.4 * s, 2.4 * s)
     elif kind == "transition":
         painter.drawRect(QRectF(5 * s, 4 * s, 14 * s, 16 * s))
+    elif kind == "silent":
+        # The black bar a silent transition is drawn as on the canvas.
+        painter.setBrush(colour)
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(QRectF(9 * s, 4 * s, 6 * s, 16 * s), 1.2 * s, 1.2 * s)
     elif kind == "arc":
         painter.drawLine(QPointF(4 * s, 19 * s), QPointF(18 * s, 6 * s))
         head = QPainterPath(QPointF(20 * s, 4 * s))
@@ -55,11 +62,11 @@ def _shape(painter: QPainter, kind: str, size: float, colour: QColor) -> None:
         painter.setBrush(colour)
         painter.drawPath(head)
     elif kind == "select":
-        _hand(painter, size, colour)
+        _pointer(painter, size, colour)
 
 
 def tool_icon(kind: str) -> QIcon:
-    """The button icon for a tool (``select``, ``place``, ``transition``, ``arc``)."""
+    """The button icon for a tool (``select``, ``place``, ``transition``, ``silent``, ``arc``)."""
     pixmap = QPixmap(48, 48)
     pixmap.setDevicePixelRatio(2.0)
     pixmap.fill(Qt.transparent)

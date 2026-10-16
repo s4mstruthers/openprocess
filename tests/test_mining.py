@@ -259,6 +259,42 @@ def test_alignment_values():
     assert bad.cost == 1 and bad.model_moves == 1        # a must be inserted
 
 
+def test_alignments_on_an_unbounded_net_stop_and_say_why():
+    """A transition with no input place (an easy slip when drawing by hand)
+    pumps tokens into a corner of the net forever.  Tokens nothing consumes
+    are a dead end, so that net aligns at once; a τ loop that really is
+    unbounded hits the state limit instead of memory, and the result says so."""
+    def net(loop: bool) -> PetriNet:
+        n = PetriNet("unbounded")
+        for p in ("start", "mid", "end", "extra"):
+            n.add_place(p, id=p)
+        n.add_transition("a", id="a")
+        n.add_transition("b", id="b")
+        n.add_transition(None, id="pump")
+        for s, t in (("start", "a"), ("a", "mid"), ("mid", "b"), ("b", "end"), ("pump", "extra")):
+            n.add_arc(s, t)
+        if loop:                                    # pump: mid -> mid + extra, and extra is consumed
+            n.add_arc("mid", "pump")
+            n.add_arc("pump", "mid")
+            n.add_transition(None, id="eat")
+            n.add_arc("extra", "eat")
+        n.initial_marking = Marking({"start": 1})
+        n.final_marking = Marking({"end": 1})
+        return n
+
+    log = parse_simple_log("[<a,b>^3, <b,a>, <a,a,b>^2]")
+    quick = align_log(net(loop=False), log, max_states=20_000)
+    assert quick.notes == [] and all(a.complete for a in quick.alignments)
+    assert [a.cost for a in quick.alignments] == [0, 1, 2]           # <a,b>, <a,a,b>, <b,a>
+    assert max(a.states_visited for a in quick.alignments) < 100
+
+    stuck = align_log(net(loop=True), log, max_states=40_000)
+    assert [a.complete for a in stuck.alignments] == [True, True, False]
+    assert stuck.incomplete[0].trace == ("b", "a") and stuck.incomplete[0].fitness == 0.0
+    assert stuck.notes[0].startswith("No optimal alignment was found for 1 of 3 variants (1 cases)")
+    assert stuck.notes[1].startswith("The net is unbounded")
+
+
 def test_precision_values():
     log = parse_simple_log(L3)
     assert precision(inductive_miner(log).net, log) == pytest.approx(0.8491, abs=1e-4)

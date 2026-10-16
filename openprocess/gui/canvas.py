@@ -407,6 +407,9 @@ class NetScene(QGraphicsScene):
         if self.tool == "transition":
             self._create_transition(position)
             return
+        if self.tool == "silent":
+            self._create_transition(position, silent=True)
+            return
         if self.tool == "arc":
             self._arc_press(position)
             return
@@ -728,10 +731,10 @@ class NetScene(QGraphicsScene):
         self.model_changed.emit()
         self.created.emit(place)
 
-    def _create_transition(self, position: QPointF) -> None:
+    def _create_transition(self, position: QPointF, silent: bool = False) -> None:
         self.about_to_change.emit()
         self._hold_views_still()
-        transition = self._new_transition(on_grid(position) if self.snap_to_grid else position)
+        transition = self._new_transition(on_grid(position) if self.snap_to_grid else position, silent)
         self.rebuild()
         self.model_changed.emit()
         self.created.emit(transition)
@@ -748,12 +751,14 @@ class NetScene(QGraphicsScene):
         self.page.places.append(place)
         return place
 
-    def _new_transition(self, position: QPointF) -> Transition:
-        """Add a transition centred on ``position`` to the model (no redraw)."""
+    def _new_transition(self, position: QPointF, silent: bool = False) -> Transition:
+        """Add a transition centred on ``position`` to the model (no redraw).
+        A silent (τ) one has no name: it is drawn as a black bar."""
         assert self.page is not None
         prefix = "t" if self.plain else "T"
         transition = Transition(
-            name=self._unique_name(prefix, [t.name for t in self.net.all_transitions()])
+            name="" if silent else self._unique_name(prefix, [t.name for t in self.net.all_transitions()]),
+            silent=silent,
         )
         transition.graphics.x, transition.graphics.y = to_model(position)
         self.page.transitions.append(transition)

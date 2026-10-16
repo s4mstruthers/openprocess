@@ -86,6 +86,11 @@ class PetriNetPage(ConcealsResults, CpnPage):
 
     INSPECTOR = ["Simulation", "Element", "Analysis"]
     KIND = "Petri net"
+    #: The coloured-net editor's tools plus τ: a silent transition in one click
+    #: (the Element tab's *Silent* box turns an ordinary one into τ, and back).
+    TOOLS = CpnPage.TOOLS[:3] + [
+        ("silent", "τ", "Click on the canvas to add a silent (τ) transition: it moves tokens "
+         "but leaves no event in a trace")] + CpnPage.TOOLS[3:]
 
     def __init__(self, document, parent=None) -> None:
         self._analysis_stale = True

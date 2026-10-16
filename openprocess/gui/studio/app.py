@@ -144,11 +144,15 @@ EXPERIMENT_FOLDER_CHOOSER = (lambda parent, title, default:
 #: How Install… runs pip (a test puts a stand-in here).
 PIP_RUNNER = _run_pip
 
-#: The Model palette's tools, in the net page's order (see CpnPage.TOOLS).
-PALETTE = [("Select", "⬚", "Select and move things; double-click a place or transition to rename it"),
-           ("Place", "○", "Click on the canvas to add a place"),
-           ("Transition", "▭", "Click on the canvas to add a transition"),
-           ("Arc", "→", "Drag from a place to a transition (or the other way) to connect them")]
+#: The Model palette's tools, in the order of a net page's ``TOOLS`` (the τ
+#: tool is a plain Petri net's; the palette hides it for a coloured net).
+#: Each button shows the same painted icon as the page's own tool buttons.
+PALETTE = [("select", "Select", "Select and move things; double-click a place or transition to rename it"),
+           ("place", "Place", "Click on the canvas to add a place"),
+           ("transition", "Transition", "Click on the canvas to add a transition"),
+           ("silent", "τ", "Click on the canvas to add a silent (τ) transition: a black bar that moves "
+            "tokens without an event in the trace"),
+           ("arc", "Arc", "Drag from a place to a transition (or the other way) to connect them")]
 
 
 def _empty_on_disk(folder: Path) -> bool:
@@ -482,6 +486,8 @@ class StudioWindow(QMainWindow):
         self._space_current: dict[str, int | None] = {MINE: None, MODEL: None}
         #: Mine's LOGS section (the folder's logs) is unfolded; remembered per folder.
         self._material_expanded = False
+        #: The subfolders whose captions are folded (relative paths); remembered per folder.
+        self._collapsed_folders: set[str] = set()
         #: The space that was shown before Learn took the window.
         self._space_before_learn = MINE
         #: Sidebar rows by what they stand for (rebuilt by _rebuild_sidebar).
@@ -776,10 +782,14 @@ class StudioWindow(QMainWindow):
         grid.addWidget(label("PALETTE", "sectionLabel"), 0, 0, 1, 2)
         self.palette_group = QButtonGroup(self.palette)
         self.palette_group.setExclusive(True)
-        for index, (text, symbol, tip) in enumerate(PALETTE):
-            tool = button(f"{symbol}  {text}", kind="paletteTool", tooltip=tip)
+        from .tool_icons import tool_icon
+        self.palette_tools: dict = {}                  # tool kind -> its button
+        for index, (kind, text, tip) in enumerate(PALETTE):
+            tool = button(text, kind="paletteTool", tooltip=tip)
+            tool.setIcon(tool_icon(kind))
             tool.setCheckable(True)
             self.palette_group.addButton(tool, index)
+            self.palette_tools[kind] = tool
             grid.addWidget(tool, 1 + index // 2, index % 2)
         self.palette_group.idClicked.connect(self._palette_tool)
         self.palette.setHidden(True)
@@ -882,20 +892,29 @@ class StudioWindow(QMainWindow):
 
     # -- the Model palette and the Connections view ----------------------------------------
     def _palette_tool(self, index: int) -> None:
+        """A palette button: the page's tool of the same kind (the palette and
+        a coloured net's toolbar do not number their tools alike)."""
         page = self.current_page()
         if isinstance(page, CpnPage):
-            page.tool_switch.set_index(index)
+            kind = PALETTE[index][0]
+            kinds = [tool_kind for tool_kind, _text, _tip in page.TOOLS]
+            if kind in kinds:
+                page.tool_switch.set_index(kinds.index(kind))
 
     def _update_palette(self) -> None:
-        """The palette shows for a net page in Model, ticked at the page's tool."""
+        """The palette shows for a net page in Model, ticked at the page's tool;
+        the τ button only for a plain Petri net, which is the page that has it."""
         if not hasattr(self, "palette"):
             return
         page = self.current_page()
         show = self.space == MODEL and isinstance(page, CpnPage) and not self.in_learn
         self.palette.setVisible(show)
         if show:
-            index = page.tool_switch.index()
-            tool = self.palette_group.button(index)
+            kinds = [tool_kind for tool_kind, _text, _tip in page.TOOLS]
+            for kind, tool in self.palette_tools.items():
+                tool.setVisible(kind in kinds)
+            current = kinds[page.tool_switch.index()]
+            tool = self.palette_tools.get(current)
             if tool is not None and not tool.isChecked():
                 tool.setChecked(True)
 
@@ -3108,6 +3127,7 @@ class StudioWindow(QMainWindow):
         self._show_notes_of_folder()
         settings = workspace.settings()
         self._material_expanded = bool(settings.get("material_expanded", False))
+        self._collapsed_folders = {str(r) for r in settings.get("collapsed_folders") or []}
         self._space_current = {MINE: None, MODEL: None}
         saved = settings.get("space")
         self._set_space_quietly(saved if saved in (MINE, MODEL) else MINE)
@@ -3270,15 +3290,18 @@ class StudioWindow(QMainWindow):
                 and not self.folder_items
             self.empty_hint.setText(0, "No analyses or logs yet" if self.space == MINE else "No models yet")
             self.empty_hint.setHidden(not empty)
-            for item in self._folder_rows:              # captions are always open
-                item.setExpanded(True)
-            # Put back the current row and the selection.
+            for item in self._folder_rows:              # captions as they were left
+                item.setExpanded(self._folder_relative(item) not in self._collapsed_folders)
+            # Put back the current row and the selection.  A current row inside
+            # a folded caption shows, and the caption stays open from then on.
             rows = {self._row_id(item): item for item in self._all_rows()}
             if current in rows:
                 item = rows[current]
                 parent = item.parent()
                 while parent is not None:
-                    parent.setExpanded(True)
+                    if not parent.isExpanded():
+                        parent.setExpanded(True)
+                        self._remember_folded(parent, False)
                     parent = parent.parent()
                 tree.setCurrentItem(item)
             for key in selected:
@@ -3431,16 +3454,43 @@ class StudioWindow(QMainWindow):
 
     def _caption_row(self, relative: str, path: Path) -> QTreeWidgetItem:
         """A subfolder's caption ("Week 5 / Part 1"): the rows under it are its
-        files.  Not a folder to open or fold, but it takes a drop and a
-        right-click (New Folder…, Rename…, Show in Finder, Move to Bin)."""
+        files.  Not a folder to open, but one to fold (a click), and it takes
+        a drop and a right-click (New Folder…, Rename…, Show in Finder, Move
+        to Bin)."""
         item = QTreeWidgetItem([relative.replace("/", "  /  ")])
         item.setFlags(Qt.ItemIsEnabled)
         item.setData(0, FOLDER_ROLE, str(path))
         item.setData(0, GROUP_ROLE, True)
         item.setFont(0, theme.ui_font(11))
         item.setForeground(0, QColor(style.tokens().text_muted))
-        item.setToolTip(0, f"{relative}\nA subfolder: the files in it are listed under it")
+        item.setToolTip(0, f"{relative}\nA subfolder: the files in it are listed under it. "
+                           "Click to fold or unfold them.")
         return item
+
+    def _folder_relative(self, item: QTreeWidgetItem) -> str:
+        """A caption's subfolder, relative to the open folder (the key it is remembered by)."""
+        path = item.data(0, FOLDER_ROLE) or ""
+        return self.workspace.relative(path) if self.workspace is not None else path
+
+    def _remember_folded(self, item: QTreeWidgetItem, folded: bool) -> None:
+        """Keep a caption's fold in the folder's settings, and fold its twin in
+        the other section the same way (Mine lists a subfolder under both
+        ANALYSES and LOGS)."""
+        relative = self._folder_relative(item)
+        if folded:
+            self._collapsed_folders.add(relative)
+        else:
+            self._collapsed_folders.discard(relative)
+        if self.workspace is not None:
+            self.workspace.update_settings(collapsed_folders=sorted(self._collapsed_folders) or None)
+        for twin in self._folder_rows:
+            if twin is not item and self._folder_relative(twin) == relative \
+                    and twin.isExpanded() == folded:
+                self.tree.blockSignals(True)
+                try:
+                    twin.setExpanded(not folded)
+                finally:
+                    self.tree.blockSignals(False)
 
     @staticmethod
     def _sort_key(item: QTreeWidgetItem):
@@ -3452,18 +3502,19 @@ class StudioWindow(QMainWindow):
         parent.addChildren(sorted(children, key=self._sort_key))
 
     def _folder_toggled(self, item: QTreeWidgetItem, expanded: bool) -> None:
-        """The LOGS section was folded or unfolded: remember it in the folder."""
+        """The LOGS section or a subfolder's caption was folded or unfolded:
+        remember it in the folder."""
         if item is self.material_section:
             self._material_expanded = expanded
             if self.workspace is not None:
                 self.workspace.update_settings(material_expanded=expanded)
             return
-        if item.data(0, GROUP_ROLE) and not expanded:
-            item.setExpanded(True)                  # a caption never folds
+        if item.data(0, GROUP_ROLE):
+            self._remember_folded(item, not expanded)
 
     def _sidebar_clicked(self, item) -> None:
-        if item is self.material_section:
-            item.setExpanded(not item.isExpanded())
+        if item is self.material_section or item.data(0, GROUP_ROLE):
+            item.setExpanded(not item.isExpanded())     # a heading or a caption folds on a click
             return
         self._open_placeholder(item)
 

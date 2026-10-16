@@ -523,7 +523,7 @@ def test_petri_net_editor_draw_and_analyse(app, tmp_path):
         _pump(app, 0.05)
 
     def connect(a: tuple, b: tuple) -> None:
-        page.tool_switch.set_index(3)
+        page.tool_switch.set_index(4)                 # Arc (τ sits before it)
         QTest.mousePress(port, Qt.LeftButton, Qt.NoModifier, at(*a))
         QTest.mouseMove(port, at((a[0] + b[0]) / 2, (a[1] + b[1]) / 2))
         QTest.mouseMove(port, at(*b))
@@ -616,6 +616,88 @@ def test_petri_net_editor_draw_and_analyse(app, tmp_path):
         if hasattr(p, "document"):
             p.document.dirty = False
     bad.document.dirty = False
+    window.close()
+
+
+def test_tau_tool_and_an_export_without_highlights(app, tmp_path, monkeypatch):
+    """The τ tool (toolbar and Model palette) puts a silent transition on the
+    canvas in one click, with no name to type; Export image draws the net as
+    it is, without the green of the transitions enabled now or the selection
+    ring, and the canvas gets them back afterwards."""
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QImage
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QFileDialog
+
+    from openprocess.gui import theme
+    from openprocess.gui.studio.app import StudioWindow
+    from openprocess.gui.studio.petri_page import PetriNetPage
+
+    window = StudioWindow()
+    window.resize(1500, 950)
+    window.show()
+    window.action_new_petri()
+    page = window.current_page()
+    assert isinstance(page, PetriNetPage)
+    _pump(app, 0.2)
+    view, port = page.view, page.view.viewport()
+    view.resetTransform()
+    view.auto_fit = False
+
+    def at(x: float, y: float):
+        return view.mapFromScene(QPointF(x, y))
+
+    assert [kind for kind, _text, _tip in page.TOOLS] == ["select", "place", "transition", "silent", "arc"]
+    assert not window.palette_tools["silent"].isHidden()          # the palette has τ too
+    window.palette_tools["silent"].click()
+    assert page.scene.tool == "silent" and page.tool_switch.index() == 3
+    QTest.mouseClick(port, Qt.LeftButton, Qt.NoModifier, at(100, 0))
+    _pump(app, 0.1)
+    assert page.tool_switch.index() == 0                           # back to Select
+    assert view.name_editor is None                                # nothing to name
+    silent = [t for t in page.net.all_transitions() if t.silent]
+    assert len(silent) == 1 and silent[0].name == ""
+    assert page.scene.transition_items[silent[0].id].silent
+    assert page.petri_net().transitions[silent[0].id].silent      # τ for the analysis too
+
+    # A marked place feeding τ: τ is enabled, so it is drawn green.
+    page.tool_switch.set_index(1)
+    QTest.mouseClick(port, Qt.LeftButton, Qt.NoModifier, at(0, 0))
+    _pump(app, 0.05)
+    QTest.keyClick(view.name_editor, Qt.Key_Return)
+    _pump(app, 0.05)
+    page.tool_switch.set_index(4)
+    QTest.mousePress(port, Qt.LeftButton, Qt.NoModifier, at(0, 0))
+    QTest.mouseMove(port, at(50, 0))
+    QTest.mouseMove(port, at(100, 0))
+    QTest.mouseRelease(port, Qt.LeftButton, Qt.NoModifier, at(100, 0))
+    _pump(app, 0.05)
+    place = next(iter(page.net.all_places()))
+    page.reveal_element(place.id)
+    page.tokens_spin.setValue(1)
+    _pump(app, 0.1)
+    tau_item = page.scene.transition_items[silent[0].id]
+    assert tau_item.enabled_count == 1
+    tau_item.setSelected(True)
+    green = theme.palette().success
+
+    def has_green(path) -> bool:
+        image = QImage(str(path))
+        assert not image.isNull()
+        for y in range(0, image.height(), 2):
+            for x in range(0, image.width(), 2):
+                colour = image.pixelColor(x, y)
+                if all(abs(a - b) < 24 for a, b in ((colour.red(), green.red()), (colour.green(), green.green()),
+                                                     (colour.blue(), green.blue()))):
+                    return True
+        return False
+
+    target = tmp_path / "net.png"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(target), "PNG")))
+    page._export_image()
+    assert target.exists() and not has_green(target)               # the net, not the session
+    assert tau_item.enabled_count == 1 and tau_item.isSelected()   # the canvas as it was
+    page.document.dirty = False
     window.close()
 
 
@@ -1601,8 +1683,17 @@ def test_each_space_lists_its_own_files_and_remembers_them(app, tmp_path):
     assert _layout(window) == ["ANALYSES", "  empty", "LOGS  ·  1", "  logs", "    boarding"]
     caption = window.folder_items["logs"]
     assert caption.data(0, GROUP_ROLE) and caption.data(0, FOLDER_ROLE) == str(week.resolve() / "logs")
-    caption.setExpanded(False)                                   # a caption never folds
-    assert caption.isExpanded()
+    # A click folds the subfolder; the fold is remembered in the folder and
+    # survives a rebuild; another click unfolds it.
+    window._sidebar_clicked(caption)
+    assert not caption.isExpanded()
+    assert _layout(window) == ["ANALYSES", "  empty", "LOGS  ·  1", "  logs"]
+    assert Workspace(week).settings()["collapsed_folders"] == ["logs"]
+    window._rebuild_sidebar()
+    assert not window.folder_items["logs"].isExpanded()
+    window._sidebar_clicked(window.folder_items["logs"])
+    assert _layout(window) == ["ANALYSES", "  empty", "LOGS  ·  1", "  logs", "    boarding"]
+    assert "collapsed_folders" not in Workspace(week).settings()
 
     # Model: the folder's own files first, then each subfolder's under its caption.
     window.set_space("model")

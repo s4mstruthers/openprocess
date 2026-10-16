@@ -40,6 +40,8 @@ def check_fit(model: PetriNet, log: EventLog,
         alignments = align_log(model, simple)
         fitness = alignments.average_fitness
         flow.note(f"{alignments.fitting_traces} of {alignments.trace_count} cases align without a deviation")
+        for note in alignments.notes:
+            flow.note(note)
     else:
         fitness = replay.fitness
         flow.note(f"{replay.fitting_traces} of {replay.trace_count} cases replay without missing or remaining tokens")
@@ -63,8 +65,11 @@ def alignments(model: PetriNet, log: EventLog) -> AlignmentResult:
     """Optimal alignments of every variant with the model (A* over the
     synchronous product, standard cost function)."""
     result = align_log(model, log.simple_log())
-    rows = [["⟨" + ", ".join(a.trace) + "⟩", a.count, a.cost, round(a.fitness, 4)] for a in result.alignments]
+    rows = [["⟨" + ", ".join(a.trace) + "⟩", a.count, a.cost if a.complete else "?", round(a.fitness, 4)]
+            for a in result.alignments]
     flow.show(Table("Alignments", ["variant", "cases", "cost", "fitness"], rows), "Alignment per variant")
+    for note in result.notes:
+        flow.note(note)
     return result
 
 

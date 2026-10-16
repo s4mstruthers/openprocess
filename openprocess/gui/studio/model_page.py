@@ -586,6 +586,7 @@ class ModelPage(ConcealsResults, QWidget):
         layout.addWidget(overlay)
 
         variants = Card("Variants", "Select a variant to see its optimal alignment.")
+        self.variants_card = variants
         self.variant_model = QStandardItemModel(0, 4)
         self.variant_model.setHorizontalHeaderLabels(["Cases", "Fitness", "Deviations", "Trace"])
         self.variant_table = _table(self.variant_model)
@@ -666,6 +667,10 @@ class ModelPage(ConcealsResults, QWidget):
                     _item(alignment.cost if alignment.complete else "?", True), trace_item])
             if self.variant_model.rowCount():
                 self.variant_table.selectRow(0)
+            # A search that gave up (an unbounded net, say) says so where the "?" is.
+            self.variants_card.caption_label.setText(
+                " ".join(alignments.notes) if alignments.notes
+                else "Select a variant to see its optimal alignment.")
             self.overlay_switch.set_index(2 if alignments.fitting_traces < total else 0)
             self.status.emit(f"Conformance of “{document.name}”: fitness "
                              f"{alignments.average_fitness:.3f}, precision {prec:.3f}")
@@ -776,8 +781,20 @@ class ModelPage(ConcealsResults, QWidget):
                                                    "PNG image (*.png);;SVG drawing (*.svg)")
         if not path:
             return
-        if path.lower().endswith(".svg"):
-            self.view.export_svg(path)
-        else:
-            self.view.export_png(path)
+        # The picture is the model, not the session: no green for the
+        # transitions enabled now, no overlay badges, no fill on the one that
+        # fired last, no hover outline.  The tokens stay.
+        nodes, _edges = petri_net_specs(self.net, marking=self.marking,
+                                        show_place_names=self.place_names.isChecked())
+        for spec in nodes:
+            self.view.graph.update_node(spec)
+        for item in self.view.graph.nodes.values():
+            item.hovered = False
+        try:
+            if path.lower().endswith(".svg"):
+                self.view.export_svg(path)
+            else:
+                self.view.export_png(path)
+        finally:
+            self.redraw(fit=False)
         self.status.emit(f"Saved {path}")

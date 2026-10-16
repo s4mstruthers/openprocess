@@ -36,6 +36,21 @@ Heuristic: every remaining event whose label does not occur in the model
 *must* become a log move, so their count is a lower bound on the remaining
 cost -- admissible, so A* stays optimal.
 
+Dead ends: a token in a place no transition consumes from can never go
+away, so a marking with more such tokens than the final marking asks for
+can never reach it.  Those states are not explored.  This is what keeps a
+transition with no input place (a common slip when drawing a net by hand)
+from pumping tokens into a corner of the net forever.
+
+When the search has no end: an *unbounded* net, where a loop of silent
+transitions can produce tokens without limit, has infinitely many runs
+cheaper than one deviation (a τ move costs 1, a deviation 10000), and the
+search would look at all of them before accepting the deviation.  Every
+search therefore stops after ``max_states`` states and reports the
+alignment as not found (``complete=False``, fitness 0); the result's
+``notes`` say so, and say whether the net is unbounded.  The limit is a
+count, not a clock, so the same input gives the same answer every time.
+
 Fitness
 -------
 ``fitness(σ) = 1 − cost(σ) / (|σ| + cost(⟨⟩))`` where ``cost(⟨⟩)`` is the
@@ -81,7 +96,8 @@ class Alignment:
     cost: int                  # number of deviations (standard cost function)
     fitness: float
     states_visited: int = 0
-    #: False if the search gave up (state limit); then moves are empty
+    #: False if the search gave up (state limit); then moves are empty, the
+    #: cost is a stand-in (every event a log move) and the fitness 0.
     complete: bool = True
 
     @property
@@ -98,10 +114,17 @@ class AlignmentResult:
     net: PetriNet
     alignments: list[Alignment] = field(default_factory=list)   # per variant
     empty_trace_cost: int = 0
+    #: What the reader should know: searches that were cut short, and why.
+    notes: list[str] = field(default_factory=list)
 
     @property
     def trace_count(self) -> int:
         return sum(a.count for a in self.alignments)
+
+    @property
+    def incomplete(self) -> list[Alignment]:
+        """The variants whose optimal alignment was not found (state limit)."""
+        return [a for a in self.alignments if not a.complete]
 
     @property
     def average_fitness(self) -> float:
@@ -162,6 +185,15 @@ class _CompiledNet:
             self.delta.append(tuple((i, d) for i, d in enumerate(change) if d))
         self.initial = self.encode(net.initial_marking, index)
         self.final = self.encode(net.final_marking, index)
+        # Places nothing consumes from: tokens there only ever pile up, so
+        # more of them than the final marking wants is a dead end.
+        consumed = {i for pre in self.pre for i, _n in pre}
+        self.dead_ends = tuple((i, self.final[i]) for i in range(len(self.places))
+                               if i not in consumed)
+
+    def dead_end(self, marking: tuple[int, ...]) -> bool:
+        """Can ``marking`` never reach the final marking?  (A sufficient test.)"""
+        return any(marking[i] > cap for i, cap in self.dead_ends)
 
     def encode(self, marking: Marking, index: dict[str, int]) -> tuple[int, ...]:
         vector = [0] * len(self.places)
@@ -180,9 +212,20 @@ class _CompiledNet:
         return tuple(vector)
 
 
+#: How many states one trace's search may discover before it gives up.  A
+#: state costs a few hundred bytes (its marking, its cost, its parent), so
+#: this also caps the memory a search can take: a few hundred megabytes.
+MAX_STATES = 500_000
+
+
 def align_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
-                max_states: int = 500_000, compiled: "_CompiledNet | None" = None) -> Alignment:
-    """An optimal alignment of one trace (A* on the synchronous product)."""
+                max_states: int = MAX_STATES, compiled: "_CompiledNet | None" = None) -> Alignment:
+    """An optimal alignment of one trace (A* on the synchronous product).
+
+    The search gives up, with ``complete=False``, once it has discovered
+    ``max_states`` states (counting the frontier, not only the states
+    expanded, so that the memory it takes is bounded too).
+    """
     c = compiled or _CompiledNet(net)
     labels = net.labels()
     # Suffix heuristic: events not in the model are unavoidable log moves.
@@ -211,7 +254,7 @@ def align_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
                 moves.append(move)
                 node = previous
             return Alignment(trace, count, moves[::-1], cost // DEVIATION, 0.0, len(closed))
-        if len(closed) > max_states:
+        if len(best_cost) > max_states:
             break
 
         marking, position = state
@@ -232,7 +275,7 @@ def align_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
                                Move(SKIP, "τ" if t.label is None else t.label, t.id)))
 
         for successor, step_cost, move in successors:
-            if successor in closed:
+            if successor in closed or c.dead_end(successor[0]):
                 continue
             new_cost = cost + step_cost
             if new_cost < best_cost.get(successor, 1 << 62):
@@ -244,9 +287,14 @@ def align_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
     return Alignment(trace, count, [], len(trace), 0.0, len(closed), complete=False)
 
 
-def align_log(net: PetriNet, log: SimpleLog, max_states: int = 500_000,
+def align_log(net: PetriNet, log: SimpleLog, max_states: int = MAX_STATES,
               progress=None) -> AlignmentResult:
-    """Align every variant; fitness per trace uses the empty-trace cost."""
+    """Align every variant; fitness per trace uses the empty-trace cost.
+
+    A variant whose search gave up (see :func:`align_trace`) counts as
+    fitness 0, and ``result.notes`` says how many did and, when the net is
+    unbounded, that this is why.
+    """
     compiled = _CompiledNet(net)
     empty = align_trace(net, (), 1, max_states, compiled)
     result = AlignmentResult(net, empty_trace_cost=empty.cost)
@@ -260,4 +308,35 @@ def align_log(net: PetriNet, log: SimpleLog, max_states: int = 500_000,
         result.alignments.append(alignment)
         if progress is not None:
             progress(number, len(variants))
+    gave_up = result.incomplete
+    if not empty.complete:
+        gave_up = [empty, *gave_up]
+    if gave_up:
+        cases = sum(a.count for a in result.incomplete)
+        result.notes.append(
+            f"No optimal alignment was found for {len(result.incomplete)} of {len(variants)} "
+            f"variants ({cases:,} cases): the search stopped at {max_states:,} states. Their "
+            f"cost is unknown and their fitness is counted as 0."
+            if result.incomplete else
+            f"The search for the model's shortest run stopped at {max_states:,} states.")
+        reason = _unbounded_reason(net)
+        if reason:
+            result.notes.append(reason)
     return result
+
+
+def _unbounded_reason(net: PetriNet, max_states: int = 20_000) -> str | None:
+    """Why a search may have no end: the net is unbounded (tokens pile up
+    without limit), or its state space is simply very large."""
+    from ..analysis import reachability_graph
+    graph = reachability_graph(net, max_states=max_states)
+    if graph.has_omega:
+        return ("The net is unbounded: some loop or transition produces tokens without "
+                "limit, so there is no end to the runs an alignment could use. A "
+                "transition with no input place, or a loop that puts back more tokens "
+                "than it takes, is the usual cause; the Analysis tab's soundness check "
+                "points at it.")
+    if graph.truncated:
+        return (f"The net has more than {max_states:,} reachable markings, so an "
+                "alignment has a very large space to search.")
+    return None

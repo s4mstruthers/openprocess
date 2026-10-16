@@ -6,6 +6,48 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.11.3
+
+- **A τ tool.** The Petri net editor's toolbar and the Model palette have
+  a fifth tool, **τ**: click the canvas and a silent transition (the black
+  bar) is there, with no name to type. The Element tab's *Silent* box still
+  turns an ordinary transition into τ and back, and PNML files keep it as
+  before.
+- **The Select tool's icon is a mouse pointer**, on the page's toolbar and in
+  the Model palette, instead of a dotted box that looked like one more
+  shape to draw. The palette now shows the same painted icons as the toolbar
+  (a circle, a square, the τ bar, an arrow).
+- **Subfolders fold.** A click on a subfolder's caption in the sidebar
+  ("Week 5 / Part 1") folds its files away, or brings them back; the chevron
+  shows which. The app remembers the folded ones in the folder's
+  `.openprocess` file, like the LOGS section, and a file you open inside a
+  folded subfolder unfolds it.
+- **+ Add box shows every box, in sections that scroll.** One section per
+  group, its name on a rule, the boxes in three columns: Input, Filter,
+  Discover, Check, Compare, Output, then Science, Predict, Coloured nets,
+  Sweep and your own. The list scrolls when it is taller than fits, so
+  nothing is folded away under *Show all* and nothing runs off the screen.
+  Search works as before: type, and Return adds the first match.
+- **Export image draws the net, not the session.** No green on the
+  transitions enabled now, no selection ring, no halo on the one that fired
+  last, no trace badges, no arc-drawing arrow or hover handles, on the Petri
+  net page and on Mine's model page alike. The tokens stay: the marking is
+  part of the model. The canvas gets its highlights back the moment the file
+  is written.
+- **Fixed: alignments on an unbounded net ran the app out of memory.** A
+  transition with no input place, or a loop that puts back more tokens than
+  it takes, gives the model infinitely many runs cheaper than one deviation
+  (a τ move costs 1, a deviation 10 000), and the search looked at all of
+  them. Two changes in `align_trace`: a marking with tokens in a place no
+  transition consumes from, beyond what the final marking asks for, is a dead
+  end and is not explored (that alone settles the no-input-place case at
+  once); and the state limit now counts the states discovered, frontier
+  included, so the memory a search can take is bounded too. A search that
+  still gives up says so: the variant's cost shows as "?", its fitness
+  counts as 0, and the result's notes (on the Check tab's Variants card, in
+  the box's How tab, from `openprocess mine conform`) say how many searches
+  stopped and whether the net is unbounded.
+
 ## 0.11.2
 
 - **The Inductive Miner's sequence cut now agrees with the reference

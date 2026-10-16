@@ -974,6 +974,8 @@ class CpnPage(QWidget):
                       f"{delete} deletes",
             "place": "Click on the canvas to add a place",
             "transition": "Click on the canvas to add a transition",
+            "silent": "Click on the canvas to add a silent (τ) transition: a black bar that "
+                      "moves tokens without an event in the trace",
             "arc": "Drag from a place to a transition (or back), or to empty space to add "
                    "one — or click one node, then the other",
         }[tool])
@@ -1009,11 +1011,12 @@ class CpnPage(QWidget):
         self.set_dirty(True)
 
     def _element_created(self, element) -> None:
-        """A new place or transition: back to Select (from the Place and
-        Transition tools) and type its name."""
-        if self.scene.tool in ("place", "transition"):
+        """A new place or transition: back to Select (from the Place, Transition
+        and τ tools) and type its name (a silent transition has none to type)."""
+        if self.scene.tool in ("place", "transition", "silent"):
             self.tool_switch.set_index(0)
-        QTimer.singleShot(0, lambda: self.start_rename(element.id))
+        if not getattr(element, "silent", False):
+            QTimer.singleShot(0, lambda: self.start_rename(element.id))
 
     def start_rename(self, element_id: str) -> None:
         """Edit a place's or transition's name right on the canvas."""
@@ -1781,29 +1784,56 @@ class CpnPage(QWidget):
             return
         from PySide6.QtCore import QRectF
         from PySide6.QtGui import QImage
-        rect = self.scene.itemsBoundingRect().adjusted(-20, -20, 20, 20)
         selected = self.scene.selectedItems()
-        self.scene.clearSelection()
-        if path.lower().endswith(".svg"):
-            from PySide6.QtSvg import QSvgGenerator
-            generator = QSvgGenerator()
-            generator.setFileName(path)
-            generator.setSize(rect.size().toSize())
-            generator.setViewBox(QRectF(0, 0, rect.width(), rect.height()))
-            painter = QPainter(generator)
-            self.scene.render(painter, QRectF(0, 0, rect.width(), rect.height()), rect)
-            painter.end()
-        else:
-            image = QImage(int(rect.width() * 2), int(rect.height() * 2), QImage.Format_ARGB32)
-            image.fill(theme.palette().canvas)
-            painter = QPainter(image)
-            painter.setRenderHints(QPainter.Antialiasing | QPainter.TextAntialiasing)
-            self.scene.render(painter, QRectF(image.rect()), rect)
-            painter.end()
-            image.save(path)
-        for item in selected:
-            item.setSelected(True)
+        self._plain_drawing(True)
+        try:
+            rect = self.scene.itemsBoundingRect().adjusted(-20, -20, 20, 20)
+            if path.lower().endswith(".svg"):
+                from PySide6.QtSvg import QSvgGenerator
+                generator = QSvgGenerator()
+                generator.setFileName(path)
+                generator.setSize(rect.size().toSize())
+                generator.setViewBox(QRectF(0, 0, rect.width(), rect.height()))
+                painter = QPainter(generator)
+                self.scene.render(painter, QRectF(0, 0, rect.width(), rect.height()), rect)
+                painter.end()
+            else:
+                image = QImage(int(rect.width() * 2), int(rect.height() * 2), QImage.Format_ARGB32)
+                image.fill(theme.palette().canvas)
+                painter = QPainter(image)
+                painter.setRenderHints(QPainter.Antialiasing | QPainter.TextAntialiasing)
+                self.scene.render(painter, QRectF(image.rect()), rect)
+                painter.end()
+                image.save(path)
+        finally:
+            self._plain_drawing(False)
+            for item in selected:
+                item.setSelected(True)
         self.status.emit(f"Exported {Path(path).name}")
+
+    def _plain_drawing(self, on: bool) -> None:
+        """Strip the canvas to the net itself for an export (``on``), or put the
+        working view back (``off``).
+
+        An exported picture is the model, not the session: no selection ring,
+        no green for the transitions enabled now, no halo on the one that
+        fired last, no trace badges, no arrow for drawing arcs, no hover
+        handles on arcs.  The tokens stay: the marking is part of the model.
+        """
+        scene = self.scene
+        if on:
+            scene.clearSelection()
+            scene.hide_connect_handle()
+            scene.update_enabling({})
+            scene.set_trace(None)
+            for item in scene.transition_items.values():
+                item.set_halo(False)
+            for item in scene.arc_items.values():
+                if item.hovered:
+                    item.hovered = False
+                    item.update()
+        else:
+            self.refresh_simulation(light=True)         # enabling, halo and trace as they were
 
 
 # ---------------------------------------------------------------------------

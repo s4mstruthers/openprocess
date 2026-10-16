@@ -340,11 +340,14 @@ def result_widget(value, page=None, node=None) -> QWidget:
                   f"m = {value.missing}, r = {value.remaining}; {value.fitting_traces} of "
                   f"{value.trace_count} cases fit.", "muted", wrap=True))
     elif isinstance(value, AlignmentResult):
-        rows = [["⟨" + ", ".join(a.trace) + "⟩", a.count, a.cost, round(a.fitness, 4),
-                 " ".join(f"({m.log}|{m.model})" for m in a.moves)] for a in value.alignments]
+        rows = [["⟨" + ", ".join(a.trace) + "⟩", a.count, a.cost if a.complete else "?", round(a.fitness, 4),
+                 " ".join(f"({m.log}|{m.model})" for m in a.moves) if a.complete else "not found"]
+                for a in value.alignments]
         add(_table(["variant", "cases", "cost", "fitness", "alignment"], rows))
         add(label(f"Average fitness {value.average_fitness:.4f}; {value.fitting_traces} of "
                   f"{value.trace_count} cases align without a deviation.", "muted", wrap=True))
+        for note in value.notes:
+            add(label(note, "muted", wrap=True))
     elif isinstance(value, Regions):
         rows = [[value.name_of(r), value.region_text(r), "minimal" if r in value.minimal else ""]
                 for r in value.regions[:200]]

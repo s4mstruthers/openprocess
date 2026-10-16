@@ -278,7 +278,7 @@ examples/models.py   four complete models, also used as test fixtures
     canvas.py        the workflow canvas: box items, wires, dragging a wire to connect
     viewers.py       a box's result, how it got there, its code, its settings; pop-out windows
     page.py          the Workflows page: canvas, side panel on demand, running in the background
-    picker.py        the + Add box popover: six core groups, Show all, search
+    picker.py        the + Add box popover: every box by group, in a list that scrolls; search
     templates.py     the ready-made workflows (File ▸ New Workflow)
   gui/learn/
     mode.py          the Learn window: pack overview, worksheet beside the materials,

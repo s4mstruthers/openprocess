@@ -56,7 +56,7 @@ What the decorator reads, and nothing else:
 | `Column` | a setting that is a column of a table connected to the box: in the app, a list of its columns to pick from (a name can still be typed) |
 | `Path` | a setting that is a file in the workflow's folder |
 | the docstring | the help text; a `name: text` line in it is the help of that setting |
-| `@box(name=…, group=…)` | the name on the canvas and the group under *+ Add box* (default: the function's name, and *Other*, which is listed under *Show all*) |
+| `@box(name=…, group=…)` | the name on the canvas and the group under *+ Add box* (default: the function's name, and *Other*, which is listed last) |
 | `@box(needs="pandas")` | the box is listed greyed out with "needs pandas" when the module is not installed |
 | `@box(heavy=True)` | the box may take minutes: the app runs it where it can be stopped |
 

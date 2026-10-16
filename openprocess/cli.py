@@ -249,6 +249,8 @@ def command_mine_conform(arguments: argparse.Namespace) -> int:
     print(f"Generalisation         {generalisation(replay):.4f}")
     print(f"Simplicity             {simplicity(net):.4f}")
     print(f"Fitting cases          {alignments.fitting_traces} / {alignments.trace_count}")
+    for note in alignments.notes:
+        print(f"Note: {note}")
     return 0
 
 

@@ -347,10 +347,11 @@ def test_the_page_opens_calm_and_the_panel_comes_with_a_click(app):
     window.close()
 
 
-def test_add_box_lists_the_core_groups_and_finds_the_rest(app):
-    """+ Add box shows the six core groups; Show all adds the others; a
+def test_add_box_lists_every_group_in_sections_and_scrolls(app):
+    """+ Add box shows every box, one section per group in the library's
+    order, in a list that scrolls rather than growing past the screen; a
     search looks everywhere; a click adds the box to the canvas."""
-    from openprocess.gui.flow.picker import CORE_GROUPS
+    from openprocess.gui.flow.picker import MAX_LIST_HEIGHT
     from openprocess.gui.studio.app import StudioWindow
 
     window = StudioWindow()
@@ -362,15 +363,15 @@ def test_add_box_lists_the_core_groups_and_finds_the_rest(app):
     picker = page._picker
     _pump(app, 0.1)
     assert picker.isVisible()
-    assert list(picker.shown_groups()) == [g for g in CORE_GROUPS if g in page.library.by_group()]
-    assert "Coloured nets" not in picker.shown_groups() and picker.more_button.text().startswith("Show all")
-    picker.more_button.click()
+    assert list(picker.shown_groups()) == list(page.library.by_group())
     assert "Coloured nets" in picker.shown_groups() and "Sweep" in picker.shown_groups()
-    picker.more_button.click()
+    assert len(picker.buttons) == len(page.library)
+    assert picker.scroll.height() <= MAX_LIST_HEIGHT < picker.groups_host.height()   # it scrolls
+    assert picker.footer.text().startswith(f"All {len(page.library)} boxes")
     picker.search.setText("alpha")
     shown = picker.shown_groups()
     assert list(shown) == ["Discover"] and [s.name for s in shown["Discover"]] == ["α-algorithm"]
-    assert not picker.more_button.isVisible()                       # a search looks everywhere already
+    assert picker.scroll.height() < MAX_LIST_HEIGHT                 # one row: no scrolling
     picker.search.setText("simulate cpn")
     assert "Coloured nets" in picker.shown_groups()
     picker.search.setText("Typed log")
