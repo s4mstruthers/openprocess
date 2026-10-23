@@ -84,6 +84,8 @@ SHAPES = ["circle", "square", "triangle", "diamond", "cross", "star"]
 #: colour, instead of one shape at a time: a million-event log stays a
 #: picture of seconds, not minutes.  Shapes come back as soon as a zoom shows fewer.
 BATCH_FROM = 40_000
+#: Above this many events the dots are worked out on a worker thread.
+BACKGROUND_FROM = 200_000
 
 
 @dataclass
@@ -419,6 +421,8 @@ class DottedChart(QWidget):
         self._pan_origin: tuple[QPointF, tuple[float, float, float, float]] | None = None
         self._cache: QPixmap | None = None
         self._cache_key = None
+        #: Shown over the chart while its dots are worked out (a large log).
+        self.busy_text = ""
         #: Dots by screen cell for hit-testing (None: build from _grid_dots on first hover).
         self._grid: dict[tuple[int, int], list[int]] | None = {}
         self._grid_dots: list[int] = []
@@ -553,11 +557,24 @@ class DottedChart(QWidget):
         key = (self.width(), self.height(), self.vx0, self.vx1, self.vy0, self.vy1,
                tuple(sorted(self.hidden_colours)), self.selected_case, id(self.data),
                self.devicePixelRatioF(), style.tokens().surface)
+        if self.busy_text and self.data is None:
+            painter = QPainter(self)
+            painter.fillRect(self.rect(), QColor(style.tokens().surface))
+            painter.setPen(QColor(style.tokens().text_muted))
+            painter.drawText(self.rect(), Qt.AlignCenter, self.busy_text)
+            return
         if self._cache is None or self._cache_key != key:
             self._cache = self._render()
             self._cache_key = key
         painter = QPainter(self)
         painter.drawPixmap(0, 0, self._cache)
+        if self.busy_text:                               # new dots on the way: say so over the old ones
+            t = style.tokens()
+            painter.setPen(QColor(t.text_secondary))
+            badge = QRectF(self.width() / 2 - 120, 14, 240, 26)
+            painter.setBrush(QColor(t.surface))
+            painter.drawRoundedRect(badge, 13, 13)
+            painter.drawText(badge, Qt.AlignCenter, self.busy_text)
         # Rubber band on top of the cached picture: dragging stays fluid.
         if self._drag_start is not None and self._drag_now is not None and not self._panning:
             t = style.tokens()
@@ -647,17 +664,24 @@ class DottedChart(QWidget):
         x0, y0 = self.vx0, self.vy0 - 0.5
         xs, rows, colour, case = d.xs, d.rows, d.colour, d.case
         # -1: the dimmed dots of the other cases when one is selected; drawn first.
-        batches: dict[int, list[QPointF]] = {}
+        # A dot is drawn once per screen pixel and colour: at this many dots most
+        # land on a pixel a dot of their colour already covers, so the picture is
+        # the same and the work a fraction of it.
+        batches: dict[int, set[tuple[int, int]]] = {}
         for i in ordered:
-            point = QPointF(left + (xs[i] - x0) * sx, top + (rows[i] - y0) * sy)
-            dimmed = selected >= 0 and case[i] != selected
-            batches.setdefault(-1 if dimmed else colour[i], []).append(point)
+            key = -1 if selected >= 0 and case[i] != selected else colour[i]
+            pixels = batches.get(key)
+            if pixels is None:
+                pixels = batches[key] = set()
+            pixels.add((int(left + (xs[i] - x0) * sx), int(top + (rows[i] - y0) * sy)))
         painter.setRenderHint(QPainter.Antialiasing, radius > 1.5)
-        for key in sorted(batches):
+        # Underneath: the dimmed dots, then the grey "Other" values; on top, the named
+        # colours, the most frequent first so the rarer ones stay visible.
+        for key in sorted(batches, key=lambda k: (k >= 0, k < 8, k)):
             pen = QPen(faded if key < 0 else colours[key], 2 * radius)
             pen.setCapStyle(Qt.RoundCap)
             painter.setPen(pen)
-            painter.drawPoints(QPolygonF(batches[key]))
+            painter.drawPoints(QPolygonF([QPointF(x + 0.5, y + 0.5) for x, y in batches[key]]))
         self._grid = None
         self._grid_dots = ordered
 
@@ -1318,7 +1342,33 @@ class DottedChartPanel(QWidget):
         return s
 
     def rebuild(self, keep_view: bool = False) -> None:
-        data = DotData(self.document, self.settings)
+        """Work out the dots for the current settings and show them.  A large
+        log's dots are worked out on a worker (seconds for a million events),
+        with a note on the chart meanwhile, so the window never stops."""
+        events = self.document.log.event_count
+        if events < BACKGROUND_FROM:
+            self._show_data(DotData(self.document, self.settings), keep_view)
+            return
+        from .workers import run_in_background
+        self._generation = getattr(self, "_generation", 0) + 1
+        generation, settings = self._generation, self.settings
+        self.chart.busy_text = f"Drawing {events:,} events…"
+        self.chart.update()
+
+        def done(data) -> None:
+            if generation != self._generation:
+                return                                   # the settings changed again meanwhile
+            self.chart.busy_text = ""
+            self._show_data(data, keep_view)
+
+        def failed(message: str) -> None:
+            if generation == self._generation:
+                self.chart.busy_text = f"Could not draw the chart: {message}"
+                self.chart.update()
+
+        run_in_background(lambda: DotData(self.document, settings), done, failed)
+
+    def _show_data(self, data: DotData, keep_view: bool) -> None:
         if not keep_view:
             self.chart.hidden_colours = set()
             self.chart.selected_case = -1

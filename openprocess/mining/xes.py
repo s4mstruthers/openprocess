@@ -126,15 +126,51 @@ def _strip_namespace(tag: str) -> str:
 # ---------------------------------------------------------------------------
 # Reading
 # ---------------------------------------------------------------------------
+class _Counted(io.RawIOBase):
+    """A file that counts the bytes read from it, for the share read so far."""
+
+    def __init__(self, handle) -> None:
+        self.handle, self.count = handle, 0
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer) -> int:
+        n = self.handle.readinto(buffer)
+        self.count += n or 0
+        return n
+
+    def close(self) -> None:
+        self.handle.close()
+        super().close()
+
+
 def _open(source: str | Path | BinaryIO) -> BinaryIO:
     if hasattr(source, "read"):
         return source  # type: ignore[return-value]
     path = Path(source)
     with open(path, "rb") as handle:
         magic = handle.read(2)
+    raw = _Counted(open(path, "rb"))                 # counted on disk, so a .gz file's share is right too
     if magic == b"\x1f\x8b":  # gzip signature, whatever the extension says
-        return gzip.open(path, "rb")
-    return open(path, "rb")
+        return gzip.GzipFile(fileobj=io.BufferedReader(raw), mode="rb")
+    return io.BufferedReader(raw)
+
+
+def _share(stream, total: int) -> float | None:
+    """How much of the file has been read (0 to 1), or None when unknown."""
+    inner = getattr(stream, "fileobj", stream)              # through a GzipFile
+    counted = getattr(inner, "raw", None)
+    if not total or not isinstance(counted, _Counted):
+        return None
+    return min(1.0, counted.count / total)
+
+
+def _size(source) -> int:
+    try:
+        return Path(source).stat().st_size if isinstance(source, (str, Path)) else 0
+    except OSError:
+        return 0
 
 
 #: Files larger than this (bytes on disk) are read into columns unless told otherwise.
@@ -144,8 +180,10 @@ COLUMNAR_FROM = 20 * 1024 * 1024
 def read_xes(source: str | Path | BinaryIO, progress=None, columnar: bool | None = None) -> EventLog:
     """Read an XES (or gzip-compressed XES) file into an :class:`EventLog`.
 
-    ``progress`` is an optional callable receiving the number of traces read
-    so far; the GUI uses it to update a progress indicator.  ``columnar``
+    ``progress`` is an optional callable, called every 500 traces with the
+    number read so far and the share of the file read (0 to 1, or None for a
+    stream), from the thread that reads; the app's loading page shows them.
+    It may raise to stop reading (the app's *Cancel*).  ``columnar``
     keeps the events in arrays rather than objects (see
     :mod:`.columns`); by default that is done for files above
     :data:`COLUMNAR_FROM`.
@@ -162,6 +200,7 @@ def read_xes(source: str | Path | BinaryIO, progress=None, columnar: bool | None
         log.source_path = str(source)
 
     stream = _open(source)
+    total = _size(source)
     try:
         # depth tracks where we are: 1 = inside <log>, 2 = inside <trace> etc.
         # We need it to tell a log-level attribute from a trace-level one.
@@ -184,7 +223,7 @@ def read_xes(source: str | Path | BinaryIO, progress=None, columnar: bool | None
                 log.traces.append(trace)
                 element.clear()  # release memory: the whole point of streaming
                 if progress is not None and len(log.traces) % 500 == 0:
-                    progress(len(log.traces))
+                    progress(len(log.traces), _share(stream, total))
             elif tag == "event" and parent == "trace":
                 # Converted when the enclosing trace closes; normalise child
                 # tags now so _attributes_of recognises them.
@@ -316,7 +355,7 @@ def _read_columnar(source: str | Path | BinaryIO, progress=None) -> EventLog:
             store.end_case({node[1].get("key"): _node_value(node) for node in trace})
             trace = None
             if progress is not None and store.case_count % 500 == 0:
-                progress(store.case_count)
+                progress(store.case_count, _share(stream, total))
         elif tag == "global" and global_ is not None:
             target = fields["global_trace_attributes"] if global_scope == "trace" else \
                 fields["global_event_attributes"]
@@ -327,6 +366,7 @@ def _read_columnar(source: str | Path | BinaryIO, progress=None) -> EventLog:
     parser.StartElementHandler = start
     parser.EndElementHandler = end
     stream = _open(source)
+    total = _size(source)
     try:
         parser.ParseFile(stream)
     except expat.ExpatError as error:
