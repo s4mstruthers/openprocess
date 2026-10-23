@@ -31,6 +31,7 @@ import itertools
 import keyword
 import re
 from dataclasses import dataclass, field
+from pathlib import PurePath
 from typing import Any, Callable
 
 from .box import Box, BoxSpec, Port
@@ -151,7 +152,12 @@ class Workflow:
             if not fitting:
                 return False, (f"{dst_spec.name} takes {_list(p.type_name for p in dst_spec.inputs) or 'nothing'}, "
                                f"not a {out_port.type_name.lower()}")
-            input = fitting[0].name
+            # The first input of that type still free (or taking any number), so
+            # connecting two logs to a box with inputs a and b fills a, then b,
+            # instead of replacing a.
+            fed = {e.input for e in self.edges if e.target == target.id}
+            free = [p for p in fitting if p.many or p.name not in fed]
+            input = (free or fitting)[0].name
         in_port = dst_spec.input(input)
         if in_port is None:
             return False, f"{dst_spec.name} has no input {input!r}"
@@ -194,6 +200,8 @@ class Workflow:
 
     # -- groups ---------------------------------------------------------------------
     def group(self, members: list[str], name: str = "Group", id: str | None = None) -> Group:
+        if not members:
+            raise WorkflowError("A group needs at least one box")
         for m in members:
             if m not in self.nodes:
                 raise WorkflowError(f"No box {m!r}")
@@ -557,6 +565,8 @@ def _call_lines(wf: Workflow, nodes: list[Node], names: dict, used: dict, import
             if is_sweep(value):
                 args.append(f"{setting.name}=Sweep({list(value.values)!r})")
             elif value != setting.default:
+                if isinstance(value, PurePath):            # a file setting: the path as text, not PosixPath(...)
+                    value = value.as_posix()
                 args.append(f"{setting.name}={value!r}")
         call = f"{function}({', '.join(args)})"
         if not spec.outputs:
@@ -576,9 +586,11 @@ def _call_lines(wf: Workflow, nodes: list[Node], names: dict, used: dict, import
     return lines
 
 
-def group_to_python(wf: Workflow, group: Group) -> str:
+def group_to_python(wf: Workflow, group: Group, annotations: set[str] | None = None) -> str:
     """A group as a ``@workflow`` function: its outside inputs are the
-    parameters, its outside outputs the return value."""
+    parameters, its outside outputs the return value.  The type names its
+    signature uses are added to ``annotations`` (for the imports)."""
+    annotations = annotations if annotations is not None else set()
     inputs, outputs = wf.group_ports(group)
     params, seen, signature = {}, {}, []
     for node_id, port_name, port in inputs:
@@ -586,17 +598,21 @@ def group_to_python(wf: Workflow, group: Group) -> str:
         seen[base] = seen.get(base, 0) + 1
         name = base if seen[base] == 1 else f"{base}_{seen[base]}"
         params[(node_id, port_name)] = name
-        signature.append(f"{name}: {port.info.python if port.info else 'Any'}")
+        type_name = port.info.python if port.info else "Any"
+        annotations.add(type_name)
+        signature.append(f"{name}: {f'list[{type_name}]' if port.many else type_name}")
     names, used, imports, customs, types_used = {}, {}, set(), set(), set()
     members = [n for n in wf.order() if n.id in group.members]
     lines = _call_lines(wf, members, names, used, imports, customs, types_used, params)
     returns = [names.get((node_id, port_name), "None") for node_id, port_name, _ in outputs]
     if returns:
         lines.append("return " + ", ".join(returns))
+    output_types = [o[2].info.python if o[2].info else "Any" for o in outputs]
+    annotations.update(output_types)
     if len(outputs) == 1:
-        return_type = outputs[0][2].info.python if outputs[0][2].info else "Any"
+        return_type = output_types[0]
     elif outputs:
-        return_type = "tuple[" + ", ".join(o[2].info.python if o[2].info else "Any" for o in outputs) + "]"
+        return_type = "tuple[" + ", ".join(output_types) + "]"
     else:
         return_type = "None"
     body = "\n".join("    " + line for line in lines) or "    pass"
@@ -608,6 +624,7 @@ def to_python(wf: Workflow) -> str:
     """The workflow as a ``@workflow`` function that would record it back;
     every group becomes a function of its own, called once."""
     names, used, imports, customs, types_used = {}, {}, set(), set(), set()
+    annotations: set[str] = set()                   # the types the groups' signatures name
     lines, group_defs = [], []
     done_groups: set[str] = set()
     for node in wf.order():
@@ -618,7 +635,7 @@ def to_python(wf: Workflow) -> str:
         if group.id in done_groups:
             continue
         done_groups.add(group.id)
-        group_defs.append(group_to_python(wf, group))
+        group_defs.append(group_to_python(wf, group, annotations))
         inputs, outputs = wf.group_ports(group)
         args = []
         for node_id, port_name, port in inputs:
@@ -640,13 +657,11 @@ def to_python(wf: Workflow) -> str:
                 names[(node_id, port_name)] = var
                 targets.append(var)
             lines.append(f"{', '.join(targets)} = {function}({', '.join(args)})")
-        for node_id, _, _ in inputs:
-            pass
         # Spec imports of the members are collected by group_to_python; redo for the header.
         _call_lines(wf, [n for n in wf.order() if n.id in group.members], {}, {}, imports, customs, set(),
                     {(n, p): "x" for n, p, _ in inputs})
     header = ["from openprocess.flow import workflow" + (", Sweep" if wf.swept() else "")
-              + (", " + ", ".join(sorted(types_used)) if types_used and group_defs else "")]
+              + (", " + ", ".join(sorted(annotations)) if annotations else "")]
     by_module: dict[str, list[str]] = {}
     for module, function in sorted(imports):
         by_module.setdefault(module, []).append(function)

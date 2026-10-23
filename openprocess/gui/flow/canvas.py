@@ -617,8 +617,11 @@ class WorkflowScene(QGraphicsScene):
         if group is None or item is None:
             return
         statuses = [self.statuses.get(m, (WAITING, "", ""))[0] for m in group.members]
+        blocked = next((self.statuses[m][1] for m in group.members
+                        if self.statuses.get(m, (WAITING,))[0] == BLOCKED), "")
         for status, text in ((FAILED, "A box inside failed"), (RUNNING, "Running…"),
-                             (BLOCKED, "Waiting for your OK")):
+                             (BLOCKED, f"A box inside {blocked}" if blocked.startswith("needs") else
+                              "Waiting for your OK")):
             if status in statuses:
                 item.set_status(status, text)
                 return

@@ -62,7 +62,16 @@ class ColumnStore:
 
     def __init__(self) -> None:
         self.case_ids: list[str] = []
-        self.case_attributes: list[dict[str, Any]] = []
+        #: Case attributes, compactly: the keys of each case (one shared tuple
+        #: for every case with the same keys) and its values as a tuple.  A
+        #: quarter of a million cases with 16 attributes each costs a fraction
+        #: of a dict per case.  :meth:`case_attributes` gives one case's dict.
+        self.case_keys: list[tuple[str, ...]] = []
+        self.case_values: list[tuple] = []
+        self._key_tuples: dict[tuple[str, ...], tuple[str, ...]] = {}
+        #: One string object per distinct text, so a value repeated on every
+        #: event ("batch_00", a vendor's name) is stored once.
+        self._strings: dict[str, str] = {}
         self.offsets = array("q", [0])
         self.activity = Codes()
         self.lifecycle = Codes()
@@ -102,7 +111,10 @@ class ColumnStore:
             self.offset_minutes.append(0)
         position = len(self.micros) - 1
         if extras:
+            strings = self._strings
             for key, value in extras:
+                if type(value) is str:
+                    value = strings.setdefault(value, value)
                 column = self.extra.get(key)
                 if column is None:
                     column = self.extra[key] = [None] * position
@@ -113,9 +125,43 @@ class ColumnStore:
                     column.append(None)
 
     def end_case(self, attributes: dict[str, Any]) -> None:
-        self.case_attributes.append(attributes)
+        keys = tuple(attributes)
+        strings = self._strings
+        self.case_keys.append(self._key_tuples.setdefault(keys, keys))
+        self.case_values.append(tuple(strings.setdefault(v, v) if type(v) is str else v
+                                      for v in attributes.values()))
         self.case_ids.append(_text(attributes.get(KEY_NAME)) or "")
         self.offsets.append(len(self.micros))
+
+    def case_attributes(self, case: int) -> dict[str, Any]:
+        """The attributes of one case, as the object reader would give them."""
+        return dict(zip(self.case_keys[case], self.case_values[case]))
+
+    def subset(self, cases) -> "ColumnStore":
+        """A store with only ``cases`` (indices, in that order): what a filter
+        keeps of a large log stays in columns, its strings shared."""
+        new = ColumnStore()
+        new.key_order, new._known = list(self.key_order), set(self._known)
+        new._key_tuples, new._strings = self._key_tuples, self._strings
+        for codes, target in ((self.activity, new.activity), (self.lifecycle, new.lifecycle),
+                              (self.resource, new.resource)):
+            target.values, target._index = list(codes.values), dict(codes._index)
+        extra = {key: [] for key in self.extra}
+        for case in cases:
+            start, stop = self.offsets[case], self.offsets[case + 1]
+            new.case_ids.append(self.case_ids[case])
+            new.case_keys.append(self.case_keys[case])
+            new.case_values.append(self.case_values[case])
+            new.activity.codes.extend(self.activity.codes[start:stop])
+            new.lifecycle.codes.extend(self.lifecycle.codes[start:stop])
+            new.resource.codes.extend(self.resource.codes[start:stop])
+            new.micros.extend(self.micros[start:stop])
+            new.offset_minutes.extend(self.offset_minutes[start:stop])
+            for key, column in self.extra.items():
+                extra[key].extend(column[start:stop])
+            new.offsets.append(len(new.micros))
+        new.extra = extra
+        return new
 
     # -- reading -------------------------------------------------------------------
     @property
@@ -161,8 +207,37 @@ class ColumnStore:
     def trace(self, case: int):
         from .log import Event, Trace
         start, end = self.offsets[case], self.offsets[case + 1]
-        return Trace(dict(self.case_attributes[case]),
+        return Trace(self.case_attributes(case),
                      [Event(self.event_attributes(i)) for i in range(start, end)])
+
+    def span(self, case: int) -> tuple[int, int] | None:
+        """The event indices of a case's earliest and latest timestamp (None:
+        it has none), read from the array without building an event."""
+        micros, start, end = self.micros, self.offsets[case], self.offsets[case + 1]
+        low = high = None
+        for i in range(start, end):
+            value = micros[i]
+            if value == NO_TIME:
+                continue
+            if low is None or value < micros[low]:
+                low = i
+            if high is None or value > micros[high]:
+                high = i
+        return None if low is None else (low, high)
+
+    def column_text(self, key: str) -> list[str | None]:
+        """Every event's value of one attribute as text (None where absent),
+        straight from the arrays: what a view that colours or groups events
+        by an attribute needs, without building the events."""
+        for standard, codes in ((KEY_NAME, self.activity), (KEY_LIFECYCLE, self.lifecycle),
+                                (KEY_RESOURCE, self.resource)):
+            if key == standard:
+                values = codes.values
+                return [None if code < 0 else values[code] for code in codes.codes]
+        column = self.extra.get(key)
+        if column is None:
+            return [None] * self.event_count
+        return [None if value is None else str(value) for value in column]
 
     def has_lifecycle_pairs(self) -> bool:
         seen = {v.lower() for v in self.lifecycle.values}

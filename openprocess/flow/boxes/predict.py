@@ -31,7 +31,9 @@ def prefixes(log: EventLog, label: Literal["next activity", "remaining time", "o
              min_prefix: int = 1, max_prefix: int = 20) -> Dataset:
     """One row per prefix of every case, encoded as features, with the
     label to predict: the next activity (⟂ when the case ends), the
-    remaining time in hours, or the outcome (the last activity).
+    remaining time in hours, or the outcome (the last activity). For the
+    outcome the whole case is not a prefix: its last activity *is* the
+    outcome, so that row would give the answer away.
 
     encoding: frequency = how often each activity occurred so far, plus the last activity; index = the last k activities as indices; one-hot = the last k activities as 0/1 columns
     min_prefix: the shortest prefix to include
@@ -54,7 +56,8 @@ def prefixes(log: EventLog, label: Literal["next activity", "remaining time", "o
         times = [e.timestamp for e in events]
         start = times[0] if times and times[0] else None
         end_time = times[-1] if times and times[-1] else None
-        for n in range(min_prefix, min(len(seq), max_prefix) + 1):
+        longest = len(seq) - 1 if label == "outcome" else len(seq)      # outcome: no peeking at the end
+        for n in range(min_prefix, min(longest, max_prefix) + 1):
             prefix = seq[:n]
             if encoding == "frequency":
                 counts = Counter(prefix)
@@ -121,11 +124,12 @@ class FrequencyModel(Predictor):
         self.kind = "classification"
 
     def _key(self, row, dataset: Dataset):
-        if dataset.feature_names and dataset.feature_names[-1].startswith("last is "):
-            n = len(dataset.activities)
-            last = row[-n:]
+        """The last activity of the prefix, from whichever encoding made the row."""
+        names, n = dataset.feature_names, len(dataset.activities)
+        if names and n and (names[-1].startswith("last is ") or names[-1].startswith("−1 is ")):
+            last = list(row[-n:])                     # frequency and one-hot: one 0/1 column per activity
             return next((a for a, flag in zip(dataset.activities, last) if flag), None)
-        return tuple(row[-1:])
+        return tuple(row[-1:])                        # index: the last column is the last activity
 
     def fit(self, dataset: Dataset) -> "FrequencyModel":
         self.kind = dataset.kind
@@ -155,8 +159,10 @@ def frequency_model(train: Dataset) -> Predictor:
 
 @box(name="Predict", group="Predict")
 def predict(model: Predictor, dataset: Dataset) -> Predictions:
-    """Applies a fitted model to a dataset (the test set)."""
-    values = list(model.predict(dataset))
+    """Applies a fitted model to a dataset (the test set). A Predictor of
+    OpenProcess's own takes the dataset; any other model (a scikit-learn
+    estimator) is given its feature rows, ``dataset.X``."""
+    values = list(model.predict(dataset) if isinstance(model, Predictor) else model.predict(dataset.X))
     flow.note(f"{len(values)} predictions by {getattr(model, 'name', type(model).__name__)}")
     return Predictions(values, dataset, getattr(model, "name", type(model).__name__))
 

@@ -8,7 +8,7 @@ classifier in the header recomputes every tab.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt, Signal
 from PySide6.QtGui import QColor, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QFileDialog, QGridLayout, QHeaderView, QLabel,
@@ -72,7 +72,73 @@ def _runs(sequence) -> list[tuple[str, int]]:
     return runs
 
 
-def _table(model: QStandardItemModel) -> QTableView:
+class CasesModel(QAbstractTableModel):
+    """The Cases table, one row per case, read on demand.
+
+    A log of a quarter of a million cases would be over a million table
+    items, and every trace built as objects to fill them; this model keeps
+    one small tuple per case (from the column store's arrays when the log is
+    columnar) and formats a cell only when it is drawn."""
+
+    HEADERS = ("Case", "Events", "Start", "Duration", "Variant")
+
+    def __init__(self, log, summary, parent=None) -> None:
+        super().__init__(parent)
+        variant_of: dict[int, int] = {}
+        for number, variant in enumerate(summary.variants, 1):
+            for index in variant.trace_indices:
+                variant_of[index] = number
+        #: (case id, events, start, duration) per case; start a datetime or None.
+        self.rows: list[tuple] = []
+        if log.columnar:
+            store = log.traces.store
+            for case in range(store.case_count):
+                span = store.span(case)
+                start = store.timestamp(span[0]) if span else None
+                duration = (store.micros[span[1]] - store.micros[span[0]]) / 1e6 if span else None
+                self.rows.append((store.case_ids[case], store.offsets[case + 1] - store.offsets[case],
+                                  start, duration))
+        else:
+            for trace in log.traces:
+                stamps = [e.timestamp for e in trace.events if e.timestamp]
+                self.rows.append((trace.case_id, len(trace), min(stamps) if stamps else None,
+                                  (max(stamps) - min(stamps)).total_seconds() if stamps else None))
+        self.variant_of = variant_of
+
+    def rowCount(self, parent=QModelIndex()) -> int:
+        return 0 if parent.isValid() else len(self.rows)
+
+    def columnCount(self, parent=QModelIndex()) -> int:
+        return 0 if parent.isValid() else len(self.HEADERS)
+
+    def headerData(self, section, orientation, role=Qt.DisplayRole):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return self.HEADERS[section]
+        return None
+
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        row, column = index.row(), index.column()
+        if role == Qt.UserRole:
+            return row                                  # the trace's index in the log
+        if role == Qt.TextAlignmentRole and column in (1, 3, 4):
+            return int(Qt.AlignRight | Qt.AlignVCenter)
+        if role != Qt.DisplayRole:
+            return None
+        case_id, events, start, duration = self.rows[row]
+        if column == 0:
+            return case_id
+        if column == 1:
+            return str(events)
+        if column == 2:
+            return start.strftime("%Y-%m-%d %H:%M") if start else "–"
+        if column == 3:
+            return format_duration(duration) if duration is not None else "–"
+        return str(self.variant_of.get(row, ""))
+
+
+def _table(model) -> QTableView:
     view = QTableView()
     view.setModel(model)
     view.setAlternatingRowColors(True)
@@ -117,7 +183,7 @@ class LogPage(ConcealsResults, QWidget):
         self.classifier_box.setToolTip("How events become activity labels")
         # Let the combo shrink below its longest entry instead of widening the window.
         self.classifier_box.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.classifier_box.setMinimumContentsLength(14)
+        self.classifier_box.setMinimumContentsLength(24)          # "Activity (complete events)" in full
         for classifier in document.log.available_classifiers():
             self.classifier_box.addItem(classifier.name, classifier)
         index = self.classifier_box.findText(document.classifier.name)
@@ -358,33 +424,22 @@ class LogPage(ConcealsResults, QWidget):
     # ----------------------------------------------------------------- cases
     def _build_cases(self, layout) -> None:
         log = self.document.log
-        s = self.document.summary
-        variant_of = {}
-        for number, variant in enumerate(s.variants, 1):
-            for index in variant.trace_indices:
-                variant_of[index] = number
-
-        cases = QStandardItemModel(0, 5)
-        cases.setHorizontalHeaderLabels(["Case", "Events", "Start", "Duration", "Variant"])
-        for index, trace in enumerate(log.traces):
-            stamps = [e.timestamp for e in trace.events if e.timestamp]
-            start = min(stamps).strftime("%Y-%m-%d %H:%M") if stamps else "–"
-            duration = format_duration(max(stamps) - min(stamps)) if stamps else "–"
-            first = _item(trace.case_id, data=index)
-            cases.appendRow([first, _item(len(trace), True), _item(start),
-                             _item(duration, True), _item(variant_of.get(index, ""), True)])
-        case_table = _table(cases)
-        case_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        case_table.horizontalHeader().setStretchLastSection(True)
+        cases = CasesModel(log, self.document.summary, self)
+        shown = QSortFilterProxyModel(self)
+        shown.setSourceModel(cases)
+        shown.setFilterKeyColumn(0)
+        shown.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        case_table = _table(shown)
+        header = case_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Interactive)     # sizing to contents would read every row
+        for column, width in enumerate((150, 60, 130, 80)):
+            case_table.setColumnWidth(column, width)
+        header.setStretchLastSection(True)
 
         search = QLineEdit()
         search.setPlaceholderText("Filter cases…")
         search.setClearButtonEnabled(True)
-
-        def filter_rows(text: str) -> None:
-            for row in range(cases.rowCount()):
-                case_table.setRowHidden(row, text.lower() not in cases.item(row, 0).text().lower())
-        search.textChanged.connect(filter_rows)
+        search.textChanged.connect(shown.setFilterFixedString)
 
         events = QStandardItemModel(0, 5)
         event_table = _table(events)
@@ -397,7 +452,7 @@ class LogPage(ConcealsResults, QWidget):
                                               "Resource", "Other attributes"])
             if not current.isValid():
                 return
-            trace = log.traces[cases.item(current.row(), 0).data(Qt.UserRole)]
+            trace = log.traces[shown.data(current, Qt.UserRole)]
             standard = {"concept:name", "time:timestamp", "lifecycle:transition", "org:resource"}
             for number, event in enumerate(trace.events, 1):
                 included = classifier.accepts(event)
@@ -432,7 +487,7 @@ class LogPage(ConcealsResults, QWidget):
         splitter.setSizes([380, 700])
         splitter.setStyleSheet("QSplitter::handle { background: transparent; }")
         layout.addWidget(splitter, 1)
-        if cases.rowCount():
+        if shown.rowCount():
             case_table.selectRow(0)
 
     # ---------------------------------------------------------- dotted chart

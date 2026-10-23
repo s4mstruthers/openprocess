@@ -175,17 +175,101 @@ def silent_path(net: PetriNet, marking: Marking, goal, max_states: int = 2000) -
     return None
 
 
+class _SilentSearch:
+    """:func:`silent_path` for one net, on markings as tuples of token
+    counts: the same breadth-first search, visiting the same markings in the
+    same order and returning the same paths, without building a
+    :class:`Marking` per state (a large log's replay asks it thousands of
+    times, each over up to ``max_states`` markings)."""
+
+    def __init__(self, net: PetriNet, max_states: int = 2000) -> None:
+        self.net, self.max_states = net, max_states
+        self.places = list(net.places)
+        index = {place: i for i, place in enumerate(self.places)}
+        self.index = index
+        self.silent = []
+        for transition_id, transition in net.transitions.items():
+            if not transition.silent:
+                continue
+            need = [(index[p], n) for p, n in net.pre(transition_id).items()]
+            change = Counter()
+            for p, n in net.pre(transition_id).items():
+                change[index[p]] -= n
+            for p, n in net.post(transition_id).items():
+                change[index[p]] += n
+            self.silent.append((transition_id, need, [(i, d) for i, d in change.items() if d]))
+
+    def vector(self, marking: Marking) -> tuple[int, ...]:
+        return tuple(marking[p] for p in self.places)
+
+    def requirement(self, marking: Marking) -> list[tuple[int, int]]:
+        return [(self.index[p], n) for p, n in marking.items()]
+
+    def path(self, marking: Marking, goal) -> list[str] | None:
+        """``goal(vector)`` decides; see :func:`silent_path`."""
+        start = self.vector(marking)
+        if goal(start):
+            return []
+        if not self.silent:
+            return None
+        parent: dict[tuple, tuple | None] = {start: None}
+        queue = deque([start])
+        while queue and len(parent) < self.max_states:
+            current = queue.popleft()
+            for transition, need, change in self.silent:
+                if any(current[i] < n for i, n in need):
+                    continue
+                following = list(current)
+                for i, d in change:
+                    following[i] += d
+                successor = tuple(following)
+                if successor in parent:
+                    continue
+                parent[successor] = (current, transition)
+                if goal(successor):
+                    path = []
+                    node = successor
+                    while parent[node] is not None:
+                        previous, step = parent[node]
+                        path.append(step)
+                        node = previous
+                    return path[::-1]
+                queue.append(successor)
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Replay
 # ---------------------------------------------------------------------------
-def replay_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1) -> TraceReplay:
+def replay_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
+                 paths: dict | None = None, searcher: _SilentSearch | None = None) -> TraceReplay:
+    """Replay one trace.  ``paths`` remembers the silent paths found, keyed
+    by the marking and what was looked for, so the many variants of a large
+    log (which pass through the same markings again and again) search each
+    one once; the answers are the same as searching every time."""
     marking = net.initial_marking
     result = TraceReplay(trace, count, produced=marking.total, consumed=0, missing=0,
                          remaining=0)
+    paths = {} if paths is None else paths
+    searcher = searcher or _SilentSearch(net)
     by_label: dict[str, list[str]] = {}
     for transition in net.transitions.values():
         if transition.label is not None:
             by_label.setdefault(transition.label, []).append(transition.id)
+
+    final_vector = searcher.vector(net.final_marking)
+    goals = {("final", "="): lambda v: v == final_vector,
+             ("final", "≥"): lambda v: all(v[i] >= n for i, n in enumerate(final_vector))}
+
+    def search(current: Marking, key) -> list[str] | None:
+        found = paths.get((current, key), paths)       # the dict itself: "not searched yet"
+        if found is paths:
+            goal = goals.get(key)
+            if goal is None:                           # ("enable", transition)
+                need = searcher.requirement(net.pre(key[1]))
+                goal = lambda v, need=need: all(v[i] >= n for i, n in need)   # noqa: E731
+            found = paths[(current, key)] = searcher.path(current, goal)
+        return found
 
     def fire(transition: str, current: Marking) -> Marking:
         pre, post = net.pre(transition), net.post(transition)
@@ -211,7 +295,7 @@ def replay_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1) -> Trace
             # Try enabling one of the candidates with silent moves.
             best_path = None
             for transition in candidates:
-                path = silent_path(net, marking, lambda m, t=transition: net.is_enabled(m, t))
+                path = search(marking, ("enable", transition))
                 if path is not None and (best_path is None or len(path) < len(best_path[1])):
                     best_path = (transition, path)
             if best_path is not None:
@@ -228,9 +312,9 @@ def replay_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1) -> Trace
     # Finish: move silently to the final marking if possible, then let the
     # environment consume it.
     final = net.final_marking
-    path = silent_path(net, marking, lambda m: m == final)
+    path = search(marking, ("final", "="))
     if path is None:
-        path = silent_path(net, marking, lambda m: m >= final) or []
+        path = search(marking, ("final", "≥")) or []
     for step in path:
         marking = fire(step, marking)
     short = Marking({p: n - marking[p] for p, n in final.items() if marking[p] < n})
@@ -247,6 +331,8 @@ def replay_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1) -> Trace
 
 def token_replay(net: PetriNet, log: SimpleLog) -> ReplayResult:
     """Replay every variant once and weight the results by frequency."""
-    traces = [replay_trace(net, trace, count)
+    paths: dict = {}
+    searcher = _SilentSearch(net)
+    traces = [replay_trace(net, trace, count, paths, searcher)
               for trace, count in sorted(log.items(), key=lambda item: (-item[1], item[0]))]
     return ReplayResult(net, traces)

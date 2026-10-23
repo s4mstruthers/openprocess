@@ -6,7 +6,7 @@ from typing import Literal
 
 from ... import flow
 from ...mining.analysis import check_soundness
-from ...mining.compare_nets import compare_nets
+from ...mining.compare_nets import compare_nets, trace_overlap
 from ...mining.conformance.alignments import AlignmentResult, align_log
 from ...mining.conformance.quality import generalisation, precision, simplicity
 from ...mining.conformance.token_replay import ReplayResult, token_replay as _replay
@@ -61,10 +61,23 @@ def token_replay(model: PetriNet, log: EventLog) -> ReplayResult:
 
 
 @box(name="Alignments", group="Check")
-def alignments(model: PetriNet, log: EventLog) -> AlignmentResult:
+def alignments(model: PetriNet, log: EventLog, variants: int = 0) -> AlignmentResult:
     """Optimal alignments of every variant with the model (A* over the
-    synchronous product, standard cost function)."""
-    result = align_log(model, log.simple_log())
+    synchronous product, standard cost function). Shown as ProM shows them:
+    the log on the model, and every variant's moves.
+
+    variants: align only this many of the most frequent variants (0: all); on a large log
+    the most frequent few hundred usually cover most cases, and the notes say how many
+    """
+    simple = log.simple_log()
+    if variants > 0 and len(simple) > variants:
+        from collections import Counter
+        kept = Counter(dict(sorted(simple.items(), key=lambda item: (-item[1], item[0]))[:variants]))
+        covered, total = sum(kept.values()), sum(simple.values())
+        flow.note(f"Aligned the {variants:,} most frequent of {len(simple):,} variants: "
+                  f"{covered:,} of {total:,} cases ({100 * covered / total:.1f} %); fitness is over those cases")
+        simple = kept
+    result = align_log(model, simple)
     rows = [["⟨" + ", ".join(a.trace) + "⟩", a.count, a.cost if a.complete else "?", round(a.fitness, 4)]
             for a in result.alignments]
     flow.show(Table("Alignments", ["variant", "cases", "cost", "fitness"], rows), "Alignment per variant")
@@ -94,23 +107,36 @@ def _yes(value) -> str:
 
 @box(name="Compare to true net", group="Check")
 def compare_to_true_net(model: PetriNet, true_net: PetriNet, max_length: int = 12) -> Scores:
-    """Model to model: the share of the true net's complete traces the
-    model allows (recall), the share of the model's traces the true net
-    allows (precision), simplicity, and soundness."""
+    """Model to model, on behaviour: of the true net's complete traces of up
+    to *max_length* activities, the share the model allows (recall); of the
+    model's, the share the true net allows (precision). Traces are counted
+    exactly, each distinct trace once; silent steps leave no trace. Also the
+    model's simplicity and soundness.
+
+    max_length: the longest trace counted (loops make the number of traces grow with it)
+    """
     comparison = compare_nets(model, true_net, max_length=max_length)
-    only_model, only_truth = len(comparison.only_first), len(comparison.only_second)
     for trace in comparison.only_first[:5]:
         flow.note("The model allows ⟨" + ", ".join(trace) + "⟩, the true net does not")
     for trace in comparison.only_second[:5]:
         flow.note("The true net allows ⟨" + ", ".join(trace) + "⟩, the model does not")
-    sound = check_soundness(model).sound
-    recall = 1.0 if comparison.equivalent else max(0.0, 1 - only_truth / max(1, only_truth + 3))
-    prec = 1.0 if comparison.equivalent else max(0.0, 1 - only_model / max(1, only_model + 3))
+    overlap = trace_overlap(model, true_net, max_length=max_length)
+    flow.note(f"Complete traces of up to {max_length} activities: the true net has {overlap.second:,}, "
+              f"the model {overlap.first:,}, both {overlap.both:,}")
+    if not overlap.complete:
+        flow.note("The nets have too many states to count every trace: the counts are a lower bound")
+    for net, count in (("true net", overlap.second), ("model", overlap.first)):
+        if not count:
+            flow.note(f"The {net} has no complete trace of up to {max_length} activities, so "
+                      f"{'recall' if net == 'true net' else 'precision'} is not defined (n/a)")
     flow.note(comparison.summary("the model", "the true net"))
-    return Scores(model.name, {"recall": recall, "precision": prec, "simplicity": simplicity(model),
+    sound = check_soundness(model).sound
+    return Scores(model.name, {"recall": overlap.recall if overlap.second else "n/a",
+                               "precision": overlap.precision if overlap.first else "n/a",
+                               "simplicity": simplicity(model),
                                "soundness": {True: "Sound", False: "Not sound", None: "Undecided"}[sound]},
-                  note="Recall and precision here count the shortest differing traces; "
-                       "equivalent nets score 1.")
+                  note=f"Recall and precision over the distinct complete traces of up to {max_length} "
+                       "activities.")
 
 
 @box(name="Footprint conformance", group="Check")

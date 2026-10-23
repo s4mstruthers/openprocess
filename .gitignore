@@ -15,3 +15,8 @@ dist/
 
 # Not part of the project
 Claude outputs/
+
+# The BPI Challenge 2019 log (728 MB): download it, do not commit it
+examples/bpi2019/*.xes
+examples/bpi2019/report.html
+examples/bpi2019/results/

@@ -237,7 +237,7 @@ def causal_net_to_petri_net(causal: CausalNet, name: str = "Heuristics net") -> 
     for activity, bindings in sorted(causal.inputs.items()):
         target = transitions[activity]
         if len(bindings) == 1:
-            for before in next(iter(bindings)):
+            for before in sorted(next(iter(bindings))):     # sorted: the same place ids in every session
                 net.add_arc(arc_place(before, activity), target)
             continue
         joined = net.add_place(f"in({activity})").id
@@ -251,7 +251,7 @@ def causal_net_to_petri_net(causal: CausalNet, name: str = "Heuristics net") -> 
     for activity, bindings in sorted(causal.outputs.items()):
         origin = transitions[activity]
         if len(bindings) == 1:
-            for after in next(iter(bindings)):
+            for after in sorted(next(iter(bindings))):
                 net.add_arc(origin, arc_place(activity, after))
             continue
         split = net.add_place(f"out({activity})").id
@@ -280,40 +280,48 @@ def _remove_redundant_silent_steps(net) -> None:
 
     A τ with one input and one output place is applied only when the arcs
     have weight 1 and the places are different.
+
+    The reductions are tried in the transitions' order and the search starts
+    again from the first after each one, so the result does not depend on how
+    the search is done; the arcs are looked up in an index rebuilt after each
+    reduction (one pass over the arcs), not by scanning them for every
+    transition, which on a large log (thousands of τ bindings) is the
+    difference between a second and minutes.
     """
     from ..petrinet import Marking
     changed = True
     while changed:
         changed = False
+        into: dict[str, list] = {}
+        out_of: dict[str, list] = {}
+        for arc in net.arcs:
+            out_of.setdefault(arc.source, []).append(arc)
+            into.setdefault(arc.target, []).append(arc)
         for transition_id, transition in list(net.transitions.items()):
             if not transition.silent:
                 continue
-            ins = [a for a in net.arcs if a.target == transition_id]
-            outs = [a for a in net.arcs if a.source == transition_id]
+            ins, outs = into.get(transition_id, []), out_of.get(transition_id, [])
             if len(ins) != 1 or len(outs) != 1 or ins[0].weight != 1 or outs[0].weight != 1:
                 continue
             p, q = ins[0].source, outs[0].target
             if p == q:
                 continue
-            consumers_of_p = [a for a in net.arcs if a.source == p]
-            producers_of_q = [a for a in net.arcs if a.target == q]
-            if len(consumers_of_p) == 1:
-                # p only feeds τ: whatever filled p fills q.
-                for arc in [a for a in net.arcs if a.target == p]:
+            if len(out_of.get(p, [])) == 1 and not net.final_marking[p]:
+                # p only feeds τ: whatever filled p fills q.  (Not when p is in
+                # the final marking: removing it would change where runs end.)
+                for arc in list(into.get(p, [])):
                     net.add_arc(arc.source, q, arc.weight)
                 if net.initial_marking[p]:
                     net.initial_marking = Marking({**dict(net.initial_marking.items()),
                                                    q: net.initial_marking[p], p: 0})
-                if net.final_marking[p]:
-                    continue
                 net.remove_transition(transition_id)
                 net.remove_place(p)
                 changed = True
                 break
-            if len(producers_of_q) == 1 and not net.final_marking[q] \
+            if len(into.get(q, [])) == 1 and not net.final_marking[q] \
                     and not net.initial_marking[q]:
                 # q is only filled by τ: whatever took from q takes from p.
-                for arc in [a for a in net.arcs if a.source == q]:
+                for arc in list(out_of.get(q, [])):
                     net.add_arc(p, arc.target, arc.weight)
                 net.remove_transition(transition_id)
                 net.remove_place(q)

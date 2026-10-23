@@ -44,7 +44,7 @@ from .. import theme
 from ..studio import style
 from ..studio.graph_builders import dfg_specs, petri_net_specs
 from ..studio.graph_view import GraphView
-from ..studio.widgets import Card, StatTile, button, footprint_table, hbox, label, scroll, vbox
+from ..studio.widgets import Card, StatTile, button, flow, footprint_table, hbox, label, scroll, vbox
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +132,11 @@ def _table(columns: list[str], rows: list[list], max_rows: int = 500) -> QTableW
     shortcut.setContext(Qt.WidgetWithChildrenShortcut)
     shortcut.activated.connect(functools.partial(_copy_selected_rows, shortcut))
     table.resizeColumnsToContents()
-    table.horizontalHeader().setStretchLastSection(True)
+    # A last column of text (a variant, an alignment) takes the spare width; a
+    # last column of numbers keeps its own, so its figures stay by their header.
+    last = [row[-1] for row in rows[:max_rows] if row]
+    numeric = bool(last) and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in last)
+    table.horizontalHeader().setStretchLastSection(not numeric)
     height = table.horizontalHeader().height() + sum(table.rowHeight(i) for i in range(table.rowCount())) + 6
     table.setMinimumHeight(min(max(height, 60), 420))
     table.setMaximumHeight(min(max(height, 60), 420))
@@ -251,7 +255,7 @@ def result_widget(value, page=None, node=None) -> QWidget:
         add(label(value.summary() + (f" · {value.info['algorithm']}" if value.info.get("algorithm") else ""),
                   "muted", wrap=True))
         if page is not None:
-            add(hbox(button("Open as model", lambda: page.open_as_model(value),
+            add(flow(button("Open as model", lambda: page.open_as_model(value),
                             tooltip="Open it as a model page: token game, analysis, conformance"),
                      button("Open a copy in Model ›", lambda: page.edit_copy(value),
                             tooltip="A copy on the net canvas in Model, to play with and change; "
@@ -340,12 +344,24 @@ def result_widget(value, page=None, node=None) -> QWidget:
                   f"m = {value.missing}, r = {value.remaining}; {value.fitting_traces} of "
                   f"{value.trace_count} cases fit.", "muted", wrap=True))
     elif isinstance(value, AlignmentResult):
-        rows = [["⟨" + ", ".join(a.trace) + "⟩", a.count, a.cost if a.complete else "?", round(a.fitness, 4),
-                 " ".join(f"({m.log}|{m.model})" for m in a.moves) if a.complete else "not found"]
-                for a in value.alignments]
-        add(_table(["variant", "cases", "cost", "fitness", "alignment"], rows))
-        add(label(f"Average fitness {value.average_fitness:.4f}; {value.fitting_traces} of "
-                  f"{value.trace_count} cases align without a deviation.", "muted", wrap=True))
+        from ..studio.alignment_view import AlignmentList, legend_items, projection
+        from ..studio.widgets import Legend, LegendSwatch
+        add(label(f"Average fitness {value.average_fitness:.4f}; {value.fitting_traces:,} of "
+                  f"{value.trace_count:,} cases align without a deviation.", wrap=True))
+        badges, fills, unknown = projection(value.net, value)
+        nodes, edges = petri_net_specs(value.net, badges=badges, fills=fills,
+                                       show_place_names=len(value.net.places) <= 40)
+        add(_graph(nodes, edges, height=300))
+        add(label("The log on the model: ✓ n synchronous moves, » n model moves (the model did it, the log did "
+                  "not), n » log moves (the log did it where the model could not). Greener transitions "
+                  "match the log; purpler ones are often skipped." + (
+                      " Activities the model does not have: " + ", ".join(
+                          f"{a} ({n:,} log moves)" for a, n in sorted(unknown.items(), key=lambda x: -x[1]))
+                      if unknown else ""), "muted", wrap=True))
+        legend = Legend()
+        legend.set_items([(LegendSwatch("dot", colour), words) for colour, words in legend_items()])
+        add(legend)
+        add(AlignmentList(value))
         for note in value.notes:
             add(label(note, "muted", wrap=True))
     elif isinstance(value, Regions):
@@ -375,7 +391,7 @@ def result_widget(value, page=None, node=None) -> QWidget:
             copy = button("Copy as CSV", lambda: (copy_table(table, csv=True),
                                                   page.status.emit("Copied the table as CSV")),
                           tooltip="The whole table, as CSV, on the clipboard; ⌘C copies the selected rows")
-            add(hbox(copy, button("Save as CSV…", lambda: page.save_table(value)), None))
+            add(flow(copy, button("Save as CSV…", lambda: page.save_table(value))))
         if value.samples:
             add(label(f"{len(value.samples)} samples behind these rows (for Compare samples and Plot).", "muted",
                       wrap=True))
@@ -675,7 +691,7 @@ def code_widget(spec: BoxSpec, page=None, compact: bool = True) -> QWidget:
         actions.append(label("Needs " + ", ".join(spec.needs)
                              + ("" if spec.available else " (not installed: the box is greyed out)"), "muted"))
     if actions:
-        box_card.add(hbox(*actions, None))
+        box_card.add(flow(*actions))
     layout.addWidget(box_card)
     if calls:
         several = len(calls) > 1
@@ -1009,12 +1025,21 @@ def pop_out(title: str, make_widget, parent=None) -> QDialog:
     return dialog
 
 
+def _duration(seconds: float) -> str:
+    """850 ms, 4.2 s, 2 min 15 s."""
+    if seconds < 1:
+        return f"{seconds * 1000:.0f} ms"
+    if seconds < 60:
+        return f"{seconds:.1f} s"
+    return f"{int(seconds // 60)} min {seconds % 60:.0f} s"
+
+
 def status_text(result: Result | None) -> tuple[str, str]:
     """(chip text, status word) for a box's result."""
     if result is None:
         return "Waiting", "muted"
     if result.status == "done":
-        return (f"Done in {result.duration * 1000:.0f} ms" + (" (kept)" if result.cached else "")), "good"
+        return f"Done in {_duration(result.duration)}" + (" (kept)" if result.cached else ""), "good"
     if result.status == "running":
         return "Running…", "accent"
     if result.status == "failed":

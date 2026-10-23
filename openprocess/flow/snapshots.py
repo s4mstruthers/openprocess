@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .figures import tile_parts
-from .record import fingerprint
+from .record import FINGERPRINT, fingerprint
 from .runner import DONE, Run
 from .sweep import Sweep, is_sweep
 from .workflow import Workflow, _json_value
@@ -38,11 +38,13 @@ class Snapshot:
     figures: dict[str, tuple[str, str]] = field(default_factory=dict)
     #: box id -> result fingerprint (done boxes only)
     fingerprints: dict[str, str] = field(default_factory=dict)
+    #: The fingerprint scheme (see :data:`.record.FINGERPRINT`); 1 for snapshots kept before 0.12.
+    scheme: int = FINGERPRINT
 
     def to_dict(self) -> dict:
         return {"taken": self.taken, "label": self.label, "settings": self.settings, "titles": self.titles,
                 "statuses": self.statuses, "figures": {k: list(v) for k, v in self.figures.items()},
-                "fingerprints": self.fingerprints}
+                "fingerprints": self.fingerprints, "scheme": self.scheme}
 
     @classmethod
     def from_dict(cls, data: dict) -> "Snapshot":
@@ -50,7 +52,7 @@ class Snapshot:
                    dict(data.get("titles", {})), dict(data.get("statuses", {})),
                    {k: (str(v[0]), str(v[1])) for k, v in data.get("figures", {}).items()
                     if isinstance(v, (list, tuple)) and len(v) == 2},
-                   dict(data.get("fingerprints", {})))
+                   dict(data.get("fingerprints", {})), int(data.get("scheme", 1)))
 
     @property
     def done(self) -> int:
@@ -74,7 +76,7 @@ def take(workflow: Workflow, run: Run | None, previous: "Snapshot | None" = None
             if parts is not None:
                 snapshot.figures[node.id] = parts
             try:
-                snapshot.fingerprints[node.id] = fingerprint(result.value)
+                snapshot.fingerprints[node.id] = fingerprint(result.value, remember=True)
             except Exception:  # noqa: BLE001 - a value that cannot be fingerprinted is left out
                 pass
     snapshot.label = describe_change(previous, snapshot)
@@ -112,7 +114,8 @@ def describe_change(before: Snapshot | None, after: Snapshot) -> str:
     parts += [f"+ {name}" for name in added] + [f"− {name}" for name in removed]
     if parts:
         return "; ".join(parts)
-    same = all(after.fingerprints.get(n) == before.fingerprints.get(n) for n in after.fingerprints)
+    same = before.scheme == after.scheme and all(
+        after.fingerprints.get(n) == before.fingerprints.get(n) for n in after.fingerprints)
     return "Run again, same results" if same and after.fingerprints else "Run again"
 
 
@@ -133,7 +136,7 @@ def compare(a: Snapshot, b: Snapshot) -> list[Row]:
     for node_id in order:
         title = b.titles.get(node_id) or a.titles.get(node_id, node_id)
         fa, fb = a.figures.get(node_id), b.figures.get(node_id)
-        in_both = node_id in a.fingerprints and node_id in b.fingerprints
+        in_both = node_id in a.fingerprints and node_id in b.fingerprints and a.scheme == b.scheme
         changed = (a.fingerprints.get(node_id) != b.fingerprints.get(node_id)) if in_both else (fa != fb)
         changes = [c for c in setting_changes(a, b) if c.startswith(title + ":")]
         rows.append(Row(node_id, title, fa[0] if fa else "", fb[0] if fb else "", changed, changes))

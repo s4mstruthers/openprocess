@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import bisect
 import math
+from array import array
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 
@@ -79,6 +80,10 @@ UNIT_SUFFIX = {"Seconds": "s", "Minutes": "min", "Hours": "h", "Days": "d", "Wee
 SORT_MODES = ["First event", "Last event", "Duration", "Number of events", "Name"]
 STANDARD_COMPONENTS = ["Case", "Activity", "Resource", "Lifecycle"]
 SHAPES = ["circle", "square", "triangle", "diamond", "cross", "star"]
+#: Above this many visible dots they are drawn as round points, a batch per
+#: colour, instead of one shape at a time: a million-event log stays a
+#: picture of seconds, not minutes.  Shapes come back as soon as a zoom shows fewer.
+BATCH_FROM = 40_000
 
 
 @dataclass
@@ -104,12 +109,140 @@ class DotSettings:
 # ---------------------------------------------------------------------------
 # Data preparation (no Qt)
 # ---------------------------------------------------------------------------
+class _Events:
+    """The events a dotted chart shows, in log order, with what it needs of
+    each: its case, its index in the case, its time, and any attribute as
+    text.  An object log is read through its events; a columnar log (a large
+    file) straight from its arrays, so a million-event log is drawn without
+    building a million event objects."""
+
+    def __init__(self, log, classifier, all_events: bool) -> None:
+        from ...mining.columns import NO_TIME
+        self.log, self.classifier = log, classifier
+        self.case = array("i")                  # trace index
+        self.position = array("i")              # index in trace.events
+        self.micros = array("q")                # microseconds since the epoch; NO_TIME when absent
+        self.missing = NO_TIME
+        if log.columnar:
+            store = self.store = log.traces.store
+            wanted = None if all_events or classifier.lifecycles is None else \
+                {v.lower() for v in classifier.lifecycles}
+            lifecycle = store.lifecycle
+            self.index = array("q")             # the event's index in the store
+            for case in range(store.case_count):
+                start, stop = store.offsets[case], store.offsets[case + 1]
+                for i in range(start, stop):
+                    if wanted is not None:
+                        code = lifecycle.codes[i]
+                        if code >= 0 and lifecycle.values[code].lower() not in wanted:
+                            continue
+                    self.case.append(case)
+                    self.position.append(i - start)
+                    self.index.append(i)
+                    self.micros.append(store.micros[i])
+            self.events = None
+        else:
+            self.store = None
+            self.events = []
+            from ...mining.columns import _micros
+            for ti, trace in enumerate(log.traces):
+                for position, event in enumerate(trace.events):
+                    if not (all_events or classifier.accepts(event)):
+                        continue
+                    self.case.append(ti)
+                    self.position.append(position)
+                    self.events.append(event)
+                    stamp = event.timestamp
+                    self.micros.append(_micros(stamp) if stamp is not None else NO_TIME)
+
+    def __len__(self) -> int:
+        return len(self.case)
+
+    def ranks(self) -> array:
+        """Each shown event's place among *all* the log's events, ordered by
+        time (then case, then position): the x of "Logical: order in log"."""
+        from ...mining.columns import _micros
+        floor = -(1 << 63)
+        everything: list[tuple[int, int, int]] = []
+        if self.store is not None:
+            store = self.store
+            for case in range(store.case_count):
+                start = store.offsets[case]
+                for i in range(start, store.offsets[case + 1]):
+                    m = store.micros[i]
+                    everything.append((m if m != self.missing else floor, case, i - start))
+        else:
+            for ti, trace in enumerate(self.log.traces):
+                for position, event in enumerate(trace.events):
+                    stamp = event.timestamp
+                    everything.append((_micros(stamp) if stamp is not None else floor, ti, position))
+        everything.sort()
+        place = {(case, position): rank for rank, (_m, case, position) in enumerate(everything)}
+        return array("q", (place[(c, p)] for c, p in zip(self.case, self.position)))
+
+    def timestamp(self, k: int):
+        """The shown event ``k``'s timestamp, with the offset it was written with."""
+        if self.store is not None:
+            return self.store.timestamp(self.index[k])
+        return self.events[k].timestamp
+
+    def values(self, component: str) -> list[str]:
+        """``component`` (Case, Activity, Resource, Lifecycle, None or an
+        attribute) as text for every shown event."""
+        if component == "None":
+            return [""] * len(self)
+        if self.store is not None:
+            store, index = self.store, self.index
+            if component == "Case":
+                return [store.case_ids[c] for c in self.case]
+            if component == "Activity":
+                labels = self._labels()
+                return [labels[i] for i in index]
+            key = {"Resource": "org:resource", "Lifecycle": "lifecycle:transition"}.get(component, component)
+            column = store.column_text(key)
+            return [column[i] or "–" for i in index]
+        classifier, traces = self.classifier, self.log.traces
+        out = []
+        for k, event in enumerate(self.events):
+            if component == "Case":
+                out.append(traces[self.case[k]].case_id)
+            elif component == "Activity":
+                out.append(classifier.label(event) if classifier.accepts(event) else str(event.activity or "–"))
+            elif component == "Resource":
+                out.append(str(event.resource or "–"))
+            elif component == "Lifecycle":
+                out.append(str(event.lifecycle or "–"))
+            else:
+                raw = event.get(component)
+                out.append("–" if raw is None else str(raw))
+        return out
+
+    def _labels(self) -> list[str]:
+        """Every stored event's activity label under the classifier (the
+        plain activity for an event the classifier leaves out)."""
+        store, classifier = self.store, self.classifier
+        names = store.column_text("concept:name")
+        if tuple(classifier.keys) == ("concept:name",):
+            return [name or "" for name in names]        # the usual classifier: the names themselves
+        columns = [store.column_text(key) for key in classifier.keys]
+        lifecycle = store.lifecycle
+        wanted = None if classifier.lifecycles is None else {v.lower() for v in classifier.lifecycles}
+        labels = []
+        for i in range(store.event_count):
+            code = lifecycle.codes[i]
+            if wanted is not None and code >= 0 and lifecycle.values[code].lower() not in wanted:
+                labels.append(names[i] or "–")
+            else:
+                labels.append("+".join(column[i] or "" for column in columns))
+        return labels
+
+
 class DotData:
     """All dots of a log under given settings, ready for drawing.
 
-    Parallel lists keep the per-dot data compact: ``xs[i]``, ``rows[i]``,
+    Parallel arrays keep the per-dot data compact: ``xs[i]``, ``rows[i]``,
     ``colour[i]`` (index into ``colour_values``), ``shape[i]``, ``case[i]``
-    (trace index) and ``events[i]``.
+    (trace index) and ``position[i]`` (the event's index in its trace).
     """
 
     def __init__(self, document: LogDocument, settings: DotSettings) -> None:
@@ -117,65 +250,75 @@ class DotData:
         log = document.log
         classifier = document.classifier
         s = settings
-
-        def value(component: str, trace, event) -> str:
-            if component == "Case":
-                return trace.case_id
-            if component == "Activity":
-                return (classifier.label(event) if classifier.accepts(event)
-                        else str(event.activity or "–"))
-            if component == "Resource":
-                return str(event.resource or "–")
-            if component == "Lifecycle":
-                return str(event.lifecycle or "–")
-            if component == "None":
-                return ""
-            raw = event.get(component)
-            return "–" if raw is None else str(raw)
+        events = _Events(log, classifier, s.all_events)
+        micros, case, missing = events.micros, events.case, events.missing
 
         # 1. Select events and compute raw x values -------------------------
-        stamps = [e.timestamp for t in log.traces for e in t.events if e.timestamp is not None]
-        self.origin = min(stamps) if stamps else None
-        self.has_time = bool(stamps)
+        earliest = None                          # the shown event with the earliest timestamp
+        for k, m in enumerate(micros):
+            if m != missing and (earliest is None or m < micros[earliest]):
+                earliest = k
+        self.has_time = earliest is not None
+        origin = micros[earliest] if earliest is not None else None
+        # The axis shows clock times in the offset the log was written with.
+        self.origin = events.timestamp(earliest) if earliest is not None else None
         mode = s.x_mode if self.has_time or s.x_mode >= 3 else 4
 
-        global_rank: dict[int, int] = {}
-        if mode == 3:
-            everything = [(e.timestamp or datetime.min.replace(tzinfo=timezone.utc), ti, pos, id(e))
-                          for ti, t in enumerate(log.traces) for pos, e in enumerate(t.events)]
-            everything.sort()
-            global_rank = {key: rank for rank, (*_, key) in enumerate(everything)}
-
-        raw: list[tuple[float, str, str, str, int, object]] = []
-        for ti, trace in enumerate(log.traces):
-            events = [e for e in trace.events if s.all_events or classifier.accepts(e)]
-            times = [e.timestamp for e in events if e.timestamp is not None]
-            start = min(times) if times else None
-            span = (max(times) - start).total_seconds() if times else 0.0
-            for position, event in enumerate(events):
-                if mode == 4:
-                    x = float(position)
-                elif mode == 3:
-                    x = float(global_rank[id(event)])
-                elif event.timestamp is None:
+        # Each case's first and last shown timestamp (for modes 1 and 2).
+        first: dict[int, int] = {}
+        last: dict[int, int] = {}
+        if mode in (1, 2):
+            for k, m in enumerate(micros):
+                if m == missing:
                     continue
-                elif mode == 0:
-                    x = (event.timestamp - self.origin).total_seconds()
-                elif mode == 1:
-                    x = (event.timestamp - start).total_seconds()
-                else:
-                    x = 100.0 * (event.timestamp - start).total_seconds() / span if span else 0.0
-                raw.append((x, value(s.rows, trace, event), value(s.colour_by, trace, event),
-                            value(s.shape_by, trace, event), ti, event))
+                c = case[k]
+                if c not in first or m < first[c]:
+                    first[c] = m
+                if c not in last or m > last[c]:
+                    last[c] = m
+        rank = events.ranks() if mode == 3 else None   # the event's place in the whole log, by time
+
+        kept: list[int] = []                    # shown events that have an x
+        xs = array("d")
+        position_in_shown: dict[int, int] = {}
+        for k in range(len(events)):
+            m = micros[k]
+            if mode == 4:
+                c = case[k]
+                x = float(position_in_shown.get(c, 0))
+                position_in_shown[c] = x + 1
+            elif mode == 3:
+                x = float(rank[k])
+            elif m == missing:
+                continue
+            elif mode == 0:
+                x = (m - origin) / 1e6
+            elif mode == 1:
+                x = (m - first[case[k]]) / 1e6
+            else:
+                span = (last[case[k]] - first[case[k]]) / 1e6       # seconds, as timedelta.total_seconds()
+                x = 100.0 * ((m - first[case[k]]) / 1e6) / span if span else 0.0
+            kept.append(k)
+            xs.append(x)
         self.mode = mode
+
+        def component(name: str) -> list[str]:
+            values = events.values(name)
+            return [values[k] for k in kept]
+        row_of, colour_of, shape_of = component(s.rows), component(s.colour_by), component(s.shape_by)
 
         # 2. Rows: one per distinct component value, sorted ------------------
         stats: dict[str, list[float]] = {}          # value -> [first, last, count]
-        for x, row_value, *_ in raw:
-            entry = stats.setdefault(row_value, [x, x, 0])
-            entry[0] = min(entry[0], x)
-            entry[1] = max(entry[1], x)
-            entry[2] += 1
+        for x, row_value in zip(xs, row_of):
+            entry = stats.get(row_value)
+            if entry is None:
+                stats[row_value] = [x, x, 1]
+            else:
+                if x < entry[0]:
+                    entry[0] = x
+                if x > entry[1]:
+                    entry[1] = x
+                entry[2] += 1
         keys = {
             0: lambda v: (stats[v][0], _natural(v)),
             1: lambda v: (stats[v][1], _natural(v)),
@@ -188,31 +331,25 @@ class DotData:
         self.row_stats = stats
 
         # 3. Colour and shape assignments, by frequency ----------------------
-        def ranked(position: int) -> list[str]:
+        def ranked(values: list[str]) -> list[str]:
             counts: dict[str, int] = {}
-            for item in raw:
-                counts[item[position]] = counts.get(item[position], 0) + 1
+            for value in values:
+                counts[value] = counts.get(value, 0) + 1
             return sorted(counts, key=lambda v: (-counts[v], _natural(v)))
-        self.colour_values = ranked(2)
-        self.shape_values = ranked(3)
-        self.colour_counts = {v: 0 for v in self.colour_values}
+        self.colour_values = ranked(colour_of)
+        self.shape_values = ranked(shape_of)
         colour_index = {v: i for i, v in enumerate(self.colour_values)}
         shape_index = {v: i for i, v in enumerate(self.shape_values)}
 
-        self.xs: list[float] = []
-        self.rows: list[int] = []
-        self.colour: list[int] = []
-        self.shape: list[int] = []
-        self.case: list[int] = []
-        self.events: list[object] = []
-        for x, row_value, colour_value, shape_value, ti, event in raw:
-            self.xs.append(x)
-            self.rows.append(row_index[row_value])
-            self.colour.append(colour_index[colour_value])
-            self.shape.append(shape_index[shape_value])
-            self.case.append(ti)
-            self.events.append(event)
-            self.colour_counts[colour_value] += 1
+        self.xs = xs
+        self.rows = array("i", (row_index[v] for v in row_of))
+        self.colour = array("i", (colour_index[v] for v in colour_of))
+        self.shape = array("i", (shape_index[v] for v in shape_of))
+        self.case = array("i", (case[k] for k in kept))
+        self.position = array("i", (events.position[k] for k in kept))
+        self.colour_counts = {v: 0 for v in self.colour_values}
+        for v in colour_of:
+            self.colour_counts[v] += 1
         self.x_min = min(self.xs, default=0.0)
         self.x_max = max(self.xs, default=1.0)
         if self.x_max <= self.x_min:
@@ -222,6 +359,22 @@ class DotData:
 
     def __len__(self) -> int:
         return len(self.xs)
+
+    def case_duration(self, case: int) -> float | None:
+        """Seconds from a case's first to its last timestamp (None: fewer
+        than two), from the arrays when the log is columnar."""
+        if self.traces.__class__.__name__ == "LazyTraces" and not self.traces.modified:
+            store = self.traces.store
+            span = store.span(case)
+            if span is None or span[0] == span[1]:
+                return None
+            return (store.micros[span[1]] - store.micros[span[0]]) / 1e6
+        stamps = [e.timestamp for e in self.traces[case].events if e.timestamp is not None]
+        return (max(stamps) - min(stamps)).total_seconds() if len(stamps) > 1 else None
+
+    def event(self, i: int):
+        """The event behind dot ``i`` (builds only its trace, for a large log)."""
+        return self.traces[self.case[i]].events[self.position[i]]
 
     def colour_slot(self, colour_index: int) -> int:
         """Palette slot for a colour value (slots 0-7, then 'Other')."""
@@ -266,7 +419,9 @@ class DottedChart(QWidget):
         self._pan_origin: tuple[QPointF, tuple[float, float, float, float]] | None = None
         self._cache: QPixmap | None = None
         self._cache_key = None
-        self._grid: dict[tuple[int, int], list[int]] = {}
+        #: Dots by screen cell for hit-testing (None: build from _grid_dots on first hover).
+        self._grid: dict[tuple[int, int], list[int]] | None = {}
+        self._grid_dots: list[int] = []
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumSize(QSize(240, 200))
@@ -465,6 +620,11 @@ class DottedChart(QWidget):
         cell = 8
         # Unselected first, the selected case last so it sits on top.
         ordered = sorted(visible, key=lambda i: d.case[i] == selected) if selected >= 0 else visible
+        if len(ordered) > BATCH_FROM:
+            self._paint_batched(painter, rect, ordered, colours, faded, radius, selected)
+            painter.restore()
+            self._visible_count = len(visible)
+            return
         for i in ordered:
             point = self.to_screen(d.xs[i], d.rows[i], rect)
             is_dim = selected >= 0 and d.case[i] != selected
@@ -475,6 +635,43 @@ class DottedChart(QWidget):
             self._grid.setdefault((int(point.x()) // cell, int(point.y()) // cell), []).append(i)
         painter.restore()
         self._visible_count = len(visible)
+
+    def _paint_batched(self, painter: QPainter, rect: QRectF, ordered: list[int], colours: list[QColor],
+                       faded: QColor, radius: float, selected: int) -> None:
+        """Many dots: one polyline of points per colour, with the mapping to
+        the screen done inline.  The hover index is built on the first hover."""
+        d = self.data
+        left, top, width, height = rect.left(), rect.top(), rect.width(), rect.height()
+        sx = width / (self.vx1 - self.vx0)
+        sy = height / (self.vy1 - self.vy0)
+        x0, y0 = self.vx0, self.vy0 - 0.5
+        xs, rows, colour, case = d.xs, d.rows, d.colour, d.case
+        # -1: the dimmed dots of the other cases when one is selected; drawn first.
+        batches: dict[int, list[QPointF]] = {}
+        for i in ordered:
+            point = QPointF(left + (xs[i] - x0) * sx, top + (rows[i] - y0) * sy)
+            dimmed = selected >= 0 and case[i] != selected
+            batches.setdefault(-1 if dimmed else colour[i], []).append(point)
+        painter.setRenderHint(QPainter.Antialiasing, radius > 1.5)
+        for key in sorted(batches):
+            pen = QPen(faded if key < 0 else colours[key], 2 * radius)
+            pen.setCapStyle(Qt.RoundCap)
+            painter.setPen(pen)
+            painter.drawPoints(QPolygonF(batches[key]))
+        self._grid = None
+        self._grid_dots = ordered
+
+    def _hover_grid(self) -> dict[tuple[int, int], list[int]]:
+        """The dots by screen cell, for hit-testing; built here, lazily, when
+        the picture was drawn in batches."""
+        if self._grid is None:
+            grid: dict[tuple[int, int], list[int]] = {}
+            rect, d, cell = self.plot_rect(), self.data, 8
+            for i in self._grid_dots:
+                point = self.to_screen(d.xs[i], d.rows[i], rect)
+                grid.setdefault((int(point.x()) // cell, int(point.y()) // cell), []).append(i)
+            self._grid = grid
+        return self._grid
 
     def _paint_connections(self, painter: QPainter, rect: QRectF, visible: list[int], t) -> None:
         d = self.data
@@ -615,7 +812,7 @@ class DottedChart(QWidget):
         best, best_distance = None, tolerance
         for gx in (cx - 1, cx, cx + 1):
             for gy in (cy - 1, cy, cy + 1):
-                for i in self._grid.get((gx, gy), []):
+                for i in self._hover_grid().get((gx, gy), []):
                     screen = self.to_screen(self.data.xs[i], self.data.rows[i], rect)
                     distance = math.hypot(screen.x() - point.x(), screen.y() - point.y())
                     if distance <= best_distance:
@@ -624,7 +821,7 @@ class DottedChart(QWidget):
 
     def describe_dot(self, i: int) -> str:
         d = self.data
-        event = d.events[i]
+        event = d.event(i)
         trace = d.traces[d.case[i]]
         lines = [f"<b>{d.classifier.label(event) if d.classifier.accepts(event) else event.activity}</b>",
                  f"case {trace.case_id}"]
@@ -1221,11 +1418,7 @@ class DottedChartPanel(QWidget):
             return
         shown = [i for i in range(len(d.xs)) if d.colour[i] not in self.chart.hidden_colours]
         cases = {d.case[i] for i in shown}
-        durations = []
-        for ti in cases:
-            stamps = [e.timestamp for e in d.traces[ti].events if e.timestamp is not None]
-            if len(stamps) > 1:
-                durations.append((max(stamps) - min(stamps)).total_seconds())
+        durations = [duration for duration in map(d.case_duration, cases) if duration is not None]
         lines = [f"{len(shown):,} events in {len(cases):,} cases · {len(d.row_values):,} rows"]
         if durations:
             durations.sort()

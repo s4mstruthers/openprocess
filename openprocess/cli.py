@@ -20,7 +20,8 @@ Commands
 ``exercises``   ``check``, ``marks``, ``import``, ``computes``: exercise packs (OpenProcess Learn)
 ``run``         run a ``.cpnflow`` workflow headless; ``--check`` re-runs and
                 compares with the record, ``--sweep`` varies a setting,
-                ``--lock`` writes the requirements the record names
+                ``--lock`` writes the requirements the record names,
+                ``--export`` and ``--report`` write a zip and an HTML page
 ``boxes``       list the boxes (OpenProcess's own, a folder's ``boxes/``, packages)
 ``datasets``    the public logs known by name: ``list``, ``fetch``, ``where``
 """
@@ -468,7 +469,7 @@ def command_run(arguments: argparse.Namespace) -> int:
         print(f"openprocess: {line}", file=sys.stderr)
     if problems:
         return 2
-    run = Runner(library, folder=folder).run(workflow)      # file settings are relative to the folder
+    run = Runner(library, folder=folder, strict=arguments.strict).run(workflow)   # file settings: relative to the folder
     for node in workflow.order():
         result = run.result(node)
         value = run.value(node)
@@ -490,13 +491,21 @@ def command_run(arguments: argparse.Namespace) -> int:
     if arguments.export:
         from .flow.record import export_experiment
         print(f"Wrote {export_experiment(workflow, run, arguments.export, folder, library)}")
+    if arguments.report:
+        from .flow.report import write_report
+        print(f"Wrote {write_report(arguments.report, workflow=workflow, run=run, folder=folder)}")
     if arguments.check:
-        report = check(workflow, record, run)
+        if not record.results:
+            # Nothing to compare is not a pass: a CI job would claim a reproduction that never happened.
+            print(f"openprocess: {path.name} has no recorded results to check against; "
+                  f"record them first with: openprocess run {path.name} --save", file=sys.stderr)
+            return 1
+        report = check(workflow, record, run, complete=True)
         if report:
             for line in report:
                 print(f"DIFFERS: {line}")
             return 1
-        print("Every recorded result was reproduced.")
+        print(f"Every recorded result was reproduced ({len(record.results)} boxes).")
     elif arguments.save:
         save(workflow, path, run, folder)
         print(f"Recorded the results in {path.name}")
@@ -504,7 +513,11 @@ def command_run(arguments: argparse.Namespace) -> int:
 
 
 def _brief(value) -> str:
+    import dataclasses
+    from .flow.figures import tile_parts
     from .flow.types import Figure, Scores, Table
+    if dataclasses.is_dataclass(value) and not isinstance(value, type) and tile_parts(value):
+        return " · ".join(tile_parts(value))
     if isinstance(value, Scores):
         return ", ".join(f"{k} {v:.3f}" if isinstance(v, float) else f"{k} {v}" for k, v in value.metrics.items())
     if isinstance(value, Table):
@@ -650,6 +663,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("-o", "--output", metavar="FOLDER", help="write every result as a file")
     run.add_argument("--export", metavar="FILE.zip",
                      help="zip the workflow, its inputs, boxes and results, with a README")
+    run.add_argument("--strict", action="store_true",
+                     help="also fail a box that changes its inputs in place (slower; for tests and CI)")
+    run.add_argument("--report", metavar="FILE.html",
+                     help="write the analysis as one HTML page: results, how, code, inputs, citations")
     run.add_argument("-v", "--verbose", action="store_true", help="also print the boxes' notes")
     run.set_defaults(handler=command_run)
 

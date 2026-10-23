@@ -1376,3 +1376,69 @@ def test_a_click_that_opens_the_panel_leaves_the_box_where_it_was(app):
     assert view.auto_fit and view.zoom() != zoom_before   # the fit came once the button was up
     page.document.dirty = False
     page.close()
+
+
+def test_the_panel_docks_under_the_canvas_and_is_never_cut_off(app):
+    """0.12: the side panel can be dragged narrower than its content no more (it used to slide
+    out of view to the left), and it can sit under the canvas, where wide tables have room."""
+    from openprocess.flow.workflow import Workflow
+    from openprocess.gui.flow.page import WorkflowPage
+    from openprocess.gui.studio.documents import WorkflowDocument
+
+    saved = dict(WorkflowPage.LAYOUT)
+    try:
+        wf = Workflow("dock")
+        log = wf.add("typed_log", {"text": "[<a,b>^2, <a,c>]"}, (0, 0))
+        miner = wf.add("inductive_miner", {}, (300, 0))
+        wf.connect(log, miner)
+        page = WorkflowPage(WorkflowDocument(wf), wf.library)
+        page.resize(1300, 800)
+        page.show()
+        page.run_from(None)
+        _wait_run(app, page)
+        page.select(miner.id, 0)
+        _pump(app, 0.3)
+        assert page.splitter.orientation() == Qt.Horizontal
+        canvas, panel = page.splitter.sizes()
+        page.splitter.setSizes([canvas + panel - 120, 120])
+        _pump(app, 0.2)
+        need = page.panel_host.minimumSizeHint().width()
+        assert page.panel.width() >= need, "the panel is narrower than what it shows"
+        assert page.panel.horizontalScrollBar().value() == 0
+
+        page.set_dock("bottom")
+        _pump(app, 0.3)
+        assert page.splitter.orientation() == Qt.Vertical and WorkflowPage.LAYOUT["dock"] == "bottom"
+        assert page.panel.width() > 1000
+        page.set_dock("right")
+        _pump(app, 0.2)
+        assert page.splitter.orientation() == Qt.Horizontal
+        page.close()
+    finally:
+        WorkflowPage.LAYOUT = saved
+
+
+def test_alignments_show_as_chevrons_and_on_the_model(app):
+    """0.12: the Alignments box draws the log on the model (✓ synchronous, » model, n » log moves)
+    and every variant's moves as ProM's chevrons."""
+    from openprocess.flow import Runner, Workflow
+    from openprocess.gui.flow.viewers import result_widget
+    from openprocess.gui.studio.alignment_view import AlignmentList, projection
+
+    wf = Workflow("aligned")
+    model_log = wf.add("typed_log", {"text": "[<s,c,d,p>^5, <s,d,c,p>^3]"})
+    real = wf.add("typed_log", {"text": "[<s,c,d,p>^4, <s,x,c,d,p>^2, <s,d,p>]"})
+    miner = wf.add("inductive_miner"); wf.connect(model_log, miner)
+    aligned = wf.add("alignments"); wf.connect(miner, aligned, "model"); wf.connect(real, aligned, "log")
+    result = Runner().run(wf).value(aligned)
+    badges, fills, unknown = projection(result.net, result)
+    label = {t.label: t.id for t in result.net.transitions.values() if t.label}
+    assert ("✓ 7", projection.__globals__["MOVE_COLOURS"]["sync"]) in badges[label["s"]]
+    assert any(text == "» 1" for text, _ in badges[label["c"]])             # <s,d,p> skips c
+    assert unknown == {"x": 2}                                             # x is in no transition
+    assert set(fills) >= {label["s"], label["c"]}
+    widget = result_widget(result)
+    lists = widget.findChildren(AlignmentList)
+    assert len(lists) == 1 and lists[0].model().rowCount() == 3
+    widget.resize(900, 900)
+    widget.grab()

@@ -38,6 +38,7 @@ from ...mining.pnml import write_pnml
 from .. import theme
 from . import instances, style
 from ..learn.concealment import ConcealsResults
+from .alignment_view import AlignmentStrip, projection
 from .documents import ModelDocument
 from .graph_builders import petri_net_specs, state_graph_specs
 from .graph_view import GraphView
@@ -59,35 +60,6 @@ def _tool(text: str, tooltip: str, checkable: bool = False) -> QToolButton:
     tool.setCheckable(checkable)
     tool.setCursor(Qt.PointingHandCursor)
     return tool
-
-
-class AlignmentStrip(QWidget):
-    """One alignment as a row of chips: sync, log move (a ≫), model move (≫ a)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.moves = []
-        self.setMinimumHeight(34)
-
-    def set_moves(self, moves) -> None:
-        self.moves = [m for m in moves if m.kind != "silent"]
-        self.update()
-
-    def paintEvent(self, _event) -> None:  # noqa: N802
-        t = style.tokens()
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        chips = []
-        for move in self.moves:
-            if move.kind == "sync":
-                chips.append((move.log, t.surface_alt, t.border))
-            elif move.kind == "log":
-                chips.append((f"{move.log} ≫", style.categorical(1), None))
-            else:
-                chips.append((f"≫ {move.model}", style.categorical(6), None))
-        font = painter.font()
-        theme.set_px(font, 10.5)
-        paint_chips(painter, QRectF(self.rect()).adjusted(0, 4, 0, -4), chips, font, 140)
 
 
 class ModelPage(ConcealsResults, QWidget):
@@ -116,6 +88,7 @@ class ModelPage(ConcealsResults, QWidget):
         self.open_logs = open_logs
         self.marking: Marking = self.net.initial_marking
         self.overlay_badges: dict = {}
+        self.overlay_fills: dict = {}
         self.conformance = None
 
         root = QVBoxLayout(self)
@@ -237,7 +210,7 @@ class ModelPage(ConcealsResults, QWidget):
     def redraw(self, fit: bool = False) -> None:
         simulating = self.simulating
         enabled = set(self.net.enabled(self.marking)) if simulating else set()
-        fills: dict[str, str] = {}
+        fills: dict[str, str] = {} if simulating else dict(self.overlay_fills)
         if simulating and self.last_fired:
             fills[self.last_fired] = style.tokens().accent_soft
         nodes, edges = petri_net_specs(
@@ -597,10 +570,12 @@ class ModelPage(ConcealsResults, QWidget):
         header.setSectionResizeMode(3, QHeaderView.Stretch)
         variants.add(self.variant_table)
         self.alignment_strip = AlignmentStrip()
-        variants.add(self.alignment_strip)
-        legend = label("Chips: plain = synchronous move · “a ≫” = log move (in the log, "
-                       "not allowed by the model) · “≫ a” = model move (required by the "
-                       "model, missing in the log). Silent τ moves are hidden.", "muted", wrap=True)
+        strip = scroll(self.alignment_strip, horizontal=True)
+        strip.setFixedHeight(76)                       # the chevrons, and a scroll bar for a long variant
+        variants.add(strip)
+        legend = label("Above, the log; below, the model. Green: both moved (synchronous); yellow: only the "
+                       "log (a log move, not allowed by the model); purple: only the model (a model move, "
+                       "missing in the log); black: a silent τ step.", "muted", wrap=True)
         variants.add(legend)
         self.variant_table.selectionModel().currentRowChanged.connect(self._show_alignment)
         layout.addWidget(variants)
@@ -690,6 +665,7 @@ class ModelPage(ConcealsResults, QWidget):
 
     def _apply_overlay(self, index: int) -> None:
         self.overlay_badges = {}
+        self.overlay_fills = {}
         self.overlay_legend.setText("")
         if self.conformance is not None and index == 1:
             replay, _ = self.conformance
@@ -707,20 +683,10 @@ class ModelPage(ConcealsResults, QWidget):
                                         "were left behind (the model expected more).")
         elif self.conformance is not None and index == 2:
             _, alignments = self.conformance
-            sync, log_moves, model_moves = alignments.move_statistics()
-            for transition in self.net.transitions.values():
-                if transition.label is None:
-                    continue
-                badges = []
-                if model_moves.get(transition.label):
-                    badges.append((f"≫ {model_moves[transition.label]:,}", style.categorical(6)))
-                if log_moves.get(transition.label):
-                    badges.append((f"{log_moves[transition.label]:,} ≫", style.categorical(1)))
-                if badges:
-                    self.overlay_badges[transition.id] = badges
-            unknown = {a: n for a, n in log_moves.items() if a not in self.net.labels()}
-            text = ("“≫ n”: the model had to do this n times without the log (model moves). "
-                    "“n ≫”: the log did this n times where the model could not (log moves).")
+            self.overlay_badges, self.overlay_fills, unknown = projection(self.net, alignments)
+            text = ("“✓ n”: n synchronous moves; “» n”: the model had to do this n times without the log "
+                    "(model moves); “n »”: the log did this n times where the model could not (log moves). "
+                    "Greener transitions match the log; purpler ones are often skipped.")
             if unknown:
                 text += " Activities missing from the model entirely: " + ", ".join(
                     f"{a} ({n:,})" for a, n in sorted(unknown.items()))

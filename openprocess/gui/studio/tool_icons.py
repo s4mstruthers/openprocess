@@ -120,6 +120,42 @@ def sidebar_icon() -> QIcon:
     return QIcon(pixmap)
 
 
+def panel_icon(where: str) -> QIcon:
+    """A window with its pane on the right, at the bottom, or popped out
+    (``"window"``): the buttons that move a side panel or open it on its own."""
+    pixmap = QPixmap(40, 40)
+    pixmap.setDevicePixelRatio(2.0)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    colour = QColor(style.tokens().text_secondary)
+    pen = QPen(colour, 1.5)
+    pen.setJoinStyle(Qt.RoundJoin)
+    if where == "window":
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRoundedRect(QRectF(2.5, 6.5, 11, 10), 2.0, 2.0)
+        painter.setBrush(QColor(style.tokens().surface))
+        painter.drawRoundedRect(QRectF(6.5, 3.5, 11, 9), 2.0, 2.0)
+        painter.end()
+        return QIcon(pixmap)
+    frame = QRectF(2.5, 4.5, 15, 11)
+    pane = (QRectF(frame.right() - 5.5, frame.top(), 5.5, frame.height()) if where == "right"
+            else QRectF(frame.left(), frame.bottom() - 4.5, frame.width(), 4.5))
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(QColor(colour.red(), colour.green(), colour.blue(), 90))
+    painter.drawRoundedRect(pane, 2.0, 2.0)
+    painter.setPen(pen)
+    painter.setBrush(Qt.NoBrush)
+    painter.drawRoundedRect(frame, 2.5, 2.5)
+    if where == "right":
+        painter.drawLine(QPointF(pane.left(), frame.top()), QPointF(pane.left(), frame.bottom()))
+    else:
+        painter.drawLine(QPointF(frame.left(), pane.top()), QPointF(frame.right(), pane.top()))
+    painter.end()
+    return QIcon(pixmap)
+
+
 def question_icon() -> QIcon:
     """A sheet with a question mark: the button that brings back an exercise's question."""
     pixmap = QPixmap(40, 40)

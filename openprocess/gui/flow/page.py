@@ -30,7 +30,8 @@ from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QStackedWidget,
-    QDialog, QFileDialog, QLineEdit, QMenu, QMessageBox, QPlainTextEdit, QSplitter, QVBoxLayout, QWidget,
+    QDialog, QFileDialog, QLineEdit, QMenu, QMessageBox, QPlainTextEdit, QSizePolicy, QSplitter, QVBoxLayout,
+    QWidget,
 )
 
 from ...flow import record as records
@@ -44,7 +45,8 @@ from ...flow.script import script_text
 from ...flow.workflow import Edge, Workflow, group_to_python, to_python
 from .. import theme
 from ..studio import motion, style
-from ..studio.widgets import Card, NoticeBar, PageHeader, SegmentedControl, button, hbox, label, scroll, vbox
+from ..studio.widgets import (Card, ElidedLabel, NoticeBar, PageHeader, SegmentedControl, button, flow, hbox,
+                               label, scroll, vbox)
 from ..studio.workers import run_in_background
 from .canvas import WorkflowScene, WorkflowView
 from .picker import BoxPicker, input_box_for
@@ -79,6 +81,10 @@ def brief(value) -> str:
         return f"{len(value.places)} places · {len(value.transitions)} transitions"
     if isinstance(value, EventLog):
         return f"{len(value)} cases · {value.event_count} events"
+    from ...flow.figures import tile_parts
+    parts = tile_parts(value)                       # replay and alignments: their fitness
+    if parts is not None and not isinstance(value, (Table, Figure)):
+        return f"{parts[0]} · {parts[1]}"[:48]
     summary = getattr(value, "summary", None)
     if callable(summary):
         try:
@@ -113,8 +119,10 @@ class WorkflowPage(QWidget):
     layout_changed = Signal()
 
     #: The layout every new Workflows page starts with; the window restores a
-    #: saved one into it.  ``sizes`` are the splitter's: canvas, side panel.
-    LAYOUT: dict = {"sizes": [820, 380]}
+    #: saved one into it.  ``dock``: the panel beside the canvas ("right") or
+    #: under it ("bottom"), where wide tables and code have room; ``sizes``
+    #: and ``bottom_sizes`` are the splitter's (canvas, panel) in each.
+    LAYOUT: dict = {"sizes": [820, 380], "dock": "right", "bottom_sizes": [480, 320]}
 
     def __init__(self, document, library: Library, folder: str | Path | None = None, parent=None) -> None:
         super().__init__(parent)
@@ -227,13 +235,12 @@ class WorkflowPage(QWidget):
         self.panel_layout = QVBoxLayout(self.panel_host)
         self.panel_layout.setContentsMargins(0, 0, 0, 0)
         self.panel = scroll(self.panel_host)
-        self.panel.setMinimumWidth(280)
         splitter.addWidget(self.panel)
         splitter.setStretchFactor(0, 1)
         splitter.setCollapsible(0, False)
         self.splitter = splitter
         self.panel.setVisible(False)
-        splitter.setSizes(_sizes(self.LAYOUT.get("sizes")))
+        self._apply_dock()
         splitter.splitterMoved.connect(lambda *_: self._layout_changed())
         splitter.reset_requested.connect(self.reset_layout)
         wrapper = QWidget()
@@ -273,7 +280,7 @@ class WorkflowPage(QWidget):
             return
         self.panel.setVisible(show)
         if show:
-            self.splitter.setSizes(_sizes(WorkflowPage.LAYOUT.get("sizes")))
+            self._apply_dock()
             QTimer.singleShot(0, lambda: motion.lift(self.panel))     # once it has its width
         self._layout_changed()
 
@@ -325,16 +332,56 @@ class WorkflowPage(QWidget):
         self.show_view(0)
         self.select(node_id, 0)
 
+    @property
+    def dock(self) -> str:
+        return "bottom" if WorkflowPage.LAYOUT.get("dock") == "bottom" else "right"
+
+    def _apply_dock(self) -> None:
+        """Put the splitter in the orientation of the dock, with its sizes."""
+        bottom = self.dock == "bottom"
+        self.splitter.setOrientation(Qt.Vertical if bottom else Qt.Horizontal)
+        if bottom:
+            self.panel.setMinimumSize(0, 180)
+        else:
+            self.panel.setMinimumSize(280, 0)
+            self._fit_panel_width()
+        key = "bottom_sizes" if bottom else "sizes"
+        self.splitter.setSizes(_sizes(WorkflowPage.LAYOUT.get(key), bottom))
+
+    def set_dock(self, where: str) -> None:
+        """The side panel beside the canvas ("right") or under it ("bottom")."""
+        if where == self.dock:
+            return
+        WorkflowPage.LAYOUT = {**WorkflowPage.LAYOUT, "dock": where}
+        self._apply_dock()
+        self._render_panel()
+        self._layout_changed()
+        if self.panel.isVisible():
+            QTimer.singleShot(0, lambda: motion.lift(self.panel))
+
+    def _fit_panel_width(self) -> None:
+        """Beside the canvas, the panel is never narrower than what it shows:
+        rows wrap and titles shorten first, and below that the divider stops,
+        so nothing is ever cut off at the side."""
+        if self.dock == "bottom":
+            return
+        need = self.panel_host.minimumSizeHint().width() + self.panel.verticalScrollBar().sizeHint().width()
+        self.panel.setMinimumWidth(max(280, need))
+
     def reset_layout(self) -> None:
-        """The side panel at its default width."""
-        self.splitter.setSizes([max(400, self.splitter.width() - 380), 380])
+        """The side panel at its default size, where it is docked."""
+        if self.dock == "bottom":
+            self.splitter.setSizes([max(300, self.splitter.height() - 320), 320])
+        else:
+            self.splitter.setSizes([max(400, self.splitter.width() - 380), 380])
         self._layout_changed()
 
     def layout_state(self) -> dict:
+        key = "bottom_sizes" if self.dock == "bottom" else "sizes"
         sizes = self.splitter.sizes()
-        if not self.panel.isVisible():                # keep the width the panel had, for when it is back
-            sizes = [sizes[0], _sizes(WorkflowPage.LAYOUT.get("sizes"))[1]]
-        return {"sizes": [max(int(s), 1) for s in sizes]}
+        if not self.panel.isVisible():                # keep the size the panel had, for when it is back
+            sizes = [sizes[0], _sizes(WorkflowPage.LAYOUT.get(key), self.dock == "bottom")[1]]
+        return {**WorkflowPage.LAYOUT, key: [max(int(s), 1) for s in sizes]}
 
     def _layout_changed(self) -> None:
         WorkflowPage.LAYOUT = self.layout_state()
@@ -344,14 +391,26 @@ class WorkflowPage(QWidget):
 
     # -- header --------------------------------------------------------------------------
     def _subtitle(self) -> str:
+        """"4 boxes, all done", or what is not: "4 boxes · 2 done · 1 failed"."""
         count = len(self.workflow.nodes)
         text = f"{count} box{'es' if count != 1 else ''}"
-        if self.run is not None:
-            text += " · " + self.run.summary()
+        if self.run is None or not count:
+            return text
+        states = [self.run.status(node_id) for node_id in self.workflow.nodes]
+        if all(state == "done" for state in states):
+            text += ", all done"
+        else:
+            tally = {state: states.count(state) for state in ("done", "failed", "idle", "blocked") if state in states}
+            text += "".join(f" · {n} {'waiting' if state == 'idle' else state}" for state, n in tally.items())
+        if len(self.run.variants) > 1:
+            text += f" · {len(self.run.variants)} sweep variants"
         return text
 
     def refresh_title(self) -> None:
         self.header.set_text(self.workflow.name, self._subtitle())
+        # The how-to line is for a canvas still being started; once boxes are
+        # connected it has been learned, and the canvas gets the room.
+        self.legend.setHidden(bool(self.workflow.edges))
         status = self._repro
         self.header.set_badge(status.short, status.tone,
                               "\n".join([status.headline] + ["· " + d for d in status.details]
@@ -571,8 +630,7 @@ class WorkflowPage(QWidget):
             if failed:
                 self.status.emit(f"{len(failed)} box{'es' if len(failed) != 1 else ''} failed: "
                                  + ", ".join(self.workflow.title(r.node) for r in failed))
-            elif not outcome.stopped:
-                self.status.emit(outcome.summary())
+            # A run that went well says so in the header ("4 boxes, all done"), not twice.
         else:
             self.status.emit(f"The run stopped: {outcome}")
         self.refresh_reproducibility()
@@ -786,11 +844,9 @@ class WorkflowPage(QWidget):
             return
         spec = self.workflow.spec(node)
         result = self.run.result(node) if self.run else None
-        title = label(node.title or spec.name, "pageTitle")
-        close = button("✕", self.close_panel, tooltip="Close the panel (click the canvas does too)")
-        close.setObjectName("panelClose")
-        close.setFixedWidth(32)
-        layout.addLayout(hbox(title, None, close))
+        title = ElidedLabel(node.title or spec.name, "pageTitle")
+        title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)     # shortens only when it must
+        layout.addLayout(hbox(title, *self._panel_controls()))
         chip_text, chip_kind = status_text(result)
         colour = {"good": style.STATUS["good"], "critical": style.STATUS["critical"], "warning": style.STATUS["warning"],
                   "accent": style.tokens().accent, "muted": style.tokens().text_muted}[chip_kind]
@@ -798,31 +854,46 @@ class WorkflowPage(QWidget):
                       f"</span> &nbsp; <span style='color: {colour}; font-weight: 600'>{chip_text}</span>")
         chips.setTextFormat(Qt.RichText)
         layout.addWidget(chips)
-        help_text = label(_paragraphs(spec.help), "muted", wrap=True)
+        help_text = label(_paragraphs(spec.description), "muted", wrap=True)
         layout.addWidget(help_text)
         tabs = SegmentedControl(TABS, compact=True)
         tabs.set_index(self.tab)
         tabs.changed.connect(self._tab_changed)
-        pop = button("⤢", lambda: self.pop_out_tab(), tooltip="Open this tab in its own window")
-        pop.setFixedWidth(34)
-        layout.addLayout(hbox(tabs, None, pop))
+        layout.addLayout(hbox(tabs, None))
         self.tabs = tabs
         layout.addWidget(self._tab_widget(node, spec, result, self.tab))
-        connections = ", ".join(f"{p.label or p.name}: {p.type_name}" for p in spec.inputs) or "nothing"
-        gives = ", ".join(p.type_name for p in spec.outputs)
-        layout.addWidget(label(f"Takes {connections}." + (f" Gives a {gives}." if gives else ""), "muted", wrap=True))
-        layout.addLayout(hbox(button("Duplicate", lambda: self.scene.duplicate(node.id)),
+        takes = ", ".join(f"{p.label or p.name} ({p.type_name})" for p in spec.inputs) or "nothing"
+        gives = ", ".join(p.type_name for p in spec.outputs) or "nothing"
+        layout.addWidget(label(f"Takes {takes}. Gives {gives}.", "muted", wrap=True))
+        layout.addWidget(flow(button("Duplicate", lambda: self.scene.duplicate(node.id)),
                               button("Disconnect all", lambda: self.scene.disconnect_all(node.id)),
-                              button("Remove box", lambda: self.scene.remove_node(node.id), kind="danger"), None))
+                              button("Remove box", lambda: self.scene.remove_node(node.id), kind="danger")))
         layout.addStretch(1)
+        QTimer.singleShot(0, self._fit_panel_width)
+
+    def _panel_controls(self) -> list:
+        """The panel's title-row buttons: open the tab in a window, move the
+        panel under (or beside) the canvas, close it."""
+        from ..studio.tool_icons import panel_icon
+        pop = button("", lambda: self.pop_out_tab(), tooltip="Open this tab in its own window")
+        pop.setIcon(panel_icon("window"))
+        bottom = self.dock == "bottom"
+        dock = button("", lambda: self.set_dock("right" if bottom else "bottom"),
+                      tooltip="Move the panel beside the canvas" if bottom else
+                      "Move the panel under the canvas: room for wide tables and code")
+        dock.setIcon(panel_icon("right" if bottom else "bottom"))
+        close = button("✕", self.close_panel, tooltip="Close the panel (click the canvas does too)")
+        close.setObjectName("panelClose")
+        for control in (pop, dock, close):
+            control.setFixedWidth(32)
+        return [pop, dock, close]
 
     def _render_group_panel(self, group) -> None:
         layout = self.panel_layout
         inside = self.scene.view_group == group.id
-        close = button("✕", self.close_panel, tooltip="Close the panel")
-        close.setObjectName("panelClose")
-        close.setFixedWidth(32)
-        layout.addLayout(hbox(label(group.name, "pageTitle"), None, close))
+        title = ElidedLabel(group.name, "pageTitle")
+        title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        layout.addLayout(hbox(title, *self._panel_controls()[1:]))
         statuses = [self.scene.statuses.get(m, ("waiting", "", ""))[0] for m in group.members]
         state = ("failed" if "failed" in statuses else "running" if "running" in statuses else
                  "done" if statuses and all(s == "done" for s in statuses) else "waiting")
@@ -857,13 +928,14 @@ class WorkflowPage(QWidget):
         layout.addWidget(label("The group and this function are the same thing: Save as a box writes it to the "
                                "folder's boxes/ and it appears in the box list; a file like it opens as this group.",
                                "muted", wrap=True))
-        layout.addLayout(hbox(button("Close" if inside else "Open", self.close_group if inside else
+        layout.addWidget(flow(button("Close" if inside else "Open", self.close_group if inside else
                                      (lambda: self.open_group(group.id)), kind="primary"),
                               button("Save as a box", lambda: self.save_group_as_box(group.id)),
                               button("Ungroup", lambda: (self.scene.ungroup(group.id), self._mark_edited(),
                                                          self.select(None))),
-                              button("Remove", lambda: self.scene.remove_group(group.id), kind="danger"), None))
+                              button("Remove", lambda: self.scene.remove_group(group.id), kind="danger")))
         layout.addStretch(1)
+        QTimer.singleShot(0, self._fit_panel_width)
 
     def _rename_group(self, group, name: str) -> None:
         name = name.strip()
@@ -1192,7 +1264,7 @@ class WorkflowPage(QWidget):
         self._stop.set()
 
 
-def _sizes(saved) -> list[int]:
+def _sizes(saved, bottom: bool = False) -> list[int]:
     """The splitter's sizes from a saved layout: canvas, panel.  A layout saved
     before 0.8 had three (box list, canvas, panel); its last two are kept."""
     try:
@@ -1202,7 +1274,7 @@ def _sizes(saved) -> list[int]:
     if len(sizes) == 3:
         sizes = sizes[1:]
     if len(sizes) != 2 or min(sizes) < 1:
-        sizes = [820, 380]
+        sizes = [480, 320] if bottom else [820, 380]
     return sizes
 
 

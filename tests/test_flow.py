@@ -80,7 +80,7 @@ def test_box_mistakes_are_plain_errors():
     with pytest.raises(BoxError, match="needs a default"):
         @box
         def no_default(log: EventLog, k: int) -> PetriNet: ...
-    with pytest.raises(BoxError, match="neither a OpenProcess type"):
+    with pytest.raises(BoxError, match="neither an OpenProcess type"):
         @box
         def odd_type(log: EventLog, k: dict = {}) -> PetriNet: ...
     with pytest.raises(BoxError, match="return type"):

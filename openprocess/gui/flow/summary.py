@@ -67,9 +67,9 @@ class SummaryWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
-        layout.addWidget(label(
-            "The key figure of every box, in the order the boxes run. Nothing is computed here: a tile "
-            "is the box's result, as on the canvas. Click one to open the box.", "muted", wrap=True))
+        intro = label("Every box's key figure, in run order. Click a tile to open its box.", "muted", wrap=True)
+        intro.setToolTip("Nothing is computed here: a tile is the box's result, as on the canvas.")
+        layout.addWidget(intro)
         self.tiles_host = QWidget()
         self.tiles_host.setObjectName("plain")
         self.tiles_layout = QVBoxLayout(self.tiles_host)

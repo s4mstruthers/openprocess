@@ -158,13 +158,20 @@ def settings_key(settings: dict[str, Any]) -> str:
 
 
 class Runner:
-    def __init__(self, library=None, cache: Cache | None = None, folder=None) -> None:
+    def __init__(self, library=None, cache: Cache | None = None, folder=None, strict: bool = False) -> None:
         """``folder`` is where a workflow's relative file settings point (its
-        own folder in the app); without it they are taken as they are."""
+        own folder in the app); without it they are taken as they are.
+
+        ``strict`` also fingerprints every box's inputs before and after it
+        runs, and fails a box that changed one in place (which would quietly
+        change the results of every other box reading the same value).  It
+        costs a fingerprint per input, so it is for tests and CI
+        (``openprocess run --strict``)."""
         from .library import standard_library
         self.library = library or standard_library()
         self.cache = cache or Cache()
         self.folder = folder
+        self.strict = strict
         self._per_variant: set[str] = set()
 
     # -- the public call ----------------------------------------------------------------
@@ -286,7 +293,15 @@ class Runner:
                         result.message = f"Waiting for “{workflow.title(source_id)}” ({why})"
                         return result
                     value = upstream.values.get(output, upstream.value)
-                    values.append(self._fit(value, port))
+                    try:
+                        values.append(self._fit(value, port))
+                    except Exception as error:   # noqa: BLE001 - a converter's failure stays in this box
+                        result.status = FAILED
+                        result.error = (f"Could not convert the {type(value).__name__} from "
+                                        f"“{workflow.title(source_id)}” to a {port.type_name.lower()} "
+                                        f"for “{port.label or port.name}”: {error}")
+                        result.traceback = traceback.format_exc()
+                        return result
                     keys.append(upstream.key + ":" + output)
             inputs[port.name] = values if port.many else values[0]
         # Nothing plugged in at all (every input optional, as Plot's are): the box
@@ -323,9 +338,12 @@ class Runner:
         result.status = RUNNING
         notify(result)
         started = time.perf_counter()
+        before = self._input_fingerprints(inputs) if self.strict else {}
         with explaining() as explanation:
             try:
                 value = spec.function(**inputs, **settings)
+                values = self._outputs(spec, value)
+                problem = self._changed_inputs(inputs, before) if self.strict else ""
             except Exception as error:   # noqa: BLE001 - whatever the box raised stays in the box
                 result.status = FAILED
                 result.error = "".join(traceback.format_exception_only(type(error), error)).strip()
@@ -334,7 +352,9 @@ class Runner:
                 result.explanation = explanation
                 return result
         result.duration = time.perf_counter() - started
-        values = self._outputs(spec, value)
+        if problem:
+            result.status, result.error, result.explanation = FAILED, problem, explanation
+            return result
         for out in values.values():
             if node.id in self._per_variant:
                 self._tag(out, assignment, spec)
@@ -355,11 +375,34 @@ class Runner:
 
     @staticmethod
     def _outputs(spec: BoxSpec, value) -> dict[str, Any]:
+        """The box's return value by output name, each checked against the
+        type its signature promises (and converted when a converter exists),
+        so a wrong return fails this box with a plain message instead of a
+        puzzling error in the box after it."""
         if spec.result_type is not None:
-            return {p.name: getattr(value, p.name) for p in spec.outputs}
-        if not spec.outputs:
+            if not isinstance(value, spec.result_type):
+                raise TypeError(f"{spec.name} returned {_a(value)}, but its signature promises "
+                                f"a {spec.result_type.__name__}")
+            raw = {p.name: getattr(value, p.name) for p in spec.outputs}
+        elif not spec.outputs:
             return {}
-        return {"out": value}
+        else:
+            raw = {"out": value}
+        return {port.name: _promised(spec, port, raw[port.name]) for port in spec.outputs}
+
+    @staticmethod
+    def _input_fingerprints(inputs: dict[str, Any]) -> dict[str, str]:
+        from .record import fingerprint
+        return {name: fingerprint(value) for name, value in inputs.items() if value is not None}
+
+    def _changed_inputs(self, inputs: dict[str, Any], before: dict[str, str]) -> str:
+        after = self._input_fingerprints(inputs)
+        changed = [name for name in before if after.get(name) != before[name]]
+        if not changed:
+            return ""
+        return (f"The box changed its input{'s' if len(changed) > 1 else ''} "
+                f"{', '.join(repr(n) for n in changed)} in place. A box must leave its inputs as it got "
+                "them (other boxes read the same value): copy it first, e.g. copy.deepcopy(log).")
 
     @staticmethod
     def _fit(value, port: Port):
@@ -377,6 +420,31 @@ class Runner:
         if isinstance(context, dict) and assignment:
             for (_node, name), v in assignment.items():
                 context.setdefault(name, v)
+
+
+def _a(value) -> str:
+    return "None" if value is None else f"a {type(value).__name__}"
+
+
+def _promised(spec: BoxSpec, port: Port, value):
+    """``value`` as the output ``port`` promises it, or :class:`TypeError`."""
+    from .types import Predictor
+    if port.type is None:                               # typing.Any: anything goes
+        return value
+    if value is None:
+        if port.optional:
+            return None
+        raise TypeError(f"{spec.name} returned None for “{port.label or port.name}”, but its signature "
+                        f"promises a {port.type_name.lower()} (write -> {port.type.__name__} | None "
+                        "if nothing is a possible result)")
+    if isinstance(value, port.type):
+        return value
+    if port.type is Predictor and callable(getattr(value, "predict", None)):
+        return value                                    # a Predictor is anything with predict (scikit-learn)
+    if can_convert(value, port.type):
+        return convert(value, port.type)
+    raise TypeError(f"{spec.name} returned {_a(value)} for “{port.label or port.name}”, but its signature "
+                    f"promises a {port.type_name.lower()} ({port.type.__name__})")
 
 
 # ---------------------------------------------------------------------------

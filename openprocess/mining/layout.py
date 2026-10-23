@@ -28,6 +28,10 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 
+#: Above this many nodes (dummies included), fewer refinement passes; see :func:`layered_layout`.
+LARGE = 20_000
+
+
 @dataclass
 class LayoutResult:
     positions: dict[str, tuple[float, float]]                   # node -> centre
@@ -169,20 +173,40 @@ def layered_layout(nodes: dict[str, tuple[float, float]], edges: list[tuple[str,
         down[x].append(y)
         up[y].append(x)
 
+    # A huge graph (a Heuristics net of a big log: thousands of τ bindings,
+    # hundreds of thousands of route points) gets fewer refinement passes,
+    # so it is drawn in seconds; a graph a person can read gets them all.
+    work = len(all_nodes)
+    if work > LARGE:
+        sweeps = min(sweeps, 4 if work <= 10 * LARGE else 2)
+    refinements = 24 if work <= LARGE else 8 if work <= 10 * LARGE else 4
+
     # -- 4. crossing reduction --------------------------------------------
     def position_map(current: list[list[str]]) -> dict[str, int]:
         return {n: i for level in current for i, n in enumerate(level)}
 
     def crossings(current: list[list[str]]) -> int:
+        """Edges between neighbouring layers that cross: with the edges sorted
+        by their left end (then right end), the pairs whose right ends are in
+        the opposite order.  Counted with a Fenwick tree, in O(E log E): a
+        large discovered net has tens of thousands of edges, and comparing
+        every pair of them took minutes."""
         pos = position_map(current)
         total = 0
-        for level in current[:-1]:
-            pairs = sorted((pos[x], pos[y]) for x in level for y in down[x])
-            # count inversions of the second coordinate (O(n^2) is fine here)
-            for i in range(len(pairs)):
-                for j in range(i + 1, len(pairs)):
-                    if pairs[i][0] < pairs[j][0] and pairs[i][1] > pairs[j][1]:
-                        total += 1
+        for index, level in enumerate(current[:-1]):
+            ends = [b for _a, b in sorted((pos[x], pos[y]) for x in level for y in down[x])]
+            size = len(current[index + 1]) + 1
+            tree = [0] * (size + 1)
+            for seen, end in enumerate(ends):
+                k, not_above = end + 1, 0         # earlier edges ending at or above this one
+                while k > 0:
+                    not_above += tree[k]
+                    k -= k & -k
+                total += seen - not_above       # earlier edges ending strictly below: a crossing
+                k = end + 1
+                while k <= size:
+                    tree[k] += 1
+                    k += k & -k
         return total
 
     best = [list(level) for level in layers]
@@ -219,10 +243,13 @@ def layered_layout(nodes: dict[str, tuple[float, float]], edges: list[tuple[str,
         xs.append(cursor + w / 2)
         cursor += w + layer_gap
 
+    half = {n: size[n][1] / 2 for n in all_nodes}
+    dummy = {n: n.startswith("\x00") for n in all_nodes}
+    pads = {(True, True): node_gap * 0.45, (True, False): node_gap * 0.7, (False, True): node_gap * 0.7,
+            (False, False): node_gap}
+
     def gap_between(a: str, b: str) -> float:
-        dummy_a, dummy_b = a.startswith("\x00"), b.startswith("\x00")
-        pad = node_gap * (0.45 if dummy_a and dummy_b else 0.7 if (dummy_a or dummy_b) else 1)
-        return size[a][1] / 2 + size[b][1] / 2 + pad
+        return half[a] + half[b] + pads[(dummy[a], dummy[b])]
 
     y: dict[str, float] = {}
     for level in layers:
@@ -250,7 +277,7 @@ def layered_layout(nodes: dict[str, tuple[float, float]], edges: list[tuple[str,
         for node, value in zip(level, placed):
             y[node] = value
 
-    for iteration in range(24):
+    for iteration in range(refinements):
         forward = iteration % 2 == 0
         sequence = layers if forward else layers[::-1]
         for level in sequence:

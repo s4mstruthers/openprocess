@@ -210,6 +210,64 @@ def compare_nets(first: PetriNet, second: PetriNet, mapping: dict[str, str] | No
     return result
 
 
+@dataclass
+class TraceOverlap:
+    """How many complete traces of up to ``max_length`` labels each net
+    allows, and how many both allow (distinct traces, not cases)."""
+
+    max_length: int
+    first: int
+    second: int
+    both: int
+    #: False when the exploration hit its limit and the counts are a lower bound.
+    complete: bool = True
+
+    @property
+    def recall(self) -> float:
+        """The share of the second net's traces that the first allows."""
+        return self.both / self.second if self.second else 1.0
+
+    @property
+    def precision(self) -> float:
+        """The share of the first net's traces that the second allows."""
+        return self.both / self.first if self.first else 1.0
+
+
+def trace_overlap(first: PetriNet, second: PetriNet, max_length: int = 12,
+                  mapping: dict[str, str] | None = None, max_pairs: int = 200_000) -> TraceOverlap:
+    """Count the complete traces of up to ``max_length`` labels that each net
+    allows and that both allow, exactly.
+
+    The two nets are explored together as deterministic automata over labels
+    (as :func:`compare_nets` does); a pair of states reached by *n* label
+    sequences of length *k* carries the count *n*, so no trace is ever listed
+    and a net with loops costs no more than its states times the length."""
+    one, two = _Automaton(first, mapping), _Automaton(second)
+    labels = sorted(one.labels() | two.labels())
+    layer: dict[tuple[frozenset, frozenset], int] = {(one.start(), two.start()): 1}
+    counts = TraceOverlap(max_length, 0, 0, 0)
+    for length in range(max_length + 1):
+        for (a, b), n in layer.items():
+            in_first, in_second = bool(a) and one.accepts(a), bool(b) and two.accepts(b)
+            counts.first += n * in_first
+            counts.second += n * in_second
+            counts.both += n * (in_first and in_second)
+        if length == max_length:
+            break
+        following: dict[tuple[frozenset, frozenset], int] = {}
+        for (a, b), n in layer.items():
+            for label in labels:
+                pair = (one.step(a, label) if a else frozenset(), two.step(b, label) if b else frozenset())
+                if pair[0] or pair[1]:
+                    following[pair] = following.get(pair, 0) + n
+        if len(following) > max_pairs:
+            counts.complete = False
+            break
+        layer = following
+    counts.complete = counts.complete and not (one.overflow or two.overflow)
+    return counts
+
+
 def replayable_prefix(net: PetriNet, trace, mapping: dict[str, str] | None = None
                       ) -> tuple[list[str], int]:
     """Transition ids that replay as much of ``trace`` (labels) on ``net`` as

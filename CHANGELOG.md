@@ -6,6 +6,80 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.12.0
+
+- **Real-life logs, at full size.** The BPI Challenge 2019 log (251,734
+  cases, 1.6 million events, 728 MB) opens in about 12 seconds and 250 MB
+  (it took 844 MB), and every tab of its log page opens in seconds: the
+  overview, the variants, the cases (a list of a quarter of a million that
+  scrolls at once), the dotted chart, the process map. Filters keep a large
+  log in its compact form. The Heuristics Miner on that log takes 2.5 s
+  (it took six minutes), token replay 11 s (twelve minutes), and drawing its
+  net of 6,000 transitions and 29,000 arcs about 15 s (it did not finish).
+- **Alignments as ProM shows them.** The *Alignments* box draws the log on
+  the model: each transition with its synchronous moves (✓) and model moves
+  (»), coloured from green, always matched, to purple, often skipped, and
+  the log moves (*n* ») at their activity, plus the activities the model
+  does not have. Under it, every variant's alignment as a row of chevrons,
+  the log above and the model below: green synchronous, yellow log move,
+  purple model move, black τ. On a large log, *variants* aligns the most
+  frequent ones and says what share of the cases they cover.
+- **Measure boxes**, for the questions an audit asks: *Time between* two
+  activities (the throughput of invoicing, per category), *Order rule*
+  (payment block lifted before the goods receipt? and the cases where it
+  was, to look into), *Segregation of duties* (who recorded *and* cleared an
+  invoice, and for how much), *Compliance by attribute* (per vendor: cases,
+  the share that fits the model, their value), *Case attribute* to keep one
+  category or sweep over all of them, and *Bubble chart*.
+- **A worked example: the BPI Challenge 2019** (`examples/bpi2019`). The
+  challenge's three questions, a model per item category, the throughput of
+  invoicing, the deviations and the vendors behind them, and the published
+  findings checked on the same log, as one workflow that runs in two
+  minutes and reproduces from its record.
+- **The side panel docks under the canvas** with the dock button beside ✕
+  (or *View ▸ Workflow Panel Under the Canvas*): wide tables and code get the
+  window's width. Beside the canvas it is never narrower than what it shows,
+  so nothing is cut off at the edge any more; titles shorten and buttons
+  wrap first.
+- **Reproducible means reproducible.** A result's fingerprint is now its
+  whole content in a fixed form. Before, the α-algorithm's net, the
+  Heuristics Miner's and a footprint could get another fingerprint in
+  another session, so *--check* failed although nothing had changed; and a
+  replay or an alignment was fingerprinted by its net alone. Files saved by
+  0.11 are still checked as they were made.
+- **Fixed: wrong numbers.**
+  - *Compare to true net*: recall and precision are now the shares of
+    complete traces (up to the length limit) each net allows, counted
+    exactly; they came from a stand-in formula.
+  - *Compare samples*: the default is the 95 % interval of the difference
+    between two bootstrap results, paired when they used the same
+    resamples. A p-value on bootstrap resamples shrinks the more samples
+    you ask for, so it is no longer offered as evidence. *Fitness with
+    confidence* bootstraps both models on the same resamples.
+  - *Prefixes* for the outcome no longer includes the whole case, whose
+    last activity *is* the outcome. The frequency baseline reads one-hot
+    rows correctly, and *Predict* works with scikit-learn models.
+- **Fixed: exports.** An exported experiment re-runs from its own zip
+  (`openprocess run … --check` and `python run.py` could not find the
+  inputs), the Python script of an analysis with a file runs (it wrote
+  `PosixPath(…)`), and a group's Python names the types it uses.
+  `--check` on a file with nothing recorded fails instead of passing.
+- **A box that returns the wrong thing** fails on its own with a plain
+  message, and a box whose input could not be converted no longer stops
+  the whole run. `openprocess run --strict` also catches a box that changes
+  its inputs. Connecting two logs to a box with two log inputs fills both.
+- **Cleaner pages.** The workflow header says "4 boxes, all done" once (it
+  was also in the status bar); a box's panel shows its description without
+  the settings' help (that is next to each setting); the canvas's how-to
+  line goes once boxes are connected; the Petri net Analysis tab starts
+  with its buttons, not two paragraphs; the welcome page's cards line up;
+  Learn's progress dots no longer overlap.
+- **Documentation that keeps up.** [docs/framework.md](docs/framework.md)
+  specifies the workflow framework; [docs/architecture.md](docs/architecture.md)
+  maps the code, drawn from its imports; [docs/boxes.md](docs/boxes.md)
+  lists every box. The map and the list are generated, and a release cannot
+  be built while they are out of date.
+
 ## 0.11.3
 
 - **A τ tool.** The Petri net editor's toolbar and the Model palette have

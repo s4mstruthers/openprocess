@@ -369,6 +369,12 @@ class EdgeItem(QGraphicsPathItem):
         self.arrow.lineTo(left)
         self.arrow.lineTo(right)
         self.arrow.closeSubpath()
+        if self.stroke_width <= 2.0:
+            # A thin line under the filled arrowhead does not show: draw it whole.
+            # (Tracing it again point by point is what made a net with thousands
+            # of arcs take half a minute to draw.)
+            self.draw_path = path
+            return
         trimmed = QPainterPath(path.pointAtPercent(0.0))
         steps = 48
         for k in range(1, steps + 1):

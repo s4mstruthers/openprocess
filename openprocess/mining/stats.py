@@ -84,6 +84,8 @@ class LogSummary:
 def summarise(log: EventLog, classifier: Classifier | None = None) -> LogSummary:
     """Compute a :class:`LogSummary` in one pass over the log."""
     classifier = classifier or log.default_classifier()
+    if log.columnar:
+        return _summarise_columns(log, classifier)
 
     by_sequence: dict[tuple[str, ...], Variant] = {}
     occurrences: Counter = Counter()
@@ -132,6 +134,54 @@ def summarise(log: EventLog, classifier: Classifier | None = None) -> LogSummary
         case_durations=durations,
         events_per_case=lengths,
     )
+
+
+def _summarise_columns(log: EventLog, classifier: Classifier) -> LogSummary:
+    """:func:`summarise` for a columnar log: the same numbers, read from the
+    arrays, without building a single trace or event object (a million-event
+    log would otherwise be turned into a million dicts just to be counted)."""
+    store = log.traces.store
+    by_sequence: dict[tuple[str, ...], Variant] = {}
+    occurrences: Counter = Counter()
+    cases_with: Counter = Counter()
+    starts: Counter = Counter()
+    ends: Counter = Counter()
+    lengths: Counter = Counter()
+    durations: list[timedelta] = []
+    first = last = None                          # event indices of the earliest and latest timestamp
+    kept_events = 0
+    micros = store.micros
+    for index, sequence in enumerate(log.sequences(classifier)):
+        variant = by_sequence.get(sequence)
+        if variant is None:
+            variant = by_sequence[sequence] = Variant(sequence)
+        variant.trace_indices.append(index)
+        lengths[len(sequence)] += 1
+        kept_events += len(sequence)
+        if sequence:
+            starts[sequence[0]] += 1
+            ends[sequence[-1]] += 1
+        span = store.span(index)
+        if span is not None:
+            low, high = span
+            durations.append(timedelta(microseconds=micros[high] - micros[low]))
+            if first is None or micros[low] < micros[first]:
+                first = low
+            if last is None or micros[high] > micros[last]:
+                last = high
+    for variant in by_sequence.values():          # per variant, not per case: far fewer
+        occurrences.update({a: n * variant.count for a, n in Counter(variant.sequence).items()})
+        cases_with.update({a: variant.count for a in set(variant.sequence)})
+    variants = sorted(by_sequence.values(), key=lambda v: (-v.count, v.sequence))
+    activities = sorted(
+        (ActivityStats(name, occurrences[name], cases_with[name], starts[name], ends[name])
+         for name in occurrences),
+        key=lambda a: (-a.occurrences, a.name))
+    return LogSummary(case_count=len(log.traces), event_count=kept_events, variants=variants,
+                      activities=activities,
+                      start=store.timestamp(first) if first is not None else None,
+                      end=store.timestamp(last) if last is not None else None,
+                      case_durations=durations, events_per_case=lengths)
 
 
 def format_duration(delta: timedelta | float | None) -> str:

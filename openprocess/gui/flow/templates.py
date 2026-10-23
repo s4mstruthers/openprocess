@@ -54,14 +54,15 @@ def compare_discovery(library: Library, log_file: str | None = None) -> Workflow
 
 def fitness_with_confidence(library: Library, log_file: str | None = None) -> Workflow:
     """Does the α-algorithm really fit this log better than the Heuristics Miner?
-    Bootstrap both, test, plot (needs NumPy, SciPy and matplotlib)."""
+    Bootstrap both on the same resamples (one seed), the interval of the
+    difference, a plot (needs NumPy and matplotlib)."""
     wf = Workflow("Fitness with confidence", library)
     log = _log(wf, log_file)
     alpha = wf.add("alpha_miner", {}, (240.0, 50.0))
     heuristics = wf.add("heuristics_miner", {"dependency": 0.9}, (240.0, 330.0))
     describe = wf.add("describe_log", {}, (240.0, 190.0))
     b1 = wf.add("bootstrap_fitness", {"samples": 200, "seed": 0}, (480.0, 30.0))
-    b2 = wf.add("bootstrap_fitness", {"samples": 200, "seed": 1}, (480.0, 310.0))
+    b2 = wf.add("bootstrap_fitness", {"samples": 200, "seed": 0}, (480.0, 310.0))   # same resamples: paired
     test = wf.add("compare_samples", {}, (720.0, 150.0))
     plot = wf.add("plot", {}, (720.0, 330.0))
     for miner, boot in ((alpha, b1), (heuristics, b2)):
@@ -114,7 +115,7 @@ TEMPLATES = [
     ("Discover and check", discover_and_check, "a log, the Inductive Miner and a fitness check"),
     ("Compare discovery", compare_discovery, "three miners on one log, side by side"),
     ("Noise sweep", noise_sweep, "one setting swept over a range, the scores stacked"),
-    ("Fitness with confidence", fitness_with_confidence, "bootstrap intervals, a test and a plot (NumPy, SciPy, matplotlib)"),
+    ("Fitness with confidence", fitness_with_confidence, "bootstrap intervals, their difference and a plot (NumPy, matplotlib)"),
     ("Predict the next activity", predict_next_activity, "the prediction pipeline with a baseline model"),
 ]
 

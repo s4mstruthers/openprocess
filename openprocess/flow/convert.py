@@ -202,13 +202,18 @@ def _ndarray_to_table(array) -> Table:
 
 
 def _mpl_figure_to_figure(fig) -> Figure:
+    """The figure as SVG (and PNG), byte for byte the same each time it is
+    drawn: no creation date in the metadata, and SVG ids from a fixed salt
+    instead of a random one, so a plot's fingerprint is reproducible."""
     import io
+    import matplotlib
     buffer = io.StringIO()
-    fig.savefig(buffer, format="svg", bbox_inches="tight")
+    with matplotlib.rc_context({"svg.hashsalt": "openprocess"}):
+        fig.savefig(buffer, format="svg", bbox_inches="tight", metadata={"Date": None})
     svg = buffer.getvalue()
     png = io.BytesIO()
     try:
-        fig.savefig(png, format="png", dpi=160, bbox_inches="tight")
+        fig.savefig(png, format="png", dpi=160, bbox_inches="tight", metadata={"Software": None})
         png_bytes = png.getvalue()
     except Exception:    # noqa: BLE001 - no PNG backend
         png_bytes = None

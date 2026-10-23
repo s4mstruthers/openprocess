@@ -76,55 +76,66 @@ def _visible_enabled(net: PetriNet, marking: Marking, max_states: int = 2000) ->
     return result
 
 
-def _replay_prefix(net: PetriNet, prefix: tuple[str, ...],
-                   cache: dict[tuple[str, ...], Marking | None]) -> Marking | None:
-    """Marking after replaying ``prefix`` without missing tokens, or None."""
-    if prefix in cache:
-        return cache[prefix]
-    if not prefix:
-        cache[prefix] = net.initial_marking
-        return net.initial_marking
-    before = _replay_prefix(net, prefix[:-1], cache)
-    result: Marking | None = None
-    if before is not None:
-        activity = prefix[-1]
-        candidates = net.transitions_with_label(activity)
-        for transition in candidates:
-            if net.is_enabled(before, transition):
-                result = net.fire(before, transition)
-                break
-        else:
-            for transition in candidates:
-                path = silent_path(net, before, lambda m, t=transition: net.is_enabled(m, t))
-                if path is not None:
-                    marking = before
-                    for step in path:
-                        marking = net.fire(marking, step)
-                    result = net.fire(marking, transition)
-                    break
-    cache[prefix] = result
-    return result
+def _step(net: PetriNet, before: Marking | None, activity: str, paths: dict) -> Marking | None:
+    """The marking after ``activity`` from ``before`` without missing tokens
+    (after τ moves if they enable it), or None.  ``paths`` remembers the
+    silent paths searched, by marking and transition."""
+    if before is None:
+        return None
+    candidates = net.transitions_with_label(activity)
+    for transition in candidates:
+        if net.is_enabled(before, transition):
+            return net.fire(before, transition)
+    for transition in candidates:
+        key = (before, transition)
+        if key not in paths:
+            paths[key] = silent_path(net, before, lambda m, t=transition: net.is_enabled(m, t))
+        path = paths[key]
+        if path is not None:
+            marking = before
+            for step in path:
+                marking = net.fire(marking, step)
+            return net.fire(marking, transition)
+    return None
 
 
 def precision(net: PetriNet, log: SimpleLog) -> float:
-    """ETConformance precision with escaping edges."""
-    log_next: dict[tuple[str, ...], set[str]] = defaultdict(set)
-    frequency: Counter = Counter()
-    for trace, count in log.items():
-        for i, activity in enumerate(trace):
-            prefix = trace[:i]
-            log_next[prefix].add(activity)
-            frequency[prefix] += count
+    """ETConformance precision with escaping edges.
 
-    cache: dict[tuple[str, ...], Marking | None] = {}
+    The log's prefixes are walked as a tree (a prefix is a node, the next
+    activity an edge), so each distinct prefix is replayed once, from its
+    parent's marking, and a prefix is never stored as a tuple of its own: a
+    log with long traces and thousands of variants (BPI 2019 has a trace of
+    990 events) costs memory in proportion to its events, not their square."""
+    children: dict[tuple[int, str], int] = {}
+    observed: list[set[str]] = [set()]          # per prefix: the activities seen next
+    frequency: list[int] = [0]                  # per prefix: how often an activity followed it
+    markings: list[Marking | None] = [net.initial_marking]
+    paths: dict = {}
+    for trace, count in log.items():
+        node = 0
+        for activity in trace:
+            observed[node].add(activity)
+            frequency[node] += count
+            child = children.get((node, activity))
+            if child is None:
+                child = children[(node, activity)] = len(observed)
+                observed.append(set())
+                frequency.append(0)
+                markings.append(_step(net, markings[node], activity, paths))
+            node = child
+
+    enabled_at: dict[Marking, set[str]] = {}
     escaping = allowed = 0
-    for prefix, observed in log_next.items():
-        marking = _replay_prefix(net, prefix, cache)
-        if marking is None:
+    for node, seen in enumerate(observed):
+        marking = markings[node]
+        if not seen or marking is None:
             continue
-        enabled = _visible_enabled(net, marking)
-        allowed += frequency[prefix] * len(enabled)
-        escaping += frequency[prefix] * len(enabled - observed)
+        enabled = enabled_at.get(marking)
+        if enabled is None:
+            enabled = enabled_at[marking] = _visible_enabled(net, marking)
+        allowed += frequency[node] * len(enabled)
+        escaping += frequency[node] * len(enabled - seen)
     return 1.0 if allowed == 0 else 1 - escaping / allowed
 
 

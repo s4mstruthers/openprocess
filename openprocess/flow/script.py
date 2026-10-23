@@ -40,7 +40,7 @@ if __name__ == "__main__":
         result = run.result(node)
         print(f"{{wf.title(node)}}: {{result.status}}" + (f" — {{result.error}}" if result.error else ""))
         if result.status == "done":
-            payload = as_file(result.value, str(results / wf.title(node).replace("/", "-")))
+            payload = as_file(result.value, str(results / f"{{node.id}} {{wf.title(node)}}".replace("/", "-")))
             if payload is not None:
                 name, content = payload
                 results.mkdir(exist_ok=True)

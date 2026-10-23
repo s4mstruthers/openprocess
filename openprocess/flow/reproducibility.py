@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .record import Record, check, differences
-from .runner import DONE, Run
+from .runner import BLOCKED, DONE, Run
 from .workflow import Workflow
 
 
@@ -51,6 +51,14 @@ def status(workflow: Workflow, record: Record | None, run: Run | None, folder=No
             "Save the analysis (it is saved as you work in a folder): the record keeps the inputs' "
             "fingerprints, the versions and the seeds, so the numbers can be checked again later."])
     changed = differences(record, workflow, folder)
+    # A box that could not run here (a library is missing) is not a difference
+    # in its result: say why it could not be compared instead.
+    blocked = {node_id for node_id in record.results
+               if run is not None and run.result(node_id, 0) is not None and run.result(node_id, 0).status == BLOCKED}
+    if blocked:
+        record = Record(**{**record.__dict__, "results": {k: v for k, v in record.results.items() if k not in blocked}})
+        changed = changed + [f"“{workflow.title(n)}” could not run here ({run.result(n, 0).message}), so its "
+                             "result was not compared." for n in sorted(blocked)]
     mismatches = check(workflow, record, run) if run is not None else []
     compared = [node_id for node_id in record.results
                 if run is not None and run.result(node_id, 0) is not None

@@ -5,25 +5,12 @@ see the [README](../README.md).
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  openprocess.gui.studio  OpenProcess Studio (the desktop app)                 │
-│  openprocess.gui         CPN editor (canvas, panels, menus)             │
-├──────────────────────────────────┬───────────────────────────────┤
-│  openprocess.mining                    │  openprocess.analysis  CPN state     │
-│    log, xes, csv, stats          │                  space         │
-│    dfg, footprint, layout        │  openprocess.sim       binding +     │
-│    petrinet, pnml, analysis      │                  firing rule   │
-│    discovery/  alpha, inductive, │  openprocess.io        .cpn XML      │
-│                heuristics        │  openprocess.model     CPN model     │
-│    conformance/ token replay,    │  openprocess.ml        CPN ML        │
-│                alignments, quality│                               │
-└──────────────────────────────────┴───────────────────────────────┘
-```
-
-Everything below the GUI has **zero runtime dependencies** — only the app
-needs PySide6 — so the engines import fine in a notebook, a script or CI.
-PM4Py is an *optional* extra; nothing requires it.
+The map of the whole code base, drawn from its imports and checked by the
+test suite, is [architecture.md](architecture.md): the four layers (engines,
+framework, teaching, app), which package imports which, how a workflow runs
+and every module. Everything below the app has **zero runtime
+dependencies** (only the app needs PySide6), so the engines import fine in a
+notebook, a script or CI. PM4Py is an *optional* extra; nothing requires it.
 
 ## The CPN ML subset
 

@@ -727,9 +727,11 @@ report = check_soundness(net)
 print(report.sound, report.findings)
 ```
 
-[**docs/how-it-works.md**](docs/how-it-works.md) covers the architecture, the
-CPN ML subset, binding search, timed nets, the state space, the file format
-and the project layout. [**docs/design.md**](docs/design.md) is the *why*:
+[**docs/architecture.md**](docs/architecture.md) maps the code: its four
+layers, which package imports which (drawn from the code, and checked), how a
+workflow runs, and every module. [**docs/how-it-works.md**](docs/how-it-works.md)
+covers the CPN ML subset, binding search, timed nets, the state space and
+the file format. [**docs/design.md**](docs/design.md) is the *why*:
 the problem, the claim, the three ideas and the decisions that follow from
 them. `tests/cross_check_inductive_miner.py` compares the built-in Inductive
 Miner with PM4Py's on hundreds of logs and reports where they differ.
@@ -752,8 +754,8 @@ extra) and *Predict the next activity*. Or start empty.
   and Save. The sidebar beside it lists the folder's analyses and, folded
   under them, its logs.
 - **+ Add box** (or a double-click on the canvas) opens every box, one
-  section per group (Input, Filter, Discover, Check, Compare, Output, then
-  Science, Predict, Coloured nets, Sweep and your own boxes), in a list that
+  section per group (Input, Filter, Discover, Check, Measure, Compare, Output,
+  then Science, Predict, Coloured nets, Sweep and your own boxes), in a list that
   scrolls. Under *Input*, **the folder's own files**: one click adds the box
   that reads the file, already set. Type to search them all: "alpha" finds
   the α-algorithm, "boarding" the log; Enter adds the first match.
@@ -814,8 +816,25 @@ extra) and *Predict the next activity*. Or start empty.
   metadata; a CSV gets a `.provenance.json` beside it.
 - **⌘Z and ⇧⌘Z** undo and redo on the canvas: boxes, connections, moves,
   settings, groups.
-- **The side panel** resizes by dragging the gap beside it; double-click the
-  gap, or *View ▸ Reset Workflow Layout*, for its default width.
+- **The side panel** resizes by dragging the gap beside it, never narrower
+  than what it shows; double-click the gap, or *View ▸ Reset Workflow Layout*,
+  for its default size. Its dock button (or *View ▸ Workflow Panel Under the
+  Canvas*) moves it under the canvas, where a wide table or the code has the
+  window's width; the app remembers where you put it.
+- **Alignments** are drawn as ProM draws them: the log on the model (per
+  transition, ✓ synchronous moves and » model moves, its colour from green,
+  always matched, to purple, often skipped; *n* » log moves at the activity),
+  and every variant's alignment as a row of chevrons: green synchronous,
+  yellow log move, purple model move, black τ. On a large log, the box's
+  *variants* setting aligns the most frequent ones and says what share of the
+  cases they cover.
+- **Measure** boxes answer the questions an audit asks, for every case: *Time
+  between* two activities (throughput), *Order rule* (does the payment block
+  go before the goods receipt?), *Segregation of duties* (who both recorded
+  and cleared an invoice?) and *Compliance by attribute* (per vendor: cases,
+  share that fits, value), with *Case attribute* to keep one category and
+  *Bubble chart* to draw it. [examples/bpi2019](examples/bpi2019/README.md)
+  uses them on the BPI Challenge 2019.
 - **Connections** (at the bottom of the sidebar, or *View ▸ Connections*)
   draws what flows in, OpenProcess and its boxes, what flows out, and the
   optional tools (pandas, numpy, scipy, matplotlib, …) with whether each is
@@ -857,7 +876,7 @@ save(wf, "orders.cpnflow", run)
 ```bash
 openprocess run orders.cpnflow --check     # re-run; fails if any result differs from the record
 openprocess run orders.cpnflow --sweep noise=0..0.5 step 0.1
-openprocess boxes                          # the 47 boxes, with a folder's boxes/
+openprocess boxes                          # every box (listed in docs/boxes.md), with a folder's boxes/
 openprocess datasets list                  # the BPI Challenge, Sepsis, ... logs by name
 ```
 
@@ -873,11 +892,22 @@ def last_two(log: EventLog, representation: str = "multiset") -> TransitionSyste
 ```
 
 `pip install -e ".[science]"` adds the pandas, NumPy, SciPy and matplotlib
-boxes (describe, bootstrap intervals, tests, plots). Large logs are read
-into columns rather than objects, so a million events fit in memory.
-[**docs/workflows.md**](docs/workflows.md) has the whole framework: writing
-a box, the types, the *How* tab, sweeps, the prediction pipeline, the
-record and running in CI.
+boxes (describe, bootstrap intervals, tests, plots).
+
+**Large logs.** A log above 20 MB is read into columns rather than objects,
+and everything that looks at every event reads the columns: the BPI
+Challenge 2019 log (251,734 cases, 1.6 million events, 728 MB) opens in
+about 12 seconds and 250 MB, every tab of its log page in a few seconds, and
+the whole [BPI 2019 analysis](examples/bpi2019/README.md), from reading the
+file to the last chart, runs in about two minutes.
+
+[**docs/workflows.md**](docs/workflows.md) is the tutorial: writing a box,
+the types, the *How* tab, sweeps, the prediction pipeline, the record and
+running in CI. [**docs/framework.md**](docs/framework.md) is the
+specification: what a box, a workflow and a run are, what a fingerprint
+covers and what a reproduced result promises. [**docs/architecture.md**](docs/architecture.md)
+maps the code, drawn from its imports, and [**docs/boxes.md**](docs/boxes.md)
+lists every box.
 
 **Building the apps.** `packaging/` turns OpenProcess into a standalone app with
 PyInstaller. In the environment:
@@ -900,11 +930,20 @@ workflow* on the Actions tab.
    [CHANGELOG.md](CHANGELOG.md) (`## 0.4.0`, then a few bullet points). Write
    it for the people using the app: it becomes the text of the release on
    GitHub, and the app shows it when it offers the update.
-2. Set `__version__` in `openprocess/__init__.py` to the same version and merge
-   both into `main`. It is the only place the version is written:
-   `pyproject.toml`, the download names and the app's update check all read
-   it from there.
-3. Tag that commit with the same version and push the tag:
+2. Bring the documentation up to date with the code:
+   - run `python docs/make_docs.py`, which rewrites the code map in
+     [docs/architecture.md](docs/architecture.md) and the box catalogue in
+     [docs/boxes.md](docs/boxes.md) (the test suite, and so the release
+     build, fails while they are out of date, and when a package imports
+     across its layer);
+   - read [docs/framework.md](docs/framework.md) against what changed in
+     `openprocess/flow` (a test fails when a public name is not described
+     there, but only you can tell whether a description is still right).
+3. Set `__version__` in `openprocess/__init__.py` and `version` and
+   `date-released` in `CITATION.cff` to the same version, and merge them into
+   `main`. `pyproject.toml`, the download names and the app's update check
+   all read the version from `__version__`.
+4. Tag that commit with the same version and push the tag:
 
    ```bash
    git pull
@@ -915,8 +954,8 @@ workflow* on the Actions tab.
 About five minutes later the
 [Releases page](https://github.com/s4mstruthers/openprocess/releases) has the
 macOS (Apple silicon and Intel), Windows and Linux apps. The build refuses a
-tag that does not match `__version__`, or a version with no section in
-`CHANGELOG.md`.
+tag that does not match `__version__`, a version with no section in
+`CHANGELOG.md`, and code whose tests fail, stale documentation included.
 
 **Updates.** Each time it opens, the app checks the latest release on GitHub
 (*Settings* turns that off). If there is a newer version, a slim bar at the

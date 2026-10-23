@@ -209,7 +209,7 @@ class BoxPicker(QWidget):
                 choice.setObjectName("boxChoice")
                 choice.setCursor(Qt.PointingHandCursor)
                 choice.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-                tip = (spec.help or "").strip().split("\n\n")[0].replace("\n", " ")
+                tip = spec.description.split("\n\n")[0].replace("\n", " ")
                 if not spec.available:
                     tip += f"\n({spec.unavailable_reason})"
                     choice.setStyleSheet(f"color: {t.text_muted};")

@@ -11,18 +11,18 @@ Writing a box is writing a function with type hints, nothing more::
 
 What the decorator reads, and nothing else:
 
-================================================  ===============================================
-parameters whose type is a OpenProcess type             input connection points, named after the parameter
-``list[Type]``                                    an input that takes any number of connections
-``Type | None`` (or a default of ``None``)        an optional input
-the return type                                   the output; a dataclass of typed fields gives several
+====================================================  ========================================================
+parameters whose type is an OpenProcess type          input connection points, named after the parameter
+``list[Type]``                                        an input that takes any number of connections
+``Type | None`` (or a default of ``None``)            an optional input
+the return type                                       the output; a dataclass of typed fields gives several
 ``int``, ``float``, ``bool``, ``str`` with a default  a setting, with the default as its value
-``Literal["a", "b"]``                             a setting that is a choice
-``Column``                                        a setting that is a column of a connected table
-``Path``                                          a setting that is a file in the folder
-the docstring                                     the help text
-``inspect.getsource``                             the Code tab
-================================================  ===============================================
+``Literal["a", "b"]``                                 a setting that is a choice
+``Column``                                            a setting that is a column of a connected table
+``Path``                                              a setting that is a file in the folder
+the docstring                                         the help text; a ``name: text`` line is a setting's help
+``inspect.getsource``                                 the Code tab
+====================================================  ========================================================
 
 A box has no base class and no registration call: the decorator returns a
 :class:`Box`, which is still the function (call it from a script or a
@@ -39,6 +39,7 @@ import hashlib
 import inspect
 import os
 import importlib.util
+import re
 import types
 import typing
 from dataclasses import dataclass, field
@@ -81,10 +82,11 @@ class Port:
         return "Anything" if self.type is None else getattr(self.type, "__name__", str(self.type))
 
     def accepts(self, other: "Port") -> bool:
-        """Can an output ``other`` be connected to this input?"""
+        """Can an output ``other`` be connected to this input?  The same type
+        or a subclass of it; a ``typing.Any`` point only to another one."""
         if self.type is None or other.type is None:
-            return self.type is other.type and other.type is None or self.type is other.type
-        return issubclass(other.type, self.type) or self.type is other.type
+            return self.type is other.type
+        return issubclass(other.type, self.type)
 
 
 def clean_path(value: Any) -> str:
@@ -113,8 +115,22 @@ class Setting:
     help: str = ""
 
     def coerce(self, value: Any) -> Any:
-        """A value as the GUI or a file gives it, in the setting's type."""
+        """A value as the GUI or a file gives it, in the setting's type.
+        Raises ``ValueError`` for a value that is not one, rather than
+        rounding it: ``2.5`` is not an int setting's value, ``"2"`` and
+        ``2.0`` are."""
+        if value is None and self.default is None and self.kind != "bool":
+            return None                                  # "no value" stays no value (str | None = None)
         if self.kind == "int":
+            if isinstance(value, (bool, int)):
+                return int(value)
+            if isinstance(value, str):
+                try:
+                    return int(value.strip())
+                except ValueError:
+                    value = float(value)
+            if isinstance(value, float) and not value.is_integer():
+                raise ValueError(f"{self.name!r} must be a whole number, not {value!r}")
             return int(value)
         if self.kind == "float":
             return float(value)
@@ -167,6 +183,20 @@ class BoxSpec:
 
     def defaults(self) -> dict[str, Any]:
         return {s.name: s.default for s in self.settings}
+
+    @property
+    def description(self) -> str:
+        """The docstring's prose: :attr:`help` without the ``name: text``
+        lines of its settings (they are shown next to each setting) and
+        without an ``Args:`` heading left with nothing under it."""
+        names = {s.name for s in self.settings} | {p.name for p in self.inputs}
+        lines = (self.help or "").splitlines()
+        dropped = {number for key, _text, first, last in _hint_blocks(self.help) if key in names
+                   for number in range(first, last + 1)}
+        text = "\n".join(line for number, line in enumerate(lines) if number not in dropped)
+        for heading in ("Args:", "Arguments:", "Parameters:"):
+            text = re.sub(rf"(?m)^\s*{heading}\s*$\n?(?=\s*(\n|$))", "", text)
+        return text.strip()
 
     @property
     def fingerprint(self) -> str:
@@ -280,7 +310,7 @@ def _setting_from(name: str, annotation, default, has_default: bool, doc_hints: 
         kind = "str"
     else:
         raise BoxError(
-            f"parameter {name!r} has type {_type_text(annotation)}, which is neither a OpenProcess "
+            f"parameter {name!r} has type {_type_text(annotation)}, which is neither an OpenProcess "
             f"type (an input) nor int, float, bool, str, Literal[...], Column or Path (a setting)")
     if not has_default:
         raise BoxError(f"setting {name!r} needs a default value (e.g. {name}: {kind} = ...)")
@@ -298,37 +328,63 @@ def _outputs_from(annotation) -> tuple[list[Port], type | None]:
         raise BoxError("the function needs a return type hint (-> PetriNet), or -> None")
     if annotation is None or annotation is type(None):
         return [], None
-    annotation, _ = _unwrap_optional(annotation)
+    annotation, optional = _unwrap_optional(annotation)
     if annotation is Any:
         return [Port("out", None)], None
     if isinstance(annotation, type) and is_known(annotation):
-        return [Port("out", annotation)], None
+        return [Port("out", annotation, optional=optional)], None
     if isinstance(annotation, type) and dataclasses.is_dataclass(annotation):
         ports = []
         hints = get_type_hints(annotation)
         for f in dataclasses.fields(annotation):
-            inner, _ = _unwrap_optional(hints.get(f.name, f.type))
+            inner, optional = _unwrap_optional(hints.get(f.name, f.type))
             if not (isinstance(inner, type) and is_known(inner)) and inner is not Any:
                 raise BoxError(f"result field {f.name!r} has type {_type_text(inner)}, "
-                               f"which is not a OpenProcess type")
-            ports.append(Port(f.name, None if inner is Any else inner, label=f.name.replace("_", " ")))
+                               f"which is not an OpenProcess type")
+            ports.append(Port(f.name, None if inner is Any else inner, optional=optional,
+                              label=f.name.replace("_", " ")))
         if not ports:
             raise BoxError(f"result class {annotation.__name__} has no fields")
         return ports, annotation
-    raise BoxError(f"the return type {_type_text(annotation)} is not a OpenProcess type "
+    raise BoxError(f"the return type {_type_text(annotation)} is not an OpenProcess type "
                    f"(nor a dataclass of them)")
 
 
 def _doc_hints(doc: str) -> dict[str, str]:
-    """``name: text`` lines of a docstring, as help for settings."""
+    """``name: text`` lines of a docstring, as help for settings.  The
+    Google style ``name (float): text`` is read the same way, so a function
+    documented for Sphinx needs no second docstring to be a box."""
     hints: dict[str, str] = {}
-    for line in (doc or "").splitlines():
-        stripped = line.strip()
-        if ":" in stripped and not stripped.startswith(":"):
-            key, _, text = stripped.partition(":")
-            if key.isidentifier() and text.strip():
-                hints[key] = text.strip()
+    for key, text, _first, _last in _hint_blocks(doc):
+        hints.setdefault(key, text)
     return hints
+
+
+def _hint_blocks(doc: str):
+    """``(name, help, first line, last line)`` for each ``name: text`` block of a
+    docstring: the line and the lines under it until a blank line or the next
+    ``name:``, so a help that goes on over several lines stays one help."""
+    lines = (doc or "").splitlines()
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        key, _, text = stripped.partition(":")
+        key = key.split("(", 1)[0].strip()                 # "noise (float)" -> "noise"
+        if ":" in stripped and not stripped.startswith(":") and key.isidentifier() and text.strip():
+            parts, end = [text.strip()], index + 1
+            while end < len(lines) and lines[end].strip() and not _starts_hint(lines[end]):
+                parts.append(lines[end].strip())
+                end += 1
+            yield key, " ".join(parts), index, end - 1
+            index = end
+        else:
+            index += 1
+
+
+def _starts_hint(line: str) -> bool:
+    stripped = line.strip()
+    key, _, text = stripped.partition(":")
+    return ":" in stripped and key.split("(", 1)[0].strip().isidentifier() and bool(text.strip())
 
 
 def _plain_name(function_name: str) -> str:

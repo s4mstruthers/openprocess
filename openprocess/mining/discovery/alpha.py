@@ -141,9 +141,9 @@ def alpha_miner(log: SimpleLog, name: str = "α(L)") -> AlphaResult:
     for number, (a_set, b_set) in enumerate(Y_sorted, 1):
         label = "p({" + ",".join(sorted(a_set)) + "},{" + ",".join(sorted(b_set)) + "})"
         place = net.add_place(label, id=f"p{number}")
-        for a in a_set:
+        for a in sorted(a_set):                  # sorted: the same net, arc for arc, in every session
             net.add_arc(transitions[a], place)
-        for b in b_set:
+        for b in sorted(b_set):
             net.add_arc(place, transitions[b])
     for a in T_I:
         net.add_arc(source, transitions[a])

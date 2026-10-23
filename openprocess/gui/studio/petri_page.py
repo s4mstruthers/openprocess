@@ -299,17 +299,16 @@ class PetriNetPage(ConcealsResults, CpnPage):
         self.analysis_button = button("Check again", self.run_analysis, kind="primary",
                                       tooltip="The analysis also runs by itself whenever "
                                               "you open this tab after an edit")
-        definitions = button("Definitions…", lambda: show_reference(None, self),
-                             kind="ghost", tooltip="Every property, defined mathematically")
-        # The hint wraps, so the row never makes the inspector wider than it is.
-        layout.addLayout(hbox(label("Hover over a property (ⓘ) for its definition.", "muted",
-                                    wrap=True), definitions, self.analysis_button))
+        definitions = button("Definitions…", lambda: show_reference(None, self), kind="ghost",
+                             tooltip="Every property, defined mathematically. Hover over a "
+                                     "property's ⓘ for its definition, filled in for this net.")
         # Conformance is Mine's job: one click builds the analysis there.
         self.check_log_button = button("Check against a log ›", self.check_requested.emit,
-                                       tooltip="In Mine: a new analysis with this net, a log you "
-                                               "choose and Check fit, connected and run")
-        layout.addLayout(hbox(label("How well does it fit a log? Fitness, precision and more, "
-                                    "with every step shown.", "muted", wrap=True), self.check_log_button))
+                                       tooltip="How well does it fit a log? In Mine: a new analysis "
+                                               "with this net, a log you choose and Check fit "
+                                               "(fitness, precision and more, every step shown)")
+        # Wraps onto a second line rather than make the inspector wider than it is.
+        layout.addWidget(flow(self.analysis_button, self.check_log_button, definitions))
         self.soundness_card = Card("Soundness", f"From one token in {I}: (i) every run can "
                                    f"still reach [{O}], (ii) [{O}] is the only marking with a "
                                    f"token in {O}, (iii) every transition can fire.")

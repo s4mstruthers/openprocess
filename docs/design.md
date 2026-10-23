@@ -3,7 +3,9 @@
 The reasoning behind the design, in one place, so that a decision can be
 checked against it before it is made. The *what* is in the README; the
 *how* is in [how-it-works.md](how-it-works.md) and
-[workflows.md](workflows.md). This page is the *why*.
+[workflows.md](workflows.md); the precise rules of the workflow framework
+are in [framework.md](framework.md), and the map of the code is
+[architecture.md](architecture.md). This page is the *why*.
 
 ## The problem
 

@@ -1,0 +1,619 @@
+{
+  "format": "cpnflow/1",
+  "name": "BPI Challenge 2019 · purchase to pay",
+  "boxes": [
+    {
+      "id": "n1",
+      "box": "openprocess.flow.boxes.input.open_log",
+      "settings": {
+        "file": "BPI_Challenge_2019.xes"
+      },
+      "position": [
+        0,
+        360
+      ],
+      "title": "BPI Challenge 2019"
+    },
+    {
+      "id": "n2",
+      "box": "openprocess.flow.boxes.filter.time_frame",
+      "settings": {
+        "start": "2017-01-01",
+        "end": "2019-12-31",
+        "mode": "contained"
+      },
+      "position": [
+        260,
+        360
+      ],
+      "title": "Cases dated 2017 to 2019"
+    },
+    {
+      "id": "n3",
+      "box": "openprocess.flow.boxes.discover.directly_follows",
+      "settings": {},
+      "position": [
+        520,
+        600
+      ],
+      "title": "Process map"
+    },
+    {
+      "id": "n4",
+      "box": "openprocess.flow.boxes.filter.case_attribute",
+      "settings": {
+        "attribute": "Item Category",
+        "values": {
+          "sweep": [
+            "3-way match, invoice before GR",
+            "3-way match, invoice after GR",
+            "Consignment",
+            "2-way match"
+          ]
+        },
+        "mode": "keep"
+      },
+      "position": [
+        520,
+        0
+      ],
+      "title": "One item category"
+    },
+    {
+      "id": "n5",
+      "box": "openprocess.flow.boxes.discover.inductive_miner",
+      "settings": {
+        "noise": 0.2
+      },
+      "position": [
+        780,
+        0
+      ],
+      "title": "Model of the category"
+    },
+    {
+      "id": "n6",
+      "box": "openprocess.flow.boxes.check.check_fit",
+      "settings": {
+        "method": "Token replay"
+      },
+      "position": [
+        1040,
+        0
+      ],
+      "title": "How well it fits"
+    },
+    {
+      "id": "n7",
+      "box": "openprocess.flow.boxes.sweeps.sweep_table",
+      "settings": {},
+      "position": [
+        1300,
+        0
+      ],
+      "title": "Models per category"
+    },
+    {
+      "id": "n9",
+      "box": "openprocess.flow.boxes.measure.time_between",
+      "settings": {
+        "start": "Record Invoice Receipt",
+        "end": "Clear Invoice",
+        "by": "Item Category",
+        "unit": "days"
+      },
+      "position": [
+        520,
+        180
+      ],
+      "title": "Invoice to clearing"
+    },
+    {
+      "id": "n11",
+      "box": "openprocess.flow.boxes.filter.case_attribute",
+      "settings": {
+        "attribute": "Item Category",
+        "values": "3-way match, invoice before GR",
+        "mode": "keep"
+      },
+      "position": [
+        520,
+        360
+      ],
+      "title": "Invoice before goods receipt"
+    },
+    {
+      "id": "n12",
+      "box": "openprocess.flow.boxes.discover.inductive_miner",
+      "settings": {
+        "noise": 0.2
+      },
+      "position": [
+        780,
+        300
+      ],
+      "title": "Its model"
+    },
+    {
+      "id": "n13",
+      "box": "openprocess.flow.boxes.check.alignments",
+      "settings": {
+        "variants": 200
+      },
+      "position": [
+        1040,
+        300
+      ],
+      "title": "Deviations, move by move"
+    },
+    {
+      "id": "n14",
+      "box": "openprocess.flow.boxes.measure.compliance_by",
+      "settings": {
+        "attribute": "Vendor",
+        "value": "Cumulative net worth (EUR)",
+        "colour": "Item Type"
+      },
+      "position": [
+        1040,
+        440
+      ],
+      "title": "Compliance per vendor"
+    },
+    {
+      "id": "n15",
+      "box": "openprocess.flow.boxes.science.bubble_chart",
+      "settings": {
+        "x": "cases",
+        "y": "compliance (%)",
+        "size": "Cumulative net worth (EUR)",
+        "colour": "Item Type",
+        "log_x": true
+      },
+      "position": [
+        1300,
+        440
+      ],
+      "title": "Vendors: cases, compliance, value"
+    },
+    {
+      "id": "n16",
+      "box": "openprocess.flow.boxes.measure.order_rule",
+      "settings": {
+        "first": "Remove Payment Block",
+        "then": "Record Goods Receipt",
+        "value": "Cumulative net worth (EUR)"
+      },
+      "position": [
+        780,
+        460
+      ],
+      "title": "Payment block lifted before goods receipt"
+    },
+    {
+      "id": "n18",
+      "box": "openprocess.flow.boxes.measure.order_rule",
+      "settings": {
+        "first": "Vendor creates debit memo",
+        "then": "Vendor creates invoice",
+        "value": "Cumulative net worth (EUR)"
+      },
+      "position": [
+        520,
+        740
+      ],
+      "title": "Debit memo before the invoice"
+    },
+    {
+      "id": "n19",
+      "box": "openprocess.flow.boxes.measure.order_rule",
+      "settings": {
+        "first": "Delete Purchase Order Item",
+        "then": "Reactivate Purchase Order Item",
+        "value": "Cumulative net worth (EUR)"
+      },
+      "position": [
+        520,
+        870
+      ],
+      "title": "Deleted, then reactivated"
+    },
+    {
+      "id": "n20",
+      "box": "openprocess.flow.boxes.measure.order_rule",
+      "settings": {
+        "first": "Vendor creates invoice",
+        "then": "Create Purchase Order Item",
+        "value": "Cumulative net worth (EUR)"
+      },
+      "position": [
+        520,
+        1000
+      ],
+      "title": "Invoice before the purchase order"
+    },
+    {
+      "id": "n21",
+      "box": "openprocess.flow.boxes.measure.segregation_of_duties",
+      "settings": {
+        "first": "Record Invoice Receipt",
+        "second": "Clear Invoice",
+        "by": "User",
+        "value": "Cumulative net worth (EUR)"
+      },
+      "position": [
+        520,
+        1130
+      ],
+      "title": "Same user records and clears"
+    }
+  ],
+  "connections": [
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n2",
+      "input": "log"
+    },
+    {
+      "from": "n2",
+      "output": "out",
+      "to": "n3",
+      "input": "log"
+    },
+    {
+      "from": "n2",
+      "output": "out",
+      "to": "n4",
+      "input": "log"
+    },
+    {
+      "from": "n4",
+      "output": "out",
+      "to": "n5",
+      "input": "log"
+    },
+    {
+      "from": "n5",
+      "output": "out",
+      "to": "n6",
+      "input": "model"
+    },
+    {
+      "from": "n4",
+      "output": "out",
+      "to": "n6",
+      "input": "log"
+    },
+    {
+      "from": "n6",
+      "output": "out",
+      "to": "n7",
+      "input": "scores"
+    },
+    {
+      "from": "n2",
+      "output": "out",
+      "to": "n9",
+      "input": "log"
+    },
+    {
+      "from": "n2",
+      "output": "out",
+      "to": "n11",
+      "input": "log"
+    },
+    {
+      "from": "n11",
+      "output": "out",
+      "to": "n12",
+      "input": "log"
+    },
+    {
+      "from": "n12",
+      "output": "out",
+      "to": "n13",
+      "input": "model"
+    },
+    {
+      "from": "n11",
+      "output": "out",
+      "to": "n13",
+      "input": "log"
+    },
+    {
+      "from": "n12",
+      "output": "out",
+      "to": "n14",
+      "input": "model"
+    },
+    {
+      "from": "n11",
+      "output": "out",
+      "to": "n14",
+      "input": "log"
+    },
+    {
+      "from": "n14",
+      "output": "out",
+      "to": "n15",
+      "input": "table"
+    },
+    {
+      "from": "n11",
+      "output": "out",
+      "to": "n16",
+      "input": "log"
+    },
+    {
+      "from": "n2",
+      "output": "out",
+      "to": "n18",
+      "input": "log"
+    },
+    {
+      "from": "n2",
+      "output": "out",
+      "to": "n19",
+      "input": "log"
+    },
+    {
+      "from": "n2",
+      "output": "out",
+      "to": "n20",
+      "input": "log"
+    },
+    {
+      "from": "n2",
+      "output": "out",
+      "to": "n21",
+      "input": "log"
+    }
+  ],
+  "groups": [
+    {
+      "id": "g8",
+      "name": "1 · Models per category",
+      "boxes": [
+        "n4",
+        "n5",
+        "n6",
+        "n7"
+      ],
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "id": "g10",
+      "name": "2 · Invoicing time",
+      "boxes": [
+        "n9"
+      ],
+      "position": [
+        520,
+        180
+      ]
+    },
+    {
+      "id": "g17",
+      "name": "3 · Deviations",
+      "boxes": [
+        "n11",
+        "n12",
+        "n13",
+        "n14",
+        "n15",
+        "n16"
+      ],
+      "position": [
+        520,
+        300
+      ]
+    },
+    {
+      "id": "g22",
+      "name": "Findings to check",
+      "boxes": [
+        "n18",
+        "n19",
+        "n20",
+        "n21"
+      ],
+      "position": [
+        520,
+        740
+      ]
+    }
+  ],
+  "record": {
+    "versions": {
+      "openprocess": "0.12.0",
+      "python": "3.11.16",
+      "numpy": "2.4.6",
+      "pandas": "2.3.3",
+      "scipy": "1.17.1",
+      "matplotlib": "3.11.1"
+    },
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python": "3.11.16",
+      "packages": {
+        "anyio": "4.15.1",
+        "appnope": "1.0.0",
+        "argon2-cffi": "25.1.0",
+        "argon2-cffi-bindings": "26.1.0",
+        "arrow": "1.4.0",
+        "asttokens": "3.0.2",
+        "async-lru": "2.3.0",
+        "attrs": "26.1.0",
+        "autograd": "1.9.1",
+        "autograd-gamma": "0.5.0",
+        "babel": "2.18.0",
+        "backports.zstd": "1.7.0",
+        "beautifulsoup4": "4.15.0",
+        "bleach": "6.4.0",
+        "brotli": "1.2.0",
+        "cached-property": "2.0.1",
+        "certifi": "2026.7.22",
+        "cffi": "2.1.1",
+        "charset-normalizer": "3.5.1",
+        "colorama": "0.4.6",
+        "comm": "0.2.3",
+        "contourpy": "1.3.3",
+        "cpnpy": "0.2.0",
+        "cycler": "0.12.1",
+        "debugpy": "1.8.21",
+        "defusedxml": "0.7.1",
+        "exceptiongroup": "1.3.1",
+        "executing": "2.2.1",
+        "fastjsonschema": "2.22.2",
+        "fonttools": "4.65.0",
+        "formulaic": "1.2.2",
+        "fqdn": "1.5.1",
+        "h11": "0.16.0",
+        "h2": "4.4.1",
+        "hpack": "4.2.0",
+        "httpcore": "1.0.9",
+        "httpx": "0.28.1",
+        "hyperframe": "6.1.0",
+        "idna": "3.19",
+        "importlib_metadata": "9.0.1",
+        "iniconfig": "2.3.0",
+        "interface_meta": "1.3.0",
+        "ipykernel": "7.3.0",
+        "ipython": "9.17.1",
+        "ipython_pygments_lexers": "1.1.1",
+        "isoduration": "20.11.0",
+        "jedi": "0.20.0",
+        "jinja2": "3.1.6",
+        "json5": "0.15.0",
+        "jsonpointer": "3.1.1",
+        "jsonschema": "4.26.0",
+        "jsonschema-specifications": "2025.9.1",
+        "jupyter-events": "0.12.1",
+        "jupyter-lsp": "2.3.1",
+        "jupyter_builder": "1.2.3",
+        "jupyter_client": "8.10.0",
+        "jupyter_core": "5.9.1",
+        "jupyter_server": "2.21.0",
+        "jupyter_server_terminals": "0.5.4",
+        "jupyterlab": "4.6.3",
+        "jupyterlab_pygments": "0.3.0",
+        "jupyterlab_server": "2.28.0",
+        "kiwisolver": "1.5.1",
+        "lark": "1.3.1",
+        "lifelines": "0.30.3",
+        "markupsafe": "3.0.3",
+        "matplotlib": "3.11.1",
+        "matplotlib-inline": "0.2.2",
+        "mistune": "3.3.4",
+        "munkres": "1.1.4",
+        "narwhals": "2.26.0",
+        "nbclient": "0.11.0",
+        "nbconvert": "7.17.1",
+        "nbformat": "5.11.1",
+        "nbstripout": "0.9.1",
+        "nest-asyncio2": "1.7.2",
+        "notebook_shim": "0.2.4",
+        "numpy": "2.4.6",
+        "overrides": "7.7.0",
+        "packaging": "26.3",
+        "pandas": "2.3.3",
+        "pandocfilters": "1.5.0",
+        "parso": "0.8.7",
+        "patsy": "1.0.3",
+        "pexpect": "4.9.0",
+        "pillow": "12.3.0",
+        "pip": "26.2.1",
+        "platformdirs": "4.11.8",
+        "pluggy": "1.6.0",
+        "prometheus_client": "0.26.0",
+        "prompt_toolkit": "3.0.53",
+        "psutil": "7.2.2",
+        "ptyprocess": "0.7.0",
+        "pure_eval": "0.2.4",
+        "pycparser": "3.0",
+        "pygments": "2.21.0",
+        "pyobjc-core": "12.2.2",
+        "pyobjc-framework-cocoa": "12.2.2",
+        "pyparsing": "3.3.2",
+        "pysocks": "1.7.1",
+        "pytest": "9.1.1",
+        "python-dateutil": "2.9.0.post0",
+        "python-json-logger": "4.2.0",
+        "pytz": "2026.3.post1",
+        "pyyaml": "6.0.3",
+        "pyzmq": "27.2.0",
+        "referencing": "0.37.0",
+        "requests": "2.34.2",
+        "rfc3339_validator": "0.1.4",
+        "rfc3986-validator": "0.1.1",
+        "rfc3987-syntax": "1.1.0",
+        "rpds-py": "2026.6.3",
+        "ruff": "0.16.7",
+        "scipy": "1.17.1",
+        "send2trash": "2.1.0",
+        "setuptools": "84.0.0",
+        "six": "1.17.0",
+        "sniffio": "1.3.1",
+        "soupsieve": "2.9.2",
+        "stack_data": "0.6.3",
+        "statsmodels": "0.15.0",
+        "survival21": "0.1.0",
+        "terminado": "0.18.1",
+        "tinycss2": "1.4.0",
+        "tomli": "2.4.1",
+        "tornado": "6.5.8",
+        "traitlets": "5.16.1",
+        "typing_extensions": "4.16.0",
+        "typing_utils": "0.1.0",
+        "tzdata": "2026.3",
+        "unicodedata2": "17.0.1",
+        "uri-template": "1.3.0",
+        "urllib3": "2.7.0",
+        "wcwidth": "0.8.3",
+        "webcolors": "25.10.0",
+        "webencodings": "0.5.1",
+        "websocket-client": "1.9.2",
+        "wheel": "0.48.0",
+        "wrapt": "2.4.0",
+        "zipp": "4.1.0"
+      }
+    },
+    "inputs": [
+      {
+        "node": "n1",
+        "setting": "file",
+        "file": "BPI_Challenge_2019.xes",
+        "sha256": "af63bc687fc4152f2123b05c3af7772b37ef3fce2d3f67f812666c9e356baae7"
+      }
+    ],
+    "custom_boxes": [],
+    "seeds": {},
+    "results": {
+      "n1": "23d79fa454d6a47222605695b7bd2dcfe0e6bb871a4522f204d2e714751846c6",
+      "n2": "f9bf3423589a5fa65fe57ba3edd6c7f3a6a6859b01157090ffc2b1b43f44bb46",
+      "n4": "108bc445db86f2684e004aae787e10e790dc2bc536fbf5d17e9879e163a296c4",
+      "n9": "e7cd72124db8a81bbd06acfd9410a345f3c201aaaf5de40c390491fc0fcdb2e0",
+      "n11": "108bc445db86f2684e004aae787e10e790dc2bc536fbf5d17e9879e163a296c4",
+      "n3": "fdbcaac11db5615bcdc57a4f1ea7b26de4ec7b3cf758e73a82ce181e9fbcbc88",
+      "n18": "962f79469f90816098f41931f563e8a390bd271f9366a99cefea9f8e168db301",
+      "n19": "c8ae641e1e413dfbcdf80c5876fef955372cec0ca4553e53b416bdb2783d3327",
+      "n20": "74b4a13a76bc1b7207b539fcbbbdc9e05a706dcab7271f85245f05ffc3ff3521",
+      "n21": "965dcb47b631573511c2ea0f66a7799321a484093d1fd007d5f483b07307260a",
+      "n5": "63b24b05ee0aca8e7cf3a21f473e96b50ac401056d26561fc0b046e9afadf63e",
+      "n12": "63b24b05ee0aca8e7cf3a21f473e96b50ac401056d26561fc0b046e9afadf63e",
+      "n16": "79be87c761e8fa27aa35061e59385396d44a3727f767a6f0462ff42f5827536a",
+      "n6": "5594798d2d0481b9b9d7b02fc33e3b7b8b1842f51f13d733ac0cd6da0dfe5e86",
+      "n13": "993d44c2272063c0819cd004c3a4c0df0fd67577b86b072ffe93bd2442a341a1",
+      "n14": "f3a904c7b90aa962aeefb3f0357110e1c37942e482666c05e38fdb2198504579",
+      "n15": "257e16c10aabd2baf46f1c49ae64738e1ff00ffec127837f7d0a4ace63e5c598",
+      "n7": "9ca5585a264e2384ccd3c46773ee6d6cb746c1c1eb6157fe977e843d53ac1a32"
+    },
+    "fingerprint": 2,
+    "saved": "2026-10-23T12:31:02+00:00",
+    "history": []
+  }
+}

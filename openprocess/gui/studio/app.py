@@ -1308,6 +1308,7 @@ class StudioWindow(QMainWindow):
             for action, slot in actions:
                 buttons.addLayout(hbox(button(action, slot), None))
             card.add(buttons)
+            card.body.addStretch(1)                # cards share a row's height: their titles line up at the top
             grid.addWidget(card, 1, index)
         holder = QWidget()
         holder.setLayout(grid)
@@ -1414,6 +1415,9 @@ class StudioWindow(QMainWindow):
         self.notes_button_action.setChecked(True)
         view_menu.addSeparator()
         # The Workflows page's side panel (the action acts on the current page).
+        self.dock_bottom_action = self._action(view_menu, "Workflow Panel Under the Canvas", None,
+                                               self._dock_workflow_panel)
+        self.dock_bottom_action.setCheckable(True)
         self.reset_layout_action = self._action(view_menu, "Reset Workflow Layout", None, self._reset_workflow_layout)
         view_menu.aboutToShow.connect(self._sync_workflow_actions)
         view_menu.addSeparator()
@@ -1450,8 +1454,19 @@ class StudioWindow(QMainWindow):
             return
         page.reset_layout()
 
+    def _dock_workflow_panel(self, bottom: bool) -> None:
+        """View ▸ Workflow Panel Under the Canvas: wide tables and code get the
+        window's width; off puts the panel back beside the canvas."""
+        page = self.current_page()
+        if isinstance(page, WorkflowPage):
+            page.set_dock("bottom" if bottom else "right")
+        else:
+            WorkflowPage.LAYOUT = {**WorkflowPage.LAYOUT, "dock": "bottom" if bottom else "right"}
+            self._set_setting("workflows/layout", json.dumps(WorkflowPage.LAYOUT))
+
     def _sync_workflow_actions(self) -> None:
         self.reset_layout_action.setEnabled(isinstance(self.current_page(), WorkflowPage))
+        self.dock_bottom_action.setChecked(WorkflowPage.LAYOUT.get("dock") == "bottom")
 
     def _action(self, menu, text, shortcut, slot) -> QAction:
         action = QAction(text, self)

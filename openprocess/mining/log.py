@@ -278,8 +278,15 @@ class EventLog:
         return Counter(self.sequences(classifier))
 
     def filtered(self, keep: Iterable[int]) -> "EventLog":
-        """A new log containing only the traces at the given indices."""
+        """A new log containing only the traces at the given indices.  A
+        columnar log stays columnar (see :meth:`.columns.ColumnStore.subset`)."""
         indices = list(keep)
+        if self.columnar:
+            return EventLog.from_columns(
+                self.traces.store.subset(indices), attributes=dict(self.attributes),
+                extensions=list(self.extensions), global_trace_attributes=dict(self.global_trace_attributes),
+                global_event_attributes=dict(self.global_event_attributes),
+                declared_classifiers=list(self.declared_classifiers), source_path=self.source_path)
         return EventLog(
             traces=[self.traces[i] for i in indices],
             attributes=dict(self.attributes),

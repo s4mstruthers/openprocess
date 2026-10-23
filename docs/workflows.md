@@ -47,7 +47,7 @@ What the decorator reads, and nothing else:
 
 | From | Becomes |
 |---|---|
-| a parameter whose type is a OpenProcess type (`EventLog`, `PetriNet`, `TransitionSystem`, …) | an input connection point, named after the parameter |
+| a parameter whose type is an OpenProcess type (`EventLog`, `PetriNet`, `TransitionSystem`, …) | an input connection point, named after the parameter |
 | `list[Scores]` | an input that takes any number of connections |
 | `Table | None`, or a default of `None` | an optional input |
 | the return type | the output; a `@dataclass` whose fields are OpenProcess types gives several outputs (one per field) |
@@ -200,7 +200,16 @@ module defines are registered from it).
   between boxes. A `heavy` box can be run with `run_in_process`, which
   can be killed.
 - **Conversions.** An output is converted to an input's type when a
-  converter exists.
+  converter exists; a converter that fails fails that box, with a message
+  naming both boxes, and the rest of the run goes on.
+- **Outputs are checked.** What a box returns is checked against its return
+  type: a box declared `-> PetriNet` that returns a dict fails with a plain
+  message instead of puzzling the box after it. `None` is allowed only for
+  `-> PetriNet | None`.
+- **Strict.** `Runner(strict=True)` (`openprocess run --strict`) also fails a
+  box that changes one of its inputs in place, which would quietly change
+  the result of every other box reading the same value. Use it in your
+  tests and CI.
 
 ### Sweeps
 
@@ -253,10 +262,13 @@ A `.cpnflow` file is JSON:
 
 The badge beside an analysis, `--check` and the record all mean one precise
 thing: **re-running the workflow gives results whose fingerprints equal the
-recorded ones.** A fingerprint is the SHA-256 of a result's content (a
-PNML string for a net, the rows for a table, the numbers of a score), so
-"reproduces" is "byte for byte the same", not "close enough". How far that
-promise travels depends on what else is the same:
+recorded ones.** A fingerprint is the SHA-256 of a canonical form of a
+result's whole content (a net's places, transitions, arcs and markings, every
+attribute of every event of a log, the rows of a table, the numbers of a
+score), independent of the order a set was filled in or where a net is
+drawn, so "reproduces" is "the same content", not "close enough"
+([framework.md §7](framework.md#7-fingerprints) defines it exactly). How far
+that promise travels depends on what else is the same:
 
 | Tier | What is the same | What the record gives you | What can still differ |
 |---|---|---|---|
@@ -285,6 +297,9 @@ What is in the record, and what is not:
 ```bash
 openprocess run experiment.cpnflow                 # run it, print what every box gave
 openprocess run experiment.cpnflow --check         # re-run; exit 1 if any result differs from the record
+                                                   #   (or if nothing was recorded to compare with)
+openprocess run experiment.cpnflow --strict        # also fail a box that changes its inputs
+openprocess run experiment.cpnflow --report r.html # the analysis as one HTML page
 openprocess run experiment.cpnflow --save          # record the results in the file
 openprocess run experiment.cpnflow --sweep noise=0..0.5 step 0.1
 openprocess run experiment.cpnflow -o results/     # every result as a file (CSV, PNML, SVG)
@@ -351,17 +366,7 @@ def random_forest(train: Dataset, trees: int = 100, seed: int = 0) -> Predictor:
 
 ## Module map
 
-```
-openprocess/flow/
-  types.py      the types and their registry
-  box.py        @box, BoxSpec, Port, Setting: the signature read into a box
-  explain.py    flow.note / show / steps and the Explanation a run keeps
-  workflow.py   Workflow, Node, Edge, Group; @workflow recording; to_python
-  runner.py     Runner, Run, Result, Cache; sweeps; run_in_process
-  sweep.py      Sweep and its notation
-  record.py     fingerprints, the environment, the .cpnflow file, differences, check
-  convert.py    converters to and from pandas, NumPy, matplotlib, PM4Py
-  library.py    Library: the standard boxes, a folder's boxes/, entry points
-  datasets.py   the public logs by name
-  boxes/        input, filter, discover, check, compare, output, science, predict, cpn, sweeps
-```
+Every module of `openprocess/flow` (and of the rest of the code), with what
+it is, is in [architecture.md](architecture.md#every-module-generated),
+generated from the code so it is never out of date. The precise rules this
+page describes by example are in [framework.md](framework.md).

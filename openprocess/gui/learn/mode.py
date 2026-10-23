@@ -213,6 +213,7 @@ class LearnMode(QWidget):
         while self.dots.count():
             item = self.dots.takeAt(0)
             if item.widget():
+                item.widget().hide()                   # not drawn under the new dots until it is deleted
                 item.widget().deleteLater()
         if self.pack is None or len(self.pack.exercises) > 24:
             return                                     # too many to show as dots

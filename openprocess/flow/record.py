@@ -48,17 +48,216 @@ def sha256_text(text: str) -> str:
     return sha256_bytes(text.encode("utf-8"))
 
 
+#: (resolved path, size, modification time) -> SHA-256: a file is hashed again only when it changed.
+_file_hashes: dict[tuple[str, int, int], str] = {}
+
+
 def sha256_file(path: str | Path) -> str:
+    """The file's SHA-256.  Remembered while its size and modification time
+    stay the same, so the badge can check a 700 MB input after every run
+    without reading it again."""
+    stat = Path(path).stat()
+    key = (str(Path(path).resolve()), stat.st_size, stat.st_mtime_ns)
+    known = _file_hashes.get(key)
+    if known is not None:
+        return known
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
         for chunk in iter(lambda: handle.read(1 << 20), b""):
             digest.update(chunk)
+    _file_hashes[key] = digest.hexdigest()
+    return _file_hashes[key]
+
+
+#: How results are fingerprinted.  Scheme 1 (up to 0.11) hashed some types
+#: by ``repr``, which follows the order of a set and so changed from one
+#: Python session to the next, and hashed a replay or an alignment by its net
+#: alone.  Scheme 2 hashes a canonical form of the whole content.  A record
+#: says which scheme it was made with, and is checked with that one.
+FINGERPRINT = 2
+
+
+def fingerprint(value: Any, scheme: int = FINGERPRINT, remember: bool = False) -> str:
+    """A code that changes if and only if the value's content changes.
+
+    Scheme 2 (the default) hashes :func:`canonical`: the value as plain
+    JSON, with sets and dictionaries sorted, floats rounded to 9 digits and
+    drawing-only details (positions, label offsets) left out, so the same
+    content gives the same code in every session and on every machine.
+
+    ``remember``: for a run's results, which do not change after their box
+    returned them (§9 of docs/framework.md), the code is kept for as long as
+    the value lives, so a snapshot or a save after every run does not hash a
+    million-event log again.  Never for a value that may still change (strict
+    mode compares a box's inputs before and after it ran)."""
+    if scheme == 1:
+        return _fingerprint_v1(value)
+    if remember:
+        known = _remembered.get(id(value))
+        if known is not None and known[0]() is value:
+            return known[1]
+    digest = _log_fingerprint(value) if isinstance(value, EventLog) else sha256_text(_dumps(canonical(value)))
+    if remember:
+        _remember(value, digest)
+    return digest
+
+
+#: id(value) -> (weak reference to it, its scheme-2 fingerprint), for
+#: ``fingerprint(..., remember=True)``; the entry goes when the value does.
+_remembered: dict[int, tuple] = {}
+
+
+def _remember(value, digest: str) -> None:
+    import weakref
+    try:
+        reference = weakref.ref(value, lambda _ref, key=id(value): _remembered.pop(key, None))
+    except TypeError:                               # an int, a str, a tuple: cheap to hash again
+        return
+    _remembered[id(value)] = (reference, digest)
+
+
+def _dumps(value) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
+
+
+def _log_fingerprint(log: EventLog) -> str:
+    """Every case and every event attribute, in log order, streamed (a log
+    can have a million events)."""
+    if log.columnar:
+        return _columnar_log_fingerprint(log)
+    digest = hashlib.sha256()
+    digest.update(_dumps(["EventLog", canonical(log.attributes)]).encode("utf-8"))
+    for trace in log:
+        digest.update(b"\n" + _dumps(canonical(trace.attributes)).encode("utf-8"))
+        for event in trace:
+            digest.update(b"|" + _dumps(canonical(event.attributes)).encode("utf-8"))
     return digest.hexdigest()
 
 
-def fingerprint(value: Any) -> str:
-    """A short code that changes if the value changes (as far as it can be
-    told from the value's content, not its identity)."""
+def _columnar_log_fingerprint(log: EventLog) -> str:
+    """:func:`_log_fingerprint` of a columnar log, read from its arrays: the
+    same bytes are hashed, so the same digest comes out, without building a
+    trace or an event (on a million-event log, seconds instead of half a
+    minute, and no gigabyte of objects kept).  The JSON of every distinct
+    value and key is made once, and a map's pairs are put in the order of
+    their keys' JSON, which is the order :func:`canonical` sorts them in
+    (keys of one map are distinct, and no key's JSON is a prefix of another's)."""
+    from datetime import timedelta, timezone
+    from ..mining.columns import KEY_LIFECYCLE, KEY_NAME, KEY_RESOURCE, KEY_TIME, NO_TIME, _EPOCH
+    store = log.traces.store
+    texts: dict[tuple[type, Any], str] = {}
+
+    def text(value) -> str:
+        if type(value) in (str, int, float, bool) or value is None:
+            key = (type(value), repr(value) if type(value) is float else value)     # -0.0 is not 0.0
+            found = texts.get(key)
+            if found is None:
+                found = texts[key] = _dumps(canonical(value))
+            return found
+        return _dumps(canonical(value))
+
+    def as_map(pairs: list[tuple[str, str]]) -> bytes:
+        pairs.sort()
+        return ('{"map":[' + ",".join(f"[{k},{v}]" for k, v in pairs) + "]}").encode("utf-8")
+
+    standard = [(KEY_NAME, store.activity), (KEY_LIFECYCLE, store.lifecycle), (KEY_RESOURCE, store.resource)]
+    standard = [(text(key), codes.codes, [text(v) for v in codes.values]) for key, codes in standard]
+    time_key = text(KEY_TIME)
+    extras = [(text(key), column) for key, column in store.extra.items()]
+    zones: dict[int, Any] = {}
+    digest = hashlib.sha256()
+    digest.update(_dumps(["EventLog", canonical(log.attributes)]).encode("utf-8"))
+    offsets, micros, minutes = store.offsets, store.micros, store.offset_minutes
+    for case in range(store.case_count):
+        attributes = zip(store.case_keys[case], store.case_values[case])
+        digest.update(b"\n" + as_map([(text(k), text(v)) for k, v in dict(attributes).items()]))
+        for i in range(offsets[case], offsets[case + 1]):
+            pairs = []
+            for key, codes, values in standard:
+                code = codes[i]
+                if code >= 0:
+                    pairs.append((key, values[code]))
+            if micros[i] != NO_TIME:
+                zone = zones.get(minutes[i])
+                if zone is None:
+                    zone = zones[minutes[i]] = _EPOCH.astimezone(timezone(timedelta(minutes=minutes[i])))
+                pairs.append((time_key, '"' + (zone + timedelta(microseconds=micros[i])).isoformat() + '"'))
+            for key, column in extras:
+                value = column[i]
+                if value is not None:
+                    pairs.append((key, text(value)))
+            digest.update(b"|" + as_map(pairs))
+    return digest.hexdigest()
+
+
+#: Attributes that say how a thing is drawn or where it came from, not what it is.
+_NOT_CONTENT = {"provenance", "position", "name_offset", "points", "info", "source_path"}
+
+
+def canonical(value: Any, _active: set[int] | None = None) -> Any:
+    """``value`` as plain JSON whose text does not depend on the order of
+    sets, on memory addresses or on how the value is drawn: what
+    :func:`fingerprint` hashes."""
+    import dataclasses
+    import datetime
+    import math
+    import re
+    from enum import Enum
+    from collections.abc import Mapping
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        return round(value, 9) if math.isfinite(value) else str(value)
+    if isinstance(value, bytes):
+        return {"bytes": sha256_bytes(value)}
+    if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+        return value.isoformat()
+    if isinstance(value, datetime.timedelta):
+        return {"seconds": round(value.total_seconds(), 6)}
+    if isinstance(value, Path):
+        return value.as_posix()
+    if isinstance(value, Enum):
+        return f"{type(value).__name__}.{value.name}"
+    if type(value).__module__.split(".")[0] == "numpy":
+        to_list = getattr(value, "tolist", None)
+        if callable(to_list):
+            return canonical(to_list(), _active)
+    _active = _active if _active is not None else set()
+    if id(value) in _active:                        # a value that contains itself
+        return "<cycle>"
+    _active.add(id(value))
+    try:
+        if isinstance(value, PetriNet):
+            return {"type": "PetriNet", "name": value.name,
+                    "places": sorted([p.id, p.name] for p in value.places.values()),
+                    "transitions": sorted([t.id, t.name, t.label] for t in value.transitions.values()),
+                    "arcs": sorted([a.source, a.target, a.weight] for a in value.arcs),
+                    "initial": sorted(value.initial_marking.items()),
+                    "final": sorted(value.final_marking.items())}
+        if isinstance(value, Mapping):
+            items = [[canonical(k, _active), canonical(v, _active)] for k, v in value.items()]
+            return {"map": sorted(items, key=_dumps)}
+        if isinstance(value, (set, frozenset)):
+            return {"set": sorted((canonical(v, _active) for v in value), key=_dumps)}
+        if isinstance(value, (list, tuple)):
+            return [canonical(v, _active) for v in value]
+        if dataclasses.is_dataclass(value) and not isinstance(value, type):
+            fields = {f.name: canonical(getattr(value, f.name, None), _active)
+                      for f in dataclasses.fields(value) if f.name not in _NOT_CONTENT}
+            return {"type": type(value).__name__, **fields}
+        attributes = getattr(value, "__dict__", None)
+        if isinstance(attributes, dict):
+            return {"type": type(value).__name__,
+                    **{k: canonical(v, _active) for k, v in sorted(attributes.items())
+                       if not k.startswith("_") and k not in _NOT_CONTENT}}
+        # No content to read: the text, without the memory addresses Python puts in it.
+        return {"type": type(value).__name__, "repr": re.sub(r"0x[0-9a-fA-F]+", "0x…", repr(value))}
+    finally:
+        _active.discard(id(value))
+
+
+def _fingerprint_v1(value: Any) -> str:
+    """Scheme 1, kept unchanged so records made before 0.12 are checked as they were made."""
     if isinstance(value, EventLog):
         digest = hashlib.sha256()
         for trace in value:
@@ -96,7 +295,7 @@ def fingerprint(value: Any) -> str:
     for attribute in ("net", "tree", "ts"):
         inner = getattr(value, attribute, None)
         if inner is not None and inner is not value:
-            return fingerprint(inner)
+            return _fingerprint_v1(inner)
     return sha256_text(repr(value))
 
 
@@ -163,18 +362,21 @@ class Record:
     saved: str = ""
     #: The last runs, as :mod:`openprocess.flow.snapshots` keeps them (dicts).
     history: list[dict] = field(default_factory=list)
+    #: The :func:`fingerprint` scheme of :attr:`results` (1 for files written before 0.12).
+    scheme: int = FINGERPRINT
 
     def to_dict(self) -> dict:
         return {"versions": self.versions, "environment": self.environment, "inputs": self.inputs,
                 "custom_boxes": self.custom_boxes, "seeds": self.seeds, "results": self.results,
-                "saved": self.saved, "history": self.history}
+                "fingerprint": self.scheme, "saved": self.saved, "history": self.history}
 
     @classmethod
     def from_dict(cls, data: dict | None) -> "Record":
         data = data or {}
         return cls(data.get("versions", {}), data.get("environment", {}), data.get("inputs", []),
                    data.get("custom_boxes", []), data.get("seeds", {}), data.get("results", {}),
-                   data.get("saved", ""), [d for d in data.get("history", []) if isinstance(d, dict)])
+                   data.get("saved", ""), [d for d in data.get("history", []) if isinstance(d, dict)],
+                   int(data.get("fingerprint", 1)))
 
 
 def make_record(workflow: Workflow, run: Run | None = None, folder: str | Path | None = None,
@@ -201,7 +403,7 @@ def make_record(workflow: Workflow, run: Run | None = None, folder: str | Path |
     if run is not None:
         for (node_id, variant), result in run.results.items():
             if variant == 0 and result.status == DONE:
-                record.results[node_id] = fingerprint(result.value)
+                record.results[node_id] = fingerprint(result.value, remember=True)
     return record
 
 
@@ -278,16 +480,29 @@ def load(path: str | Path, library=None) -> tuple[Workflow, Record]:
     return workflow, Record.from_dict(data.get("record"))
 
 
-def check(workflow: Workflow, record: Record, run: Run) -> list[str]:
-    """After re-running: which results differ from the recorded ones."""
+def check(workflow: Workflow, record: Record, run: Run, complete: bool = False) -> list[str]:
+    """After re-running: which results differ from the recorded ones, in
+    plain words (empty: every recorded result was reproduced).  Each result
+    is fingerprinted with the scheme the record was made with.
+
+    ``complete`` (what ``openprocess run --check`` asks for): a recorded box
+    that is gone from the workflow, or did not run, is a difference too;
+    otherwise only the boxes that ran are compared (the app checks a run
+    that may still be going)."""
     out = []
     for node_id, then in record.results.items():
+        if node_id not in workflow.nodes:
+            if complete:
+                out.append(f"The box {node_id} has a recorded result but is no longer in the workflow.")
+            continue
         result = run.result(node_id, 0)
         if result is None:
+            if complete:
+                out.append(f"“{workflow.title(node_id)}” did not run.")
             continue
-        if result.status != DONE:
+        elif result.status != DONE:
             out.append(f"“{workflow.title(node_id)}” did not finish: {result.error or result.message}")
-        elif fingerprint(result.value) != then:
+        elif fingerprint(result.value, record.scheme, remember=True) != then:
             out.append(f"“{workflow.title(node_id)}” gives a different result than recorded.")
     return out
 
@@ -305,7 +520,30 @@ def export_experiment(workflow: Workflow, run: Run | None, target: str | Path,
     target = Path(target)
     folder = Path(folder) if folder is not None else target.parent
     record = make_record(workflow, run, folder)
+    # The inputs travel in inputs/, so the workflow in the zip reads them from
+    # there: `openprocess run --check` and `python run.py` work in the
+    # unpacked folder as they are.
+    packed: dict[str, str] = {}                     # source file -> its name in the zip
+    moved: dict[tuple[str, str], str] = {}          # (node, setting) -> inputs/...
+    for item in record.inputs:
+        source = _resolve(item["file"], folder)
+        if not source.is_file():
+            continue
+        key = str(source.resolve())
+        if key not in packed:
+            stem, suffix, number = Path(item["file"]).name, "", 2
+            candidate = f"inputs/{stem}"
+            while candidate in packed.values():
+                candidate = f"inputs/{Path(stem).stem} {number}{''.join(Path(stem).suffixes)}"
+                number += 1
+            packed[key] = candidate
+        moved[(item["node"], item["setting"])] = item["file"] = packed[key]
     data = {"format": FORMAT, **workflow.to_dict(), "record": record.to_dict()}
+    for box in data["boxes"]:
+        for setting in box["settings"]:
+            if (box["id"], setting) in moved:
+                box["settings"][setting] = moved[(box["id"], setting)]
+    packed_workflow = Workflow.from_dict(data, library or workflow.library) if moved else workflow
     name = workflow.name or "workflow"
     lines = [f"# {name}", "", f"Exported {record.saved} with OpenProcess {record.versions.get('openprocess', '')}, "
              f"Python {record.versions.get('python', '')}.", "",
@@ -315,7 +553,8 @@ def export_experiment(workflow: Workflow, run: Run | None, target: str | Path,
              "it into a folder and runs it.", "", "## Boxes", ""]
     for node in workflow.order():
         spec = workflow.spec(node)
-        settings = ", ".join(f"{k} = {v}" for k, v in node.settings.items()) or "no settings"
+        settings = ", ".join(f"{k} = {v}" for k, v in packed_workflow.nodes[node.id].settings.items()) \
+            or "no settings"
         fed = ", ".join(f"{p} ← {workflow.title(src)}" for p, sources in workflow.inputs_of(node).items()
                         for src, _ in sources) or "no inputs"
         result = run.result(node) if run else None
@@ -323,7 +562,8 @@ def export_experiment(workflow: Workflow, run: Run | None, target: str | Path,
         if result is not None and result.status == DONE:
             verdict = " → " + _describe(result.value)
         lines.append(f"- **{workflow.title(node)}** (`{spec.id}`): {settings}; {fed}{verdict}")
-    lines += ["", "## Inputs", ""] + [f"- `{i['file']}` sha256 `{i['sha256']}`" for i in record.inputs] +         ["", "## Your boxes", ""] + [f"- `{b['file']}` sha256 `{b['sha256']}`" for b in record.custom_boxes]
+    lines += ["", "## Inputs", ""] + [f"- `{i['file']}` sha256 `{i['sha256']}`" for i in record.inputs]
+    lines += ["", "## Your boxes", ""] + [f"- `{b['file']}` sha256 `{b['sha256']}`" for b in record.custom_boxes]
     from .. import citation
     from .box import algorithm_calls
     entries = [citation.app_entry()]
@@ -338,13 +578,11 @@ def export_experiment(workflow: Workflow, run: Run | None, target: str | Path,
         zipped.writestr(f"{name}.cpnflow", json.dumps(data, indent=2, ensure_ascii=False, default=str))
         zipped.writestr("requirements.lock", requirements_lock(record))
         from .script import script_text
-        zipped.writestr("run.py", script_text(workflow, "run.py"))
+        zipped.writestr("run.py", script_text(packed_workflow, "run.py"))
         zipped.writestr("CITATIONS.bib", "\n\n".join(e.bibtex() for e in entries) + "\n")
         zipped.writestr("README.md", "\n".join(lines) + "\n")
-        for item in record.inputs:
-            path = _resolve(item["file"], folder)
-            if path.is_file():
-                zipped.write(path, f"inputs/{Path(item['file']).name}")
+        for source, packed_name in packed.items():
+            zipped.write(source, packed_name)
         for item in record.custom_boxes:
             path = _resolve(item["file"], folder)
             if path.is_file():

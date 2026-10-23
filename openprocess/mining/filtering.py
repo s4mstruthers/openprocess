@@ -88,6 +88,24 @@ def _derived(log: EventLog, traces: list[Trace]) -> EventLog:
     return result
 
 
+def _keep(log: EventLog, indices) -> EventLog:
+    """The cases at ``indices``, as :meth:`EventLog.filtered` keeps them (a
+    large columnar log stays columnar, so a filter costs no event objects)."""
+    return log.filtered(indices)
+
+
+def _spans(log: EventLog):
+    """Each case's (first, last) timestamp, or None."""
+    if log.columnar:
+        store = log.traces.store
+        for case in range(store.case_count):
+            span = store.span(case)
+            yield None if span is None else (store.timestamp(span[0]), store.timestamp(span[1]))
+    else:
+        for trace in log:
+            yield _span(trace)
+
+
 def _span(trace: Trace) -> tuple[datetime, datetime] | None:
     stamps = [event.timestamp for event in trace if event.timestamp is not None]
     return (min(stamps), max(stamps)) if stamps else None
@@ -99,32 +117,29 @@ def filter_time_frame(log: EventLog, start: datetime, end: datetime,
     if mode not in TIME_MODES:
         raise ValueError(f"mode must be one of {TIME_MODES}")
     kept = []
-    for trace in log:
-        span = _span(trace)
+    for index, span in enumerate(_spans(log)):
         if span is None:
             continue
         first, last = span
         if (mode == "contained" and start <= first and last <= end) or \
                 (mode == "started" and start <= first <= end) or \
                 (mode == "intersecting" and first <= end and last >= start):
-            kept.append(trace)
-    return _derived(log, kept)
+            kept.append(index)
+    return _keep(log, kept)
 
 
 def filter_start_activities(log: EventLog, allowed: set[str],
                             classifier: Classifier | None = None) -> EventLog:
     """Cases whose first activity is one of ``allowed``."""
-    kept = [trace for trace, sequence in zip(log, log.sequences(classifier))
-            if sequence and sequence[0] in allowed]
-    return _derived(log, kept)
+    kept = [i for i, sequence in enumerate(log.sequences(classifier)) if sequence and sequence[0] in allowed]
+    return _keep(log, kept)
 
 
 def filter_end_activities(log: EventLog, allowed: set[str],
                           classifier: Classifier | None = None) -> EventLog:
     """Cases whose last activity is one of ``allowed``."""
-    kept = [trace for trace, sequence in zip(log, log.sequences(classifier))
-            if sequence and sequence[-1] in allowed]
-    return _derived(log, kept)
+    kept = [i for i, sequence in enumerate(log.sequences(classifier)) if sequence and sequence[-1] in allowed]
+    return _keep(log, kept)
 
 
 def filter_activities(log: EventLog, activities: set[str], mode: str = "keep events",
@@ -145,20 +160,16 @@ def filter_activities(log: EventLog, activities: set[str], mode: str = "keep eve
             if any(classifier.accepts(event) for event in events):
                 kept.append(Trace(dict(trace.attributes), events))
         return _derived(log, kept)
-    kept = []
-    for trace, sequence in zip(log, log.sequences(classifier)):
-        contains = any(activity in activities for activity in sequence)
-        if contains == (mode == "mandatory"):
-            kept.append(trace)
-    return _derived(log, kept)
+    kept = [i for i, sequence in enumerate(log.sequences(classifier))
+            if any(activity in activities for activity in sequence) == (mode == "mandatory")]
+    return _keep(log, kept)
 
 
 def filter_case_length(log: EventLog, minimum: int, maximum: int,
                        classifier: Classifier | None = None) -> EventLog:
     """Cases with between ``minimum`` and ``maximum`` events (inclusive)."""
-    kept = [trace for trace, sequence in zip(log, log.sequences(classifier))
-            if minimum <= len(sequence) <= maximum]
-    return _derived(log, kept)
+    kept = [i for i, sequence in enumerate(log.sequences(classifier)) if minimum <= len(sequence) <= maximum]
+    return _keep(log, kept)
 
 
 def top_variants(log: EventLog, classifier: Classifier | None = None, *,
@@ -193,9 +204,8 @@ def filter_variants(log: EventLog, classifier: Classifier | None = None, *,
     """Keep the cases of the most frequent variants (see :func:`top_variants`)."""
     keep = {variant for variant, _ in top_variants(log, classifier, coverage=coverage,
                                                    count=count)}
-    kept = [trace for trace, sequence in zip(log, log.sequences(classifier))
-            if sequence in keep]
-    return _derived(log, kept)
+    kept = [i for i, sequence in enumerate(log.sequences(classifier)) if sequence in keep]
+    return _keep(log, kept)
 
 
 # ---------------------------------------------------------------------------
