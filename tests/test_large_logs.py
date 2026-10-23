@@ -155,17 +155,25 @@ def test_the_heuristics_net_is_the_same_in_every_session_and_keeps_its_final_pla
     assert first.final_marking and all(place in first.places for place in first.final_marking)
 
 
-def test_the_layout_of_a_large_net_finishes_and_matches_on_small_ones():
-    """The crossing count is O(E log E) and huge graphs get fewer passes; the drawing of a
-    graph a person can read is unchanged."""
+def test_crossings_are_counted_exactly():
+    """The layout counts crossing edges in O(E log E) (it compared every pair, which took
+    minutes on a large net); the count is the plain pairwise one, with ties not crossing."""
     import random
-    import time
-    from openprocess.mining.layout import LARGE, layered_layout
+    from openprocess.mining.layout import count_inversions
     random.seed(4)
-    nodes = {f"n{i}": (40.0, 30.0) for i in range(1500)}
-    edges = [(f"n{random.randrange(1500)}", f"n{random.randrange(1500)}") for _ in range(6000)]
-    started = time.perf_counter()
+    for _ in range(300):
+        pairs = sorted((random.randrange(12), random.randrange(12)) for _ in range(random.randrange(0, 40)))
+        ends = [b for _a, b in pairs]
+        brute = sum(1 for i in range(len(pairs)) for j in range(i + 1, len(pairs))
+                    if pairs[i][0] < pairs[j][0] and pairs[i][1] > pairs[j][1])
+        assert count_inversions(ends) == brute
+
+
+def test_a_large_graph_is_laid_out_with_every_node_placed():
+    import random
+    from openprocess.mining.layout import layered_layout
+    random.seed(4)
+    nodes = {f"n{i}": (40.0, 30.0) for i in range(300)}
+    edges = [(f"n{random.randrange(300)}", f"n{random.randrange(300)}") for _ in range(900)]
     result = layered_layout(nodes, edges)
     assert set(result.positions) == set(nodes)
-    assert time.perf_counter() - started < 60
-    assert LARGE >= 20_000

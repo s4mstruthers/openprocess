@@ -32,6 +32,28 @@ from dataclasses import dataclass, field
 LARGE = 20_000
 
 
+def count_inversions(ends: list[int]) -> int:
+    """How many pairs of edges between two neighbouring layers cross: with the
+    edges sorted by their left end (then right end), ``ends`` are their right
+    ends, and a crossing is a pair whose right ends are in the opposite order.
+    Counted with a Fenwick tree in O(E log E); a large discovered net has tens
+    of thousands of edges, and comparing every pair of them took minutes."""
+    size = max(ends, default=0) + 2
+    tree = [0] * (size + 1)
+    total = 0
+    for seen, end in enumerate(ends):
+        k, not_above = end + 1, 0                      # earlier edges ending at or above this one
+        while k > 0:
+            not_above += tree[k]
+            k -= k & -k
+        total += seen - not_above                      # earlier edges ending strictly below: a crossing
+        k = end + 1
+        while k <= size:
+            tree[k] += 1
+            k += k & -k
+    return total
+
+
 @dataclass
 class LayoutResult:
     positions: dict[str, tuple[float, float]]                   # node -> centre
@@ -186,28 +208,9 @@ def layered_layout(nodes: dict[str, tuple[float, float]], edges: list[tuple[str,
         return {n: i for level in current for i, n in enumerate(level)}
 
     def crossings(current: list[list[str]]) -> int:
-        """Edges between neighbouring layers that cross: with the edges sorted
-        by their left end (then right end), the pairs whose right ends are in
-        the opposite order.  Counted with a Fenwick tree, in O(E log E): a
-        large discovered net has tens of thousands of edges, and comparing
-        every pair of them took minutes."""
         pos = position_map(current)
-        total = 0
-        for index, level in enumerate(current[:-1]):
-            ends = [b for _a, b in sorted((pos[x], pos[y]) for x in level for y in down[x])]
-            size = len(current[index + 1]) + 1
-            tree = [0] * (size + 1)
-            for seen, end in enumerate(ends):
-                k, not_above = end + 1, 0         # earlier edges ending at or above this one
-                while k > 0:
-                    not_above += tree[k]
-                    k -= k & -k
-                total += seen - not_above       # earlier edges ending strictly below: a crossing
-                k = end + 1
-                while k <= size:
-                    tree[k] += 1
-                    k += k & -k
-        return total
+        return sum(count_inversions([b for _a, b in sorted((pos[x], pos[y]) for x in level for y in down[x])])
+                   for level in current[:-1])
 
     best = [list(level) for level in layers]
     best_score = crossings(best)
