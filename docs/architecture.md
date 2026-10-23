@@ -407,6 +407,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`gui/studio/graph_builders.py`](../openprocess/gui/studio/graph_builders.py) | Turn mining objects into canvas descriptions (:class:`NodeSpec` / :class:`EdgeSpec`). |
 | [`gui/studio/graph_view.py`](../openprocess/gui/studio/graph_view.py) | A zoomable canvas for laid-out graphs, and builders for each graph kind. |
 | [`gui/studio/instances.py`](../openprocess/gui/studio/instances.py) | The definitions, filled in for the net being analysed. |
+| [`gui/studio/loading.py`](../openprocess/gui/studio/loading.py) | Opening a large file: a page that says what is happening, instead of a window that seems stuck. |
 | [`gui/studio/log_editor.py`](../openprocess/gui/studio/log_editor.py) | Editing an event log inside the app. |
 | [`gui/studio/log_page.py`](../openprocess/gui/studio/log_page.py) | The event log workspace: overview, variants, cases, dotted chart, process map, footprint, and discovery. |
 | [`gui/studio/markdown_view.py`](../openprocess/gui/studio/markdown_view.py) | Markdown with maths, as the exercises and the definitions show it. |
@@ -456,5 +457,5 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 |---|---|
 | [`cli.py`](../openprocess/cli.py) | Command-line interface: ``openprocess <command> [options]``. |
 
-167 modules.
+168 modules.
 <!-- /generated -->

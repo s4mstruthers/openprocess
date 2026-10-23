@@ -101,6 +101,7 @@ from .workspace import (
     exercise_files, file_kind, file_stem, file_suffix,
     made_by_openprocess, safe_file_name, unique_path,
 )
+from .loading import Loading, LoadingPage
 from .workers import run_in_background
 
 APPLICATION_NAME = "OpenProcess Studio"
@@ -179,6 +180,17 @@ def _same_file(a: Path, b: Path) -> bool:
         return a.samefile(b)
     except OSError:
         return False
+
+
+#: How long a read may take before the loading page shows (a small file never flashes it).
+LOADING_DELAY_MS = 350
+
+
+def _file_size(path: str) -> int:
+    try:
+        return Path(path).stat().st_size
+    except OSError:
+        return 0
 
 
 def _signature(path: str | Path) -> tuple[int, int] | None:
@@ -581,6 +593,12 @@ class StudioWindow(QMainWindow):
         self.connections_page = ConnectionsPage()
         self.connections_page.install_requested.connect(self.install_tool)
         self.content.addWidget(self.connections_page)
+        #: What the main area shows while a file you opened is read (see _start_loading).
+        self.loading_page = LoadingPage()
+        self.loading_page.cancel_requested.connect(self._cancel_loading)
+        self.content.addWidget(self.loading_page)
+        self._loads: dict[str, Loading] = {}
+        self._before_loading = None
         # Above the pages: "a new version is out" (see check_automatically).
         from .updates import UpdateBar
         self.update_bar = UpdateBar()
@@ -2527,14 +2545,24 @@ class StudioWindow(QMainWindow):
                         self._rebuild_sidebar()
                         return
                     mapping = dialog.mapping()
-                log = read_csv(path, mapping)
-                self.add_document(LogDocument(log, path=path),
-                                  options={"csv_mapping": asdict(mapping)})
+                self._start_loading(path, "Reading the event log")
+                folder = self._folder_switches
+
+                def csv_loaded(log, mapping=mapping) -> None:
+                    self._finish_loading(path)
+                    if folder != self._folder_switches:
+                        self._opening.discard(self._key(path))
+                        return
+                    self.add_document(LogDocument(log, path=path), options={"csv_mapping": asdict(mapping)})
+
+                run_in_background(lambda: read_csv(path, mapping), csv_loaded,
+                                  lambda message: self._load_failed(path, message, size))
             elif lower.endswith((".xes", ".xes.gz", ".gz")):
-                self.statusBar().showMessage(f"Reading {name}…")
+                loading = self._start_loading(path, "Reading the event log")
                 folder = self._folder_switches
 
                 def loaded(log) -> None:
+                    self._finish_loading(path)
                     if folder != self._folder_switches:
                         # The folder was switched or closed while this was
                         # loading: it belongs to the folder that was left.
@@ -2543,8 +2571,8 @@ class StudioWindow(QMainWindow):
                     self.add_document(LogDocument(log, path=path))
                     self.statusBar().showMessage(f"Opened {name}: {len(log):,} cases", 6000)
 
-                run_in_background(lambda: read_xes(path), loaded,
-                                  lambda message: self._could_not_open(path, message, size))
+                run_in_background(lambda: read_xes(path, progress=loading.report), loaded,
+                                  lambda message: self._load_failed(path, message, size))
             else:
                 QMessageBox.information(self, "Unsupported file",
                                         f"{name}: open .xes, .csv, .pnml or .cpn files (or a "
@@ -2553,6 +2581,61 @@ class StudioWindow(QMainWindow):
                                         "….ts.txt).")
         except Exception as error:  # noqa: BLE001 - surface any import problem
             self._could_not_open(path, str(error), size)
+
+    # -- reading a large file: the loading page --------------------------------------------------
+    def _start_loading(self, path: str, title: str) -> Loading:
+        """Start reading ``path`` on a worker.  For a file the user opened (not
+        one reopened with its folder), the main area shows the loading page
+        if the read takes more than a moment, so a large log never leaves the
+        window looking stuck; the window keeps working meanwhile."""
+        key = self._key(path)
+        loading = Loading(path, title, size=_file_size(path))
+        self._loads[key] = loading
+        self.statusBar().showMessage(f"Reading {Path(path).name}…")
+        if key not in self._restore_paths:
+            origin = self.content.currentWidget()
+            QTimer.singleShot(LOADING_DELAY_MS, lambda: self._show_loading(key, origin))
+        return loading
+
+    def _show_loading(self, key: str, origin) -> None:
+        loading = self._loads.get(key)
+        if loading is None or self.in_learn:
+            return                                       # done already, or Learn has the window
+        if self.content.currentWidget() not in (origin, self.loading_page):
+            return                                       # you went to another page meanwhile: stay there
+        if self.content.currentWidget() is not self.loading_page:
+            self._before_loading = self.content.currentWidget()
+        self.loading_page.show_loading(loading)
+        self.content.setCurrentWidget(self.loading_page)
+
+    def _finish_loading(self, path: str) -> None:
+        """The read ended (done, failed or stopped): leave the loading page if it shows this file."""
+        loading = self._loads.pop(self._key(path), None)
+        if loading is None or self.loading_page.loading is not loading:
+            return
+        self.loading_page.stop()
+        self.loading_page.loading = None
+        waiting = next(iter(self._loads.values()), None)
+        if waiting is not None and self.content.currentWidget() is self.loading_page:
+            self.loading_page.show_loading(waiting)       # another file you opened is still coming
+        elif self.content.currentWidget() is self.loading_page:
+            back = self._before_loading
+            self.content.setCurrentWidget(back if back is not None and self.content.indexOf(back) >= 0
+                                          else self.content.widget(0))
+
+    def _cancel_loading(self, path: str) -> None:
+        self.statusBar().showMessage(f"Stopping {Path(path).name}…")
+
+    def _load_failed(self, path: str, message: str, before: tuple | None) -> None:
+        loading = self._loads.get(self._key(path))
+        cancelled = loading is not None and loading.cancelled
+        self._finish_loading(path)
+        if cancelled:
+            self._opening.discard(self._key(path))
+            self._rebuild_sidebar()
+            self.statusBar().showMessage(f"Stopped reading {Path(path).name}", 6000)
+            return
+        self._could_not_open(path, message, before)
 
     def _could_not_open(self, path: str, message: str, before: tuple | None) -> None:
         self._opening.discard(self._key(path))

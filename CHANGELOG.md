@@ -6,6 +6,21 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.12.1
+
+- **Opening a large file no longer looks like a crash.** While a log is read,
+  the window shows what is happening: the file's name and size, how much of
+  it has been read, the cases so far, about how long is left, and *Cancel*.
+  The window keeps working meanwhile: open or look at anything else, and the
+  log appears in the sidebar when it is ready. A small file opens as before,
+  without the page flashing past. CSV logs are now read in the background
+  too (they froze the window while they were read).
+- **The dotted chart of a large log** is worked out in the background, with
+  "Drawing 1,595,923 events…" on the chart meanwhile, and drawn three times
+  faster: the tab of the BPI Challenge 2019 log opens in about a second
+  instead of eight. Its colours are right again on a dense chart: the grey
+  "Other" values are drawn underneath, not over the named activities.
+
 ## 0.12.0
 
 - **Real-life logs, at full size.** The BPI Challenge 2019 log (251,734
