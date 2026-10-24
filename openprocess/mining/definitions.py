@@ -150,6 +150,15 @@ DEFINITIONS: tuple[Definition, ...] = (
          "well-structured WF-net are always safe.",),
         f"{AALST_2000}, Definition 3, Lemmas 1 and 3", "behaviour", ("bounded",)),
     Definition(
+        "terminating", "Terminating",
+        "Every run ends: there is no infinite firing sequence.",
+        (r"(N, M_0) \text{ is terminating} \iff \neg \exists \text{ infinite } "
+         r"\sigma \colon M_0 \xrightarrow{\sigma}",),
+        ("On a finite reachability graph: terminating iff the graph has no cycle. An "
+         "unbounded net is never terminating, and a terminating net always has a dead "
+         "marking, so it is not live.",),
+        "course lecture on Petri net properties", "behaviour", ("reachability",)),
+    Definition(
         "deadlock_free", "Deadlock-free",
         "No reachable marking is dead, i.e. the net can never get stuck with nothing "
         "enabled.",
@@ -500,7 +509,8 @@ FOR_TITLE = {
     "(ii) Proper completion": "proper_completion", "Proper completion": "proper_completion",
     "(iii) No dead transitions": "no_dead_transitions",
     "No dead transitions": "dead_transition",
-    "Bounded": "bounded", "Safe": "safe", "Deadlock-free": "deadlock_free",
+    "Bounded": "bounded", "Safe": "safe", "Terminating": "terminating",
+    "Deadlock-free": "deadlock_free",
     "Live": "live", "Reversible": "reversible",
     "Live and bounded ⇒ sound": "soundness_theorem",
     "Unbounded ⇒ not sound": "soundness_theorem",

@@ -145,6 +145,20 @@ Builds on: [Bounded](#bounded).
 
 *Source: W.M.P. van der Aalst, Workflow Verification: Finding Control-Flow Errors Using Petri-Net-Based Techniques (2000), Definition 3, Lemmas 1 and 3.*
 
+### Terminating
+
+Every run ends: there is no infinite firing sequence.
+
+$$
+(N, M_0) \text{ is terminating} \iff \neg \exists \text{ infinite } \sigma \colon M_0 \xrightarrow{\sigma}
+$$
+
+On a finite reachability graph: terminating iff the graph has no cycle. An unbounded net is never terminating, and a terminating net always has a dead marking, so it is not live.
+
+Builds on: [Reachable markings](#reachable-markings).
+
+*Source: course lecture on Petri net properties.*
+
 ### Deadlock-free
 
 No reachable marking is dead, i.e. the net can never get stuck with nothing enabled.

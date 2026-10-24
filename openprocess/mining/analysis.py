@@ -341,6 +341,21 @@ class PropertyReport:
     def deadlock_free(self) -> bool:
         return not self.dead_markings
 
+    @property
+    def terminating(self) -> bool | None:
+        """Does every run end? No once the graph has a cycle or an ω place."""
+        if self.graph.has_omega:
+            return False                 # unbounded: some run never ends
+        if self.graph.truncated:
+            return None
+        graph = self.graph
+        for component in strongly_connected_components(
+                len(graph.states), lambda s: [t for _, t in graph.successors(s)]):
+            state = next(iter(component))
+            if len(component) > 1 or any(t == state for _, t in graph.successors(state)):
+                return False
+        return True
+
     def lines(self) -> list[tuple[str, bool | None, str]]:
         """(property, verdict, detail) rows for display."""
         net = self.graph.net
@@ -353,6 +368,13 @@ class PropertyReport:
                                  if b == OMEGA)))
         rows.append(("Safe", self.safe, "every place holds at most one token"
                      if self.safe else "some place can hold two or more tokens"))
+        terminating = self.terminating
+        rows.append(("Terminating", terminating,
+                     "not decided (truncated state space)" if terminating is None else
+                     "every run ends: the reachability graph has no cycle" if terminating
+                     else "some run can go on forever"
+                     + (" (the net is unbounded)" if self.graph.has_omega
+                        else ": the reachability graph has a cycle")))
         rows.append(("Deadlock-free", self.deadlock_free,
                      "every reachable marking enables something" if self.deadlock_free
                      else f"{len(self.dead_markings)} dead marking(s), e.g. "
