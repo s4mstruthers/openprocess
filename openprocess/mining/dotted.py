@@ -365,7 +365,7 @@ def svg(dots: Dots, title: str = "", unit: str = "Auto", width: int = 900) -> st
     legend_rows = (min(len(dots.colour_values), 9) + 2) // 3
     top = 34 + 18 * legend_rows
     bottom, right = 44, 16
-    plot_h = min(max(n_rows * (16 if labelled else 0.5), 220), 620)
+    plot_h = min(max(n_rows * (16 if labelled else 0.5), 220), 440)     # landscape: it fits a side panel
     plot_w = width - left - right
     height = top + plot_h + bottom
     x0, x1 = dots.x_min, dots.x_max
@@ -442,14 +442,40 @@ def svg(dots: Dots, title: str = "", unit: str = "Auto", width: int = 900) -> st
     # Legend: what each colour means, with how many events.
     items = [(CATEGORICAL_LIGHT[i], v, dots.colour_counts[v]) for i, v in enumerate(dots.colour_values[:8])]
     rest = dots.colour_values[8:]
-    if rest:
-        items.append((OTHER_LIGHT, f"Other ({len(rest)})", sum(dots.colour_counts[v] for v in rest)))
+    if rest:     # name the grey values when there are few, so none is hidden
+        name = "Other: " + ", ".join(rest) if len(rest) <= 3 else f"Other ({len(rest)} values)"
+        items.append((OTHER_LIGHT, name, sum(dots.colour_counts[v] for v in rest)))
     column = (width - left - right) / 3
     for i, (fill, value, count) in enumerate(items):
         lx, ly = left + (i % 3) * column, 32 + (i // 3) * 18
-        name = (value or "–") if len(value) <= 34 else value[:33] + "…"
+        name = (value or "–") if len(value) <= 48 else value[:47] + "…"
         out.append(f'<circle cx="{lx + 5:.1f}" cy="{ly - 4}" r="4.5" fill="{fill}"/>')
         out.append(f'<text x="{lx + 14:.1f}" y="{ly}" fill="#333">{_escape(name)} '
                    f'<tspan fill="#888">{count:,}</tspan></text>')
     out.append("</svg>")
     return "\n".join(out)
+
+
+def how_to_read(settings: DotSettings, mode: int) -> str:
+    """What the chart's axes mean and which patterns to look for, for the
+    x mode it was drawn in and its rows."""
+    by_case = settings.rows == "Case"
+    rows = ("Each row is a case and each dot one of its events" if by_case else
+            f"Each row is one value of {settings.rows} and each dot an event of it")
+    order = f"; rows are sorted by {SORT_MODES[settings.sort].lower()}" if by_case else ""
+    x = {
+        0: ", at the time it happened. "
+           + ("The slope of the first dots is the arrival rate, vertical lines are events handled "
+              "together (batches), and horizontal gaps are cases waiting."
+              if by_case else
+              "Gaps are times it was not active (nights, weekends, days off), and vertical lines "
+              "are batches."),
+        1: ", at the time since its case began, so every case starts at 0. Compare how long each "
+           "step takes after the start; long horizontal gaps are waiting.",
+        2: ", at its share of the case's duration (0 % the first event, 100 % the last), so cases "
+           "of different lengths line up: a column shows where in a case something usually happens.",
+        3: ", at its place among all events of the log ordered by time: actual time without the gaps.",
+        4: ", at its position in the case (0 is the first event): which step comes where, whatever "
+           "the time.",
+    }[mode]
+    return f"{rows}{order}{x}"

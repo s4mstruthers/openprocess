@@ -1442,3 +1442,12 @@ def test_alignments_show_as_chevrons_and_on_the_model(app):
     assert len(lists) == 1 and lists[0].model().rowCount() == 3
     widget.resize(900, 900)
     widget.grab()
+
+
+def test_a_figure_keeps_its_proportions_at_any_width(app):
+    """A figure in the Result panel is never stretched: its height follows its width."""
+    from openprocess.gui.flow.viewers import SvgFigure
+    figure = SvgFigure('<svg xmlns="http://www.w3.org/2000/svg" width="900" height="450" viewBox="0 0 900 450">'
+                       '<rect width="900" height="450" fill="white"/></svg>')
+    assert figure.hasHeightForWidth()
+    assert figure.heightForWidth(380) == 190 and figure.heightForWidth(900) == 450
