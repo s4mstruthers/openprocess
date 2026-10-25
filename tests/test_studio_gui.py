@@ -2747,3 +2747,11 @@ def test_a_saved_box_file_is_reloaded_by_itself(app, tmp_path):
     window.library().resolve("count_traces")
     assert "mine.py" in window.statusBar().currentMessage()
     window.close()
+
+
+def test_not_terminating_is_shown_as_info():
+    from openprocess.gui.studio.widgets import property_status
+    assert property_status("Terminating", False) == "info"
+    assert property_status("Terminating", True) == "good"
+    assert property_status("Terminating", None) == "unknown"
+    assert property_status("Safe", False) == "critical"
