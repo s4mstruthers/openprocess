@@ -52,7 +52,7 @@ from .documents import ModelDocument
 from .workspace import atomic_write
 from .widgets import (
     suggested_path,
-    Card, Verdict, button, flow, footprint_table, hbox, label, status_for,
+    Card, Verdict, button, flow, footprint_table, hbox, label, property_status, status_for,
 )
 from . import instances
 from .provenance import add_code
@@ -475,7 +475,7 @@ class PetriNetPage(ConcealsResults, CpnPage):
                     f"WF-net stops there, so this is expected; {NBAR} above shows whether it "
                     "can get stuck anywhere else.", instance=filled))
                 continue
-            self.properties_card.add(Verdict(name, status_for(value), detail,
+            self.properties_card.add(Verdict(name, property_status(name, value), detail,
                                              instance=filled))
         self.properties_card.add(label(
             f"{len(properties.graph.states):,} reachable markings "
