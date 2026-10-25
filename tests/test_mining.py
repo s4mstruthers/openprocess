@@ -225,6 +225,25 @@ def test_unbounded_net_uses_coverability():
     report = analyse(net)
     assert report.bounded is False
     assert any(m.describe(net) == "[p, q^ω]" for m in report.graph.states)
+    assert report.terminating is False
+
+
+def test_terminating():
+    sequence = PetriNet()
+    p, q = sequence.add_place("p"), sequence.add_place("q")
+    t = sequence.add_transition("t")
+    sequence.add_arc(p, t), sequence.add_arc(t, q)
+    sequence.initial_marking = Marking({p.id: 1})
+    assert analyse(sequence).terminating is True
+
+    loop = PetriNet()
+    p, q = loop.add_place("p"), loop.add_place("q")
+    there, back = loop.add_transition("there"), loop.add_transition("back")
+    loop.add_arc(p, there), loop.add_arc(there, q), loop.add_arc(q, back), loop.add_arc(back, p)
+    loop.initial_marking = Marking({p.id: 1})
+    report = analyse(loop)
+    assert report.terminating is False
+    assert ("Terminating", False) in [(name, value) for name, value, _ in report.lines()]
 
 
 def test_pnml_round_trip_with_silent_transition():

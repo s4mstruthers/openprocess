@@ -318,7 +318,7 @@ def stylesheet() -> str:
         border-radius: 8px; font-size: 14px; padding: 4px; }}
     QListWidget#rankingList::item {{ padding: 5px 8px; border-radius: 6px; }}
     QListWidget#rankingList::item:selected {{ background: {t.accent_soft}; color: {t.text}; }}
-    #examClock {{ color: {t.text_secondary}; font-weight: 600; font-variant-numeric: tabular-nums;
+    #examClock {{ color: {t.text_secondary}; font-weight: 600;
         padding: 2px 10px; border-radius: 9px; background: {qc(t.text, 0.06).name(QColor.HexArgb)}; }}
     #examClock[state="soon"] {{ color: {t.text};
         background: {qc(STATUS["warning"], 0.3).name(QColor.HexArgb)}; }}
