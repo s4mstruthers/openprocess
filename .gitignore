@@ -20,3 +20,8 @@ Claude outputs/
 examples/bpi2019/*.xes
 examples/bpi2019/report.html
 examples/bpi2019/results/
+# The 2AMI10 exam log is course material from Canvas: do not commit it
+examples/energy_contracts/*.xes
+examples/energy_contracts/*.xes.gz
+examples/energy_contracts/report.html
+examples/energy_contracts/results/

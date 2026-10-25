@@ -2747,3 +2747,99 @@ def test_a_saved_box_file_is_reloaded_by_itself(app, tmp_path):
     window.library().resolve("count_traces")
     assert "mine.py" in window.statusBar().currentMessage()
     window.close()
+
+
+def test_a_slow_file_shows_the_loading_page_and_a_fast_one_does_not(app, tmp_path, monkeypatch):
+    """0.12.1: opening a large log shows what is happening (name, size, share read, Cancel)
+    instead of a window that seems stuck; it goes when the log is open."""
+    import time as _time
+    from openprocess.gui.studio import app as studio_app
+    from openprocess.gui.studio.app import StudioWindow
+    from openprocess.gui.studio.loading import LoadingPage
+    from openprocess.mining import xes
+
+    cases = "".join(f'<trace><string key="concept:name" value="c{i}"/>'
+                    f'<event><string key="concept:name" value="a"/></event></trace>' for i in range(1500))
+    path = tmp_path / "slow.xes"
+    path.write_text(f'<?xml version="1.0"?><log>{cases}</log>')
+    real = xes.read_xes
+
+    def slow_read(source, progress=None, columnar=None):
+        def report(n, share):
+            _time.sleep(0.25)                        # a big file, as far as the page can tell
+            if progress is not None:
+                progress(n, share)
+        return real(source, progress=report, columnar=columnar)
+    monkeypatch.setattr(studio_app, "read_xes", slow_read)
+    window = StudioWindow()
+    window.show()
+    window.open_path(str(path))
+    end = _time.time() + 3
+    while _time.time() < end and window.content.currentWidget() is not window.loading_page:
+        app.processEvents()
+        _time.sleep(0.02)
+    assert isinstance(window.content.currentWidget(), LoadingPage)
+    assert "slow.xes" in window.loading_page.title.text()
+    end = _time.time() + 10
+    while _time.time() < end and window.content.currentWidget() is window.loading_page:
+        app.processEvents()
+        _time.sleep(0.02)
+    assert window.content.currentWidget() is not window.loading_page
+    assert any(getattr(d, "path", None) == str(path) for d in window.documents)
+
+    # Cancel: the reader stops, nothing opens, the page goes.
+    other = tmp_path / "other.xes"
+    other.write_text(path.read_text())
+    window.open_path(str(other))
+    end = _time.time() + 3
+    while _time.time() < end and window.content.currentWidget() is not window.loading_page:
+        app.processEvents()
+        _time.sleep(0.02)
+    window.loading_page.cancel.click()
+    end = _time.time() + 5
+    while _time.time() < end and window.content.currentWidget() is window.loading_page:
+        app.processEvents()
+        _time.sleep(0.02)
+    assert window.content.currentWidget() is not window.loading_page
+    assert not any(getattr(d, "path", None) == str(other) for d in window.documents)
+    window.close()
+
+
+def test_a_large_dotted_chart_is_worked_out_in_the_background(app, monkeypatch):
+    import time as _time
+    from openprocess.gui.studio import dotted_chart
+    from openprocess.gui.studio.documents import LogDocument
+    from openprocess.mining.log import EventLog, parse_simple_log
+    monkeypatch.setattr(dotted_chart, "BACKGROUND_FROM", 1)
+    log = EventLog.from_simple_log(parse_simple_log("[<a,b,c>^20, <a,c,b>^10]"))
+    panel = dotted_chart.DottedChartPanel(LogDocument(log))
+    assert panel.chart.data is None and "Drawing" in panel.chart.busy_text
+    end = _time.time() + 5
+    while _time.time() < end and panel.chart.data is None:
+        app.processEvents()
+        _time.sleep(0.02)
+    assert panel.chart.data is not None and len(panel.chart.data) == 90 and panel.chart.busy_text == ""
+
+
+def test_a_workflow_opened_from_another_folder_reads_its_files_from_there(app, tmp_path):
+    """Double-clicking an example's .cpnflow: its log is beside it, not in the open folder."""
+    from openprocess.flow import Workflow, save
+    from openprocess.gui.studio.app import StudioWindow
+    from openprocess.gui.studio.documents import WorkflowDocument
+    example, elsewhere = tmp_path / "example", tmp_path / "elsewhere"
+    example.mkdir()
+    elsewhere.mkdir()
+    (example / "log.txt").write_text("[<a,b,c>^3, <a,c,b>]")
+    wf = Workflow("Example")
+    wf.connect(wf.add("open_log", {"file": "log.txt"}), wf.add("alpha_miner"))
+    save(wf, example / "Example.cpnflow", folder=example)
+    window = StudioWindow()
+    window.show()
+    assert window.open_workspace(str(elsewhere))
+    window.open_path(str(example / "Example.cpnflow"))
+    document = next(d for d in window.documents if isinstance(d, WorkflowDocument))
+    page = window.pages[document.id]
+    end = time.time() + 15
+    while time.time() < end and (page._running or page.run is None):
+        _pump(app, 0.05)
+    assert page.run is not None and all(page.run.status(n) == "done" for n in page.workflow.nodes.values())

@@ -5,7 +5,9 @@ the goods receipt?  Did one user record an invoice and also clear it?  How
 compliant is each vendor, and with how much money?  Each box answers one such
 question for every case, in a table (and, where it helps, the cases
 themselves, to analyse further), and works on a large log without building
-its events (:func:`openprocess.mining.cases.cases`).  The BPI Challenge 2019
+its events (:func:`openprocess.mining.cases.cases`).  The dotted chart and
+*Who does what* are the first look at a log: when things happen, and who
+does them.  The BPI Challenge 2019
 analysis in ``examples/bpi2019`` is built from them.
 """
 
@@ -18,10 +20,11 @@ from typing import Literal
 
 from ... import flow
 from ...mining.cases import case_value, cases
+from ...mining.dotted import SORT_MODES, X_MODES, DotSettings, Dots, svg
 from ...mining.log import EventLog
 from ...mining.petrinet import PetriNet
 from ..box import box
-from ..types import Table
+from ..types import Figure, Table
 
 UNITS = {"hours": 3600.0, "days": 86400.0}
 
@@ -192,4 +195,71 @@ def compliance_by(model: PetriNet, log: EventLog, attribute: str = "Vendor",
     return Table(f"Compliance by {attribute}", columns, rows)
 
 
-__all__ = ["RuleResult", "compliance_by", "order_rule", "segregation_of_duties", "time_between"]
+@box(name="Dotted chart", group="Measure")
+def dotted_chart(log: EventLog,
+                 x: Literal["Actual time", "Time since case start", "Relative to case duration (%)",
+                            "Logical: order in log", "Logical: position in case"] = "Actual time",
+                 rows: str = "Case", colour: str = "Activity",
+                 sort: Literal["First event", "Last event", "Duration", "Number of events", "Name"] = "First event",
+                 unit: Literal["Auto", "Seconds", "Minutes", "Hours", "Days", "Weeks"] = "Auto") -> Figure:
+    """Every event as a dot (Song & van der Aalst, 2007): *x* says when, the
+    row what it belongs to, the colour one more attribute; the same dots as
+    the dotted chart in Mine, saved as a figure. Patterns to look for: the
+    arrival rate (the slope of the first dots), batches (vertical lines),
+    waiting (long gaps in a row), and in Time since case start, how long
+    each step takes after the case begins.
+
+    x: when: actual time, time since the case started, the share of the case's duration, or a logical position
+    rows: Case, Activity, Resource, Lifecycle or any event attribute
+    colour: Activity, Resource, Lifecycle, Case, None or any event attribute
+    sort: the order of the rows
+    unit: the time unit of the x axis (Auto: dates and durations)
+    """
+    settings = DotSettings(x_mode=X_MODES.index(x), rows=rows, colour_by=colour, sort=SORT_MODES.index(sort))
+    dots = Dots(log, log.default_classifier(), settings)
+    if not len(dots):
+        raise ValueError(f"{log.name} has no events to draw")
+    if dots.mode != settings.x_mode:
+        flow.note(f"The log has no timestamps, so x is {X_MODES[dots.mode].lower()}")
+    flow.note(f"{len(dots):,} events in {len(dots.row_values):,} rows ({rows}), "
+              f"{len(dots.colour_values):,} colours ({colour})")
+    if dots.mode == 0 and dots.origin is not None:
+        from datetime import timedelta
+        flow.note(f"From {dots.origin:%d %b %Y %H:%M} to "
+                  f"{dots.origin + timedelta(seconds=dots.x_max - dots.x_min):%d %b %Y %H:%M}")
+    title = f"{log.name}: {rows.lower()} by {X_MODES[dots.mode].lower()}, colour by {colour.lower()}"
+    return Figure("Dotted chart", svg=svg(dots, title, unit),
+                  caption=f"Dotted chart: rows {rows}, x {X_MODES[dots.mode]}, colour {colour}, "
+                          f"sorted by {sort.lower()}.")
+
+
+@box(name="Who does what", group="Measure")
+def who_does_what(log: EventLog, by: str = "org:resource") -> Table:
+    """How often each activity is done by each value of the event attribute
+    *by* (each resource, say): one row per activity, one column per value,
+    most frequent first. It shows the roles in a process: who only does one
+    step, who does several, and which steps nobody else does.
+
+    by: the event attribute to count by (org:resource, or any other)
+    """
+    counts: dict[str, Counter] = {}
+    totals: Counter = Counter()
+    for case in cases(log, (by,)):
+        for activity, value in zip(case.activities, case.columns[by]):
+            name = "–" if value is None else str(value)
+            counts.setdefault(activity, Counter())[name] += 1
+            totals[name] += 1
+    if not totals or set(totals) == {"–"}:
+        raise ValueError(f"No event of {log.name} has the attribute {by!r}")
+    values = [v for v, _ in totals.most_common()]
+    activities = sorted(counts, key=lambda a: -sum(counts[a].values()))
+    rows = [[a, *[counts[a][v] for v in values], sum(counts[a].values())] for a in activities]
+    for value in values:
+        done = [a for a in activities if counts[a][value]]
+        if len(done) == 1:
+            flow.note(f"{value} only does {done[0]}")
+    return Table(f"Who does what ({by})", ["activity", *values, "events"], rows)
+
+
+__all__ = ["RuleResult", "compliance_by", "dotted_chart", "order_rule", "segregation_of_duties",
+           "time_between", "who_does_what"]

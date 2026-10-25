@@ -834,7 +834,11 @@ extra) and *Predict the next activity*. Or start empty.
   and cleared an invoice?) and *Compliance by attribute* (per vendor: cases,
   share that fits, value), with *Case attribute* to keep one category and
   *Bubble chart* to draw it. [examples/bpi2019](examples/bpi2019/README.md)
-  uses them on the BPI Challenge 2019.
+  uses them on the BPI Challenge 2019. *Dotted chart* saves a dotted chart
+  as a figure (the same dots as the log page's tab), and *Who does what*
+  counts each activity per resource;
+  [examples/energy_contracts](examples/energy_contracts/README.md) uses them
+  with the course's miners and checks on the 2AMI10 exam log.
 - **Connections** (at the bottom of the sidebar, or *View ▸ Connections*)
   draws what flows in, OpenProcess and its boxes, what flows out, and the
   optional tools (pandas, numpy, scipy, matplotlib, …) with whether each is

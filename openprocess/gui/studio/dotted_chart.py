@@ -42,8 +42,7 @@ from __future__ import annotations
 
 import bisect
 import math
-from array import array
-from dataclasses import dataclass, field, replace
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
@@ -55,6 +54,9 @@ from PySide6.QtWidgets import (
     QScrollBar, QSlider, QSplitter, QToolTip, QVBoxLayout, QWidget,
 )
 
+from ...mining.dotted import (
+    SORT_MODES, STANDARD_COMPONENTS, TIME_UNITS, UNIT_SUFFIX, X_MODES, X_TITLES, DotSettings, Dots, natural,
+)
 from ...mining.stats import format_duration
 from . import style
 from .documents import LogDocument
@@ -63,318 +65,24 @@ from .widgets import (
     Card, ElidedLabel, button, flow, hbox, label, modifier_text, scroll, shortcut_text, vbox,
 )
 
-X_MODES = ["Actual time", "Time since case start", "Relative to case duration (%)",
-           "Logical: order in log", "Logical: position in case"]
-#: Axis titles for each x mode.
-X_TITLES = ["Time", "Time since case start", "Share of case duration (%)",
-            "Event order in the log", "Event position in the case"]
-#: Time units for the x axis, as in ProM's dotted chart: with a unit chosen
-#: the axis shows plain numbers in that unit ("0  5  10 …", titled
-#: "… (minutes)"); "Auto" shows clock times / durations instead.  Months and
-#: years are fixed lengths (30 and 365 days), because the axis is linear.
-TIME_UNITS = {"Auto": None, "Seconds": 1.0, "Minutes": 60.0, "Hours": 3600.0,
-              "Days": 86400.0, "Weeks": 604800.0, "Months (30 d)": 2592000.0,
-              "Years (365 d)": 31536000.0}
-UNIT_SUFFIX = {"Seconds": "s", "Minutes": "min", "Hours": "h", "Days": "d", "Weeks": "wk",
-               "Months (30 d)": "mo", "Years (365 d)": "yr"}
-SORT_MODES = ["First event", "Last event", "Duration", "Number of events", "Name"]
-STANDARD_COMPONENTS = ["Case", "Activity", "Resource", "Lifecycle"]
 SHAPES = ["circle", "square", "triangle", "diamond", "cross", "star"]
 #: Above this many visible dots they are drawn as round points, a batch per
 #: colour, instead of one shape at a time: a million-event log stays a
 #: picture of seconds, not minutes.  Shapes come back as soon as a zoom shows fewer.
 BATCH_FROM = 40_000
+#: Above this many events the dots are worked out on a worker thread.
+BACKGROUND_FROM = 200_000
 
 
-@dataclass
-class DotSettings:
-    x_mode: int = 0
-    rows: str = "Case"
-    sort: int = 0
-    descending: bool = False
-    colour_by: str = "Activity"
-    shape_by: str = "None"
-    all_events: bool = False        # ignore the classifier's event filter
-    dot_size: float = 4.0
-    connect: bool = False           # line through the events of each case
-    unit: str = "Auto"              # time unit of the x axis (see TIME_UNITS)
-    grid_step: float = 0.0          # distance between gridlines in axis units; 0 = automatic
-    grid_lines: bool = True         # vertical gridlines
-    row_lines: bool = True          # a hairline per row when rows are tall enough
-    #: Colours picked in the legend: "<attribute>\x1f<value>" -> "#rrggbb".
-    #: Values without an entry keep the default palette.
-    colours: dict = field(default_factory=dict)
+class DotData(Dots):
+    """The dots of a log document, with the colours the legend picked.
 
-
-# ---------------------------------------------------------------------------
-# Data preparation (no Qt)
-# ---------------------------------------------------------------------------
-class _Events:
-    """The events a dotted chart shows, in log order, with what it needs of
-    each: its case, its index in the case, its time, and any attribute as
-    text.  An object log is read through its events; a columnar log (a large
-    file) straight from its arrays, so a million-event log is drawn without
-    building a million event objects."""
-
-    def __init__(self, log, classifier, all_events: bool) -> None:
-        from ...mining.columns import NO_TIME
-        self.log, self.classifier = log, classifier
-        self.case = array("i")                  # trace index
-        self.position = array("i")              # index in trace.events
-        self.micros = array("q")                # microseconds since the epoch; NO_TIME when absent
-        self.missing = NO_TIME
-        if log.columnar:
-            store = self.store = log.traces.store
-            wanted = None if all_events or classifier.lifecycles is None else \
-                {v.lower() for v in classifier.lifecycles}
-            lifecycle = store.lifecycle
-            self.index = array("q")             # the event's index in the store
-            for case in range(store.case_count):
-                start, stop = store.offsets[case], store.offsets[case + 1]
-                for i in range(start, stop):
-                    if wanted is not None:
-                        code = lifecycle.codes[i]
-                        if code >= 0 and lifecycle.values[code].lower() not in wanted:
-                            continue
-                    self.case.append(case)
-                    self.position.append(i - start)
-                    self.index.append(i)
-                    self.micros.append(store.micros[i])
-            self.events = None
-        else:
-            self.store = None
-            self.events = []
-            from ...mining.columns import _micros
-            for ti, trace in enumerate(log.traces):
-                for position, event in enumerate(trace.events):
-                    if not (all_events or classifier.accepts(event)):
-                        continue
-                    self.case.append(ti)
-                    self.position.append(position)
-                    self.events.append(event)
-                    stamp = event.timestamp
-                    self.micros.append(_micros(stamp) if stamp is not None else NO_TIME)
-
-    def __len__(self) -> int:
-        return len(self.case)
-
-    def ranks(self) -> array:
-        """Each shown event's place among *all* the log's events, ordered by
-        time (then case, then position): the x of "Logical: order in log"."""
-        from ...mining.columns import _micros
-        floor = -(1 << 63)
-        everything: list[tuple[int, int, int]] = []
-        if self.store is not None:
-            store = self.store
-            for case in range(store.case_count):
-                start = store.offsets[case]
-                for i in range(start, store.offsets[case + 1]):
-                    m = store.micros[i]
-                    everything.append((m if m != self.missing else floor, case, i - start))
-        else:
-            for ti, trace in enumerate(self.log.traces):
-                for position, event in enumerate(trace.events):
-                    stamp = event.timestamp
-                    everything.append((_micros(stamp) if stamp is not None else floor, ti, position))
-        everything.sort()
-        place = {(case, position): rank for rank, (_m, case, position) in enumerate(everything)}
-        return array("q", (place[(c, p)] for c, p in zip(self.case, self.position)))
-
-    def timestamp(self, k: int):
-        """The shown event ``k``'s timestamp, with the offset it was written with."""
-        if self.store is not None:
-            return self.store.timestamp(self.index[k])
-        return self.events[k].timestamp
-
-    def values(self, component: str) -> list[str]:
-        """``component`` (Case, Activity, Resource, Lifecycle, None or an
-        attribute) as text for every shown event."""
-        if component == "None":
-            return [""] * len(self)
-        if self.store is not None:
-            store, index = self.store, self.index
-            if component == "Case":
-                return [store.case_ids[c] for c in self.case]
-            if component == "Activity":
-                labels = self._labels()
-                return [labels[i] for i in index]
-            key = {"Resource": "org:resource", "Lifecycle": "lifecycle:transition"}.get(component, component)
-            column = store.column_text(key)
-            return [column[i] or "–" for i in index]
-        classifier, traces = self.classifier, self.log.traces
-        out = []
-        for k, event in enumerate(self.events):
-            if component == "Case":
-                out.append(traces[self.case[k]].case_id)
-            elif component == "Activity":
-                out.append(classifier.label(event) if classifier.accepts(event) else str(event.activity or "–"))
-            elif component == "Resource":
-                out.append(str(event.resource or "–"))
-            elif component == "Lifecycle":
-                out.append(str(event.lifecycle or "–"))
-            else:
-                raw = event.get(component)
-                out.append("–" if raw is None else str(raw))
-        return out
-
-    def _labels(self) -> list[str]:
-        """Every stored event's activity label under the classifier (the
-        plain activity for an event the classifier leaves out)."""
-        store, classifier = self.store, self.classifier
-        names = store.column_text("concept:name")
-        if tuple(classifier.keys) == ("concept:name",):
-            return [name or "" for name in names]        # the usual classifier: the names themselves
-        columns = [store.column_text(key) for key in classifier.keys]
-        lifecycle = store.lifecycle
-        wanted = None if classifier.lifecycles is None else {v.lower() for v in classifier.lifecycles}
-        labels = []
-        for i in range(store.event_count):
-            code = lifecycle.codes[i]
-            if wanted is not None and code >= 0 and lifecycle.values[code].lower() not in wanted:
-                labels.append(names[i] or "–")
-            else:
-                labels.append("+".join(column[i] or "" for column in columns))
-        return labels
-
-
-class DotData:
-    """All dots of a log under given settings, ready for drawing.
-
-    Parallel arrays keep the per-dot data compact: ``xs[i]``, ``rows[i]``,
-    ``colour[i]`` (index into ``colour_values``), ``shape[i]``, ``case[i]``
-    (trace index) and ``position[i]`` (the event's index in its trace).
+    The dots themselves are worked out in :class:`openprocess.mining.dotted.Dots`
+    (no Qt), which the *Dotted chart* box shares.
     """
 
     def __init__(self, document: LogDocument, settings: DotSettings) -> None:
-        self.settings = settings
-        log = document.log
-        classifier = document.classifier
-        s = settings
-        events = _Events(log, classifier, s.all_events)
-        micros, case, missing = events.micros, events.case, events.missing
-
-        # 1. Select events and compute raw x values -------------------------
-        earliest = None                          # the shown event with the earliest timestamp
-        for k, m in enumerate(micros):
-            if m != missing and (earliest is None or m < micros[earliest]):
-                earliest = k
-        self.has_time = earliest is not None
-        origin = micros[earliest] if earliest is not None else None
-        # The axis shows clock times in the offset the log was written with.
-        self.origin = events.timestamp(earliest) if earliest is not None else None
-        mode = s.x_mode if self.has_time or s.x_mode >= 3 else 4
-
-        # Each case's first and last shown timestamp (for modes 1 and 2).
-        first: dict[int, int] = {}
-        last: dict[int, int] = {}
-        if mode in (1, 2):
-            for k, m in enumerate(micros):
-                if m == missing:
-                    continue
-                c = case[k]
-                if c not in first or m < first[c]:
-                    first[c] = m
-                if c not in last or m > last[c]:
-                    last[c] = m
-        rank = events.ranks() if mode == 3 else None   # the event's place in the whole log, by time
-
-        kept: list[int] = []                    # shown events that have an x
-        xs = array("d")
-        position_in_shown: dict[int, int] = {}
-        for k in range(len(events)):
-            m = micros[k]
-            if mode == 4:
-                c = case[k]
-                x = float(position_in_shown.get(c, 0))
-                position_in_shown[c] = x + 1
-            elif mode == 3:
-                x = float(rank[k])
-            elif m == missing:
-                continue
-            elif mode == 0:
-                x = (m - origin) / 1e6
-            elif mode == 1:
-                x = (m - first[case[k]]) / 1e6
-            else:
-                span = (last[case[k]] - first[case[k]]) / 1e6       # seconds, as timedelta.total_seconds()
-                x = 100.0 * ((m - first[case[k]]) / 1e6) / span if span else 0.0
-            kept.append(k)
-            xs.append(x)
-        self.mode = mode
-
-        def component(name: str) -> list[str]:
-            values = events.values(name)
-            return [values[k] for k in kept]
-        row_of, colour_of, shape_of = component(s.rows), component(s.colour_by), component(s.shape_by)
-
-        # 2. Rows: one per distinct component value, sorted ------------------
-        stats: dict[str, list[float]] = {}          # value -> [first, last, count]
-        for x, row_value in zip(xs, row_of):
-            entry = stats.get(row_value)
-            if entry is None:
-                stats[row_value] = [x, x, 1]
-            else:
-                if x < entry[0]:
-                    entry[0] = x
-                if x > entry[1]:
-                    entry[1] = x
-                entry[2] += 1
-        keys = {
-            0: lambda v: (stats[v][0], _natural(v)),
-            1: lambda v: (stats[v][1], _natural(v)),
-            2: lambda v: (stats[v][1] - stats[v][0], _natural(v)),
-            3: lambda v: (stats[v][2], _natural(v)),
-            4: lambda v: _natural(v),
-        }
-        self.row_values = sorted(stats, key=keys[s.sort], reverse=s.descending)
-        row_index = {v: i for i, v in enumerate(self.row_values)}
-        self.row_stats = stats
-
-        # 3. Colour and shape assignments, by frequency ----------------------
-        def ranked(values: list[str]) -> list[str]:
-            counts: dict[str, int] = {}
-            for value in values:
-                counts[value] = counts.get(value, 0) + 1
-            return sorted(counts, key=lambda v: (-counts[v], _natural(v)))
-        self.colour_values = ranked(colour_of)
-        self.shape_values = ranked(shape_of)
-        colour_index = {v: i for i, v in enumerate(self.colour_values)}
-        shape_index = {v: i for i, v in enumerate(self.shape_values)}
-
-        self.xs = xs
-        self.rows = array("i", (row_index[v] for v in row_of))
-        self.colour = array("i", (colour_index[v] for v in colour_of))
-        self.shape = array("i", (shape_index[v] for v in shape_of))
-        self.case = array("i", (case[k] for k in kept))
-        self.position = array("i", (events.position[k] for k in kept))
-        self.colour_counts = {v: 0 for v in self.colour_values}
-        for v in colour_of:
-            self.colour_counts[v] += 1
-        self.x_min = min(self.xs, default=0.0)
-        self.x_max = max(self.xs, default=1.0)
-        if self.x_max <= self.x_min:
-            self.x_max = self.x_min + 1.0
-        self.traces = log.traces
-        self.classifier = classifier
-
-    def __len__(self) -> int:
-        return len(self.xs)
-
-    def case_duration(self, case: int) -> float | None:
-        """Seconds from a case's first to its last timestamp (None: fewer
-        than two), from the arrays when the log is columnar."""
-        if self.traces.__class__.__name__ == "LazyTraces" and not self.traces.modified:
-            store = self.traces.store
-            span = store.span(case)
-            if span is None or span[0] == span[1]:
-                return None
-            return (store.micros[span[1]] - store.micros[span[0]]) / 1e6
-        stamps = [e.timestamp for e in self.traces[case].events if e.timestamp is not None]
-        return (max(stamps) - min(stamps)).total_seconds() if len(stamps) > 1 else None
-
-    def event(self, i: int):
-        """The event behind dot ``i`` (builds only its trace, for a large log)."""
-        return self.traces[self.case[i]].events[self.position[i]]
+        super().__init__(document.log, document.classifier, settings)
 
     def colour_slot(self, colour_index: int) -> int:
         """Palette slot for a colour value (slots 0-7, then 'Other')."""
@@ -388,6 +96,8 @@ class DotData:
         else the palette's."""
         custom = self.settings.colours.get(self.colour_key(colour_index))
         return custom or style.categorical(self.colour_slot(colour_index))
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -419,6 +129,8 @@ class DottedChart(QWidget):
         self._pan_origin: tuple[QPointF, tuple[float, float, float, float]] | None = None
         self._cache: QPixmap | None = None
         self._cache_key = None
+        #: Shown over the chart while its dots are worked out (a large log).
+        self.busy_text = ""
         #: Dots by screen cell for hit-testing (None: build from _grid_dots on first hover).
         self._grid: dict[tuple[int, int], list[int]] | None = {}
         self._grid_dots: list[int] = []
@@ -553,11 +265,24 @@ class DottedChart(QWidget):
         key = (self.width(), self.height(), self.vx0, self.vx1, self.vy0, self.vy1,
                tuple(sorted(self.hidden_colours)), self.selected_case, id(self.data),
                self.devicePixelRatioF(), style.tokens().surface)
+        if self.busy_text and self.data is None:
+            painter = QPainter(self)
+            painter.fillRect(self.rect(), QColor(style.tokens().surface))
+            painter.setPen(QColor(style.tokens().text_muted))
+            painter.drawText(self.rect(), Qt.AlignCenter, self.busy_text)
+            return
         if self._cache is None or self._cache_key != key:
             self._cache = self._render()
             self._cache_key = key
         painter = QPainter(self)
         painter.drawPixmap(0, 0, self._cache)
+        if self.busy_text:                               # new dots on the way: say so over the old ones
+            t = style.tokens()
+            painter.setPen(QColor(t.text_secondary))
+            badge = QRectF(self.width() / 2 - 120, 14, 240, 26)
+            painter.setBrush(QColor(t.surface))
+            painter.drawRoundedRect(badge, 13, 13)
+            painter.drawText(badge, Qt.AlignCenter, self.busy_text)
         # Rubber band on top of the cached picture: dragging stays fluid.
         if self._drag_start is not None and self._drag_now is not None and not self._panning:
             t = style.tokens()
@@ -647,17 +372,24 @@ class DottedChart(QWidget):
         x0, y0 = self.vx0, self.vy0 - 0.5
         xs, rows, colour, case = d.xs, d.rows, d.colour, d.case
         # -1: the dimmed dots of the other cases when one is selected; drawn first.
-        batches: dict[int, list[QPointF]] = {}
+        # A dot is drawn once per screen pixel and colour: at this many dots most
+        # land on a pixel a dot of their colour already covers, so the picture is
+        # the same and the work a fraction of it.
+        batches: dict[int, set[tuple[int, int]]] = {}
         for i in ordered:
-            point = QPointF(left + (xs[i] - x0) * sx, top + (rows[i] - y0) * sy)
-            dimmed = selected >= 0 and case[i] != selected
-            batches.setdefault(-1 if dimmed else colour[i], []).append(point)
+            key = -1 if selected >= 0 and case[i] != selected else colour[i]
+            pixels = batches.get(key)
+            if pixels is None:
+                pixels = batches[key] = set()
+            pixels.add((int(left + (xs[i] - x0) * sx), int(top + (rows[i] - y0) * sy)))
         painter.setRenderHint(QPainter.Antialiasing, radius > 1.5)
-        for key in sorted(batches):
+        # Underneath: the dimmed dots, then the grey "Other" values; on top, the named
+        # colours, the most frequent first so the rarer ones stay visible.
+        for key in sorted(batches, key=lambda k: (k >= 0, k < 8, k)):
             pen = QPen(faded if key < 0 else colours[key], 2 * radius)
             pen.setCapStyle(Qt.RoundCap)
             painter.setPen(pen)
-            painter.drawPoints(QPolygonF(batches[key]))
+            painter.drawPoints(QPolygonF([QPointF(x + 0.5, y + 0.5) for x, y in batches[key]]))
         self._grid = None
         self._grid_dots = ordered
 
@@ -1318,7 +1050,33 @@ class DottedChartPanel(QWidget):
         return s
 
     def rebuild(self, keep_view: bool = False) -> None:
-        data = DotData(self.document, self.settings)
+        """Work out the dots for the current settings and show them.  A large
+        log's dots are worked out on a worker (seconds for a million events),
+        with a note on the chart meanwhile, so the window never stops."""
+        events = self.document.log.event_count
+        if events < BACKGROUND_FROM:
+            self._show_data(DotData(self.document, self.settings), keep_view)
+            return
+        from .workers import run_in_background
+        self._generation = getattr(self, "_generation", 0) + 1
+        generation, settings = self._generation, self.settings
+        self.chart.busy_text = f"Drawing {events:,} events…"
+        self.chart.update()
+
+        def done(data) -> None:
+            if generation != self._generation:
+                return                                   # the settings changed again meanwhile
+            self.chart.busy_text = ""
+            self._show_data(data, keep_view)
+
+        def failed(message: str) -> None:
+            if generation == self._generation:
+                self.chart.busy_text = f"Could not draw the chart: {message}"
+                self.chart.update()
+
+        run_in_background(lambda: DotData(self.document, settings), done, failed)
+
+    def _show_data(self, data: DotData, keep_view: bool) -> None:
         if not keep_view:
             self.chart.hidden_colours = set()
             self.chart.selected_case = -1
@@ -1536,9 +1294,7 @@ def _swatch(colour: str):
     return QIcon(pixmap)
 
 
-def _natural(text: str):
-    """Sort '2' before '10', numbers before words."""
-    return (0, int(text), "") if text.isdigit() else (1, 0, text.lower())
+_natural = natural
 
 
 def axis_unit(mode: int, unit: str) -> float:

@@ -1,0 +1,847 @@
+{
+  "format": "cpnflow/1",
+  "name": "Energy contracts · exam log 2026",
+  "boxes": [
+    {
+      "id": "n1",
+      "box": "openprocess.flow.boxes.input.open_log",
+      "settings": {
+        "file": "Exam Eventlog 2026.xes"
+      },
+      "position": [
+        0,
+        520
+      ],
+      "title": "Exam event log"
+    },
+    {
+      "id": "n2",
+      "box": "openprocess.flow.boxes.measure.dotted_chart",
+      "settings": {
+        "x": "Actual time",
+        "rows": "Case",
+        "colour": "Activity",
+        "sort": "First event",
+        "unit": "Auto"
+      },
+      "position": [
+        260,
+        0
+      ],
+      "title": "Cases over time"
+    },
+    {
+      "id": "n3",
+      "box": "openprocess.flow.boxes.measure.dotted_chart",
+      "settings": {
+        "x": "Time since case start",
+        "rows": "Case",
+        "colour": "Activity",
+        "sort": "First event",
+        "unit": "Hours"
+      },
+      "position": [
+        260,
+        130
+      ],
+      "title": "Cases from their start"
+    },
+    {
+      "id": "n4",
+      "box": "openprocess.flow.boxes.measure.dotted_chart",
+      "settings": {
+        "x": "Time since case start",
+        "rows": "Case",
+        "colour": "Activity",
+        "sort": "Duration",
+        "unit": "Hours"
+      },
+      "position": [
+        260,
+        260
+      ],
+      "title": "Cases by duration"
+    },
+    {
+      "id": "n5",
+      "box": "openprocess.flow.boxes.measure.dotted_chart",
+      "settings": {
+        "x": "Actual time",
+        "rows": "Resource",
+        "colour": "Activity",
+        "sort": "First event",
+        "unit": "Auto"
+      },
+      "position": [
+        260,
+        390
+      ],
+      "title": "Resources over time"
+    },
+    {
+      "id": "n6",
+      "box": "openprocess.flow.boxes.measure.dotted_chart",
+      "settings": {
+        "x": "Relative to case duration (%)",
+        "rows": "Activity",
+        "colour": "Resource",
+        "sort": "First event",
+        "unit": "Auto"
+      },
+      "position": [
+        260,
+        520
+      ],
+      "title": "Activities within a case"
+    },
+    {
+      "id": "n7",
+      "box": "openprocess.flow.boxes.measure.who_does_what",
+      "settings": {
+        "by": "org:resource"
+      },
+      "position": [
+        260,
+        650
+      ],
+      "title": "Who does what"
+    },
+    {
+      "id": "n9",
+      "box": "openprocess.flow.boxes.discover.directly_follows",
+      "settings": {},
+      "position": [
+        560,
+        0
+      ],
+      "title": "Process map"
+    },
+    {
+      "id": "n10",
+      "box": "openprocess.flow.boxes.discover.footprint",
+      "settings": {},
+      "position": [
+        560,
+        130
+      ],
+      "title": "Footprint"
+    },
+    {
+      "id": "n11",
+      "box": "openprocess.flow.boxes.discover.alpha_miner",
+      "settings": {},
+      "position": [
+        560,
+        260
+      ],
+      "title": "α-algorithm"
+    },
+    {
+      "id": "n12",
+      "box": "openprocess.flow.boxes.discover.inductive_miner",
+      "settings": {
+        "noise": 0.0
+      },
+      "position": [
+        560,
+        390
+      ],
+      "title": "Inductive Miner"
+    },
+    {
+      "id": "n13",
+      "box": "openprocess.flow.boxes.discover.inductive_miner",
+      "settings": {
+        "noise": 0.2
+      },
+      "position": [
+        560,
+        520
+      ],
+      "title": "Inductive Miner (IMf 0.2)"
+    },
+    {
+      "id": "n14",
+      "box": "openprocess.flow.boxes.discover.heuristics_miner",
+      "settings": {
+        "dependency": 0.9
+      },
+      "position": [
+        560,
+        650
+      ],
+      "title": "Heuristics Miner"
+    },
+    {
+      "id": "n16",
+      "box": "openprocess.flow.boxes.check.check_fit",
+      "settings": {
+        "method": "Alignments"
+      },
+      "position": [
+        860,
+        260
+      ],
+      "title": "Fit: α-algorithm"
+    },
+    {
+      "id": "n17",
+      "box": "openprocess.flow.boxes.check.soundness",
+      "settings": {},
+      "position": [
+        1160,
+        260
+      ],
+      "title": "Sound? α-algorithm"
+    },
+    {
+      "id": "n18",
+      "box": "openprocess.flow.boxes.check.check_fit",
+      "settings": {
+        "method": "Alignments"
+      },
+      "position": [
+        860,
+        390
+      ],
+      "title": "Fit: Inductive Miner"
+    },
+    {
+      "id": "n19",
+      "box": "openprocess.flow.boxes.check.soundness",
+      "settings": {},
+      "position": [
+        1160,
+        390
+      ],
+      "title": "Sound? Inductive Miner"
+    },
+    {
+      "id": "n20",
+      "box": "openprocess.flow.boxes.check.check_fit",
+      "settings": {
+        "method": "Alignments"
+      },
+      "position": [
+        860,
+        520
+      ],
+      "title": "Fit: Inductive Miner (IMf 0.2)"
+    },
+    {
+      "id": "n21",
+      "box": "openprocess.flow.boxes.check.soundness",
+      "settings": {},
+      "position": [
+        1160,
+        520
+      ],
+      "title": "Sound? Inductive Miner (IMf 0.2)"
+    },
+    {
+      "id": "n22",
+      "box": "openprocess.flow.boxes.check.check_fit",
+      "settings": {
+        "method": "Alignments"
+      },
+      "position": [
+        860,
+        650
+      ],
+      "title": "Fit: Heuristics Miner"
+    },
+    {
+      "id": "n23",
+      "box": "openprocess.flow.boxes.check.soundness",
+      "settings": {},
+      "position": [
+        1160,
+        650
+      ],
+      "title": "Sound? Heuristics Miner"
+    },
+    {
+      "id": "n24",
+      "box": "openprocess.flow.boxes.compare.compare",
+      "settings": {},
+      "position": [
+        1160,
+        0
+      ],
+      "title": "Fitness of the models"
+    },
+    {
+      "id": "n26",
+      "box": "openprocess.flow.boxes.check.alignments",
+      "settings": {
+        "variants": 0
+      },
+      "position": [
+        1460,
+        260
+      ],
+      "title": "Deviations: α-algorithm"
+    },
+    {
+      "id": "n27",
+      "box": "openprocess.flow.boxes.check.token_replay",
+      "settings": {},
+      "position": [
+        1760,
+        260
+      ],
+      "title": "Token replay: α-algorithm"
+    },
+    {
+      "id": "n28",
+      "box": "openprocess.flow.boxes.check.alignments",
+      "settings": {
+        "variants": 0
+      },
+      "position": [
+        1460,
+        390
+      ],
+      "title": "Deviations: Inductive Miner (IMf 0.2)"
+    },
+    {
+      "id": "n29",
+      "box": "openprocess.flow.boxes.check.token_replay",
+      "settings": {},
+      "position": [
+        1760,
+        390
+      ],
+      "title": "Token replay: Inductive Miner (IMf 0.2)"
+    },
+    {
+      "id": "n30",
+      "box": "openprocess.flow.boxes.check.alignments",
+      "settings": {
+        "variants": 0
+      },
+      "position": [
+        1460,
+        520
+      ],
+      "title": "Deviations: Heuristics Miner"
+    },
+    {
+      "id": "n31",
+      "box": "openprocess.flow.boxes.check.token_replay",
+      "settings": {},
+      "position": [
+        1760,
+        520
+      ],
+      "title": "Token replay: Heuristics Miner"
+    },
+    {
+      "id": "n33",
+      "box": "openprocess.flow.boxes.measure.order_rule",
+      "settings": {
+        "first": "Cancel previous contract",
+        "then": "Approve contract",
+        "value": ""
+      },
+      "position": [
+        560,
+        860
+      ],
+      "title": "Cancelled before approval?"
+    },
+    {
+      "id": "n34",
+      "box": "openprocess.flow.boxes.measure.order_rule",
+      "settings": {
+        "first": "Start cancellation",
+        "then": "Cancel previous contract",
+        "value": ""
+      },
+      "position": [
+        560,
+        990
+      ],
+      "title": "Start cancellation, then cancel"
+    },
+    {
+      "id": "n35",
+      "box": "openprocess.flow.boxes.measure.segregation_of_duties",
+      "settings": {
+        "first": "Add customer details",
+        "second": "Add meter details",
+        "by": "org:resource",
+        "value": ""
+      },
+      "position": [
+        560,
+        1120
+      ],
+      "title": "Same person adds both details"
+    },
+    {
+      "id": "n36",
+      "box": "openprocess.flow.boxes.measure.time_between",
+      "settings": {
+        "start": "Receive application",
+        "end": "Approve contract",
+        "by": "",
+        "unit": "hours"
+      },
+      "position": [
+        560,
+        1250
+      ],
+      "title": "Application to approval"
+    },
+    {
+      "id": "n37",
+      "box": "openprocess.flow.boxes.measure.time_between",
+      "settings": {
+        "start": "Receive application",
+        "end": "Reject contract",
+        "by": "",
+        "unit": "hours"
+      },
+      "position": [
+        560,
+        1380
+      ],
+      "title": "Application to rejection"
+    }
+  ],
+  "connections": [
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n2",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n3",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n4",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n5",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n6",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n7",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n11",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n12",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n13",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n14",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n9",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n10",
+      "input": "log"
+    },
+    {
+      "from": "n11",
+      "output": "out",
+      "to": "n16",
+      "input": "model"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n16",
+      "input": "log"
+    },
+    {
+      "from": "n11",
+      "output": "out",
+      "to": "n17",
+      "input": "model"
+    },
+    {
+      "from": "n12",
+      "output": "out",
+      "to": "n18",
+      "input": "model"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n18",
+      "input": "log"
+    },
+    {
+      "from": "n12",
+      "output": "out",
+      "to": "n19",
+      "input": "model"
+    },
+    {
+      "from": "n13",
+      "output": "out",
+      "to": "n20",
+      "input": "model"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n20",
+      "input": "log"
+    },
+    {
+      "from": "n13",
+      "output": "out",
+      "to": "n21",
+      "input": "model"
+    },
+    {
+      "from": "n14",
+      "output": "out",
+      "to": "n22",
+      "input": "model"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n22",
+      "input": "log"
+    },
+    {
+      "from": "n14",
+      "output": "out",
+      "to": "n23",
+      "input": "model"
+    },
+    {
+      "from": "n16",
+      "output": "out",
+      "to": "n24",
+      "input": "scores"
+    },
+    {
+      "from": "n18",
+      "output": "out",
+      "to": "n24",
+      "input": "scores"
+    },
+    {
+      "from": "n20",
+      "output": "out",
+      "to": "n24",
+      "input": "scores"
+    },
+    {
+      "from": "n22",
+      "output": "out",
+      "to": "n24",
+      "input": "scores"
+    },
+    {
+      "from": "n11",
+      "output": "out",
+      "to": "n26",
+      "input": "model"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n26",
+      "input": "log"
+    },
+    {
+      "from": "n11",
+      "output": "out",
+      "to": "n27",
+      "input": "model"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n27",
+      "input": "log"
+    },
+    {
+      "from": "n13",
+      "output": "out",
+      "to": "n28",
+      "input": "model"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n28",
+      "input": "log"
+    },
+    {
+      "from": "n13",
+      "output": "out",
+      "to": "n29",
+      "input": "model"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n29",
+      "input": "log"
+    },
+    {
+      "from": "n14",
+      "output": "out",
+      "to": "n30",
+      "input": "model"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n30",
+      "input": "log"
+    },
+    {
+      "from": "n14",
+      "output": "out",
+      "to": "n31",
+      "input": "model"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n31",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n33",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n34",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n35",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n36",
+      "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n37",
+      "input": "log"
+    }
+  ],
+  "groups": [
+    {
+      "id": "g8",
+      "name": "1 · Dotted charts",
+      "boxes": [
+        "n2",
+        "n3",
+        "n4",
+        "n5",
+        "n6",
+        "n7"
+      ],
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "id": "g15",
+      "name": "2 · Discovery",
+      "boxes": [
+        "n9",
+        "n10",
+        "n11",
+        "n12",
+        "n13",
+        "n14"
+      ],
+      "position": [
+        560,
+        0
+      ]
+    },
+    {
+      "id": "g25",
+      "name": "3 · Fitness",
+      "boxes": [
+        "n16",
+        "n18",
+        "n20",
+        "n22",
+        "n17",
+        "n19",
+        "n21",
+        "n23",
+        "n24"
+      ],
+      "position": [
+        860,
+        0
+      ]
+    },
+    {
+      "id": "g32",
+      "name": "4 · Deviations",
+      "boxes": [
+        "n26",
+        "n27",
+        "n28",
+        "n29",
+        "n30",
+        "n31"
+      ],
+      "position": [
+        1460,
+        260
+      ]
+    },
+    {
+      "id": "g38",
+      "name": "5 · The process",
+      "boxes": [
+        "n33",
+        "n34",
+        "n35",
+        "n36",
+        "n37"
+      ],
+      "position": [
+        560,
+        860
+      ]
+    }
+  ],
+  "record": {
+    "versions": {
+      "openprocess": "0.12.1",
+      "python": "3.12.14"
+    },
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python": "3.12.14",
+      "packages": {
+        "colorama": "0.4.6",
+        "cpnpy": "0.1.0",
+        "exceptiongroup": "1.3.1",
+        "iniconfig": "2.3.0",
+        "packaging": "26.3",
+        "pip": "26.2.1",
+        "pluggy": "1.6.0",
+        "pyflakes": "4.0.2",
+        "pygments": "2.21.0",
+        "pypdf": "6.19.0",
+        "pyside6": "6.11.2",
+        "pytest": "9.1.1",
+        "pyyaml": "6.0.3",
+        "setuptools": "84.0.0",
+        "shiboken6": "6.11.2",
+        "tomli": "2.4.1",
+        "typing_extensions": "4.16.0",
+        "wheel": "0.48.0"
+      }
+    },
+    "inputs": [
+      {
+        "node": "n1",
+        "setting": "file",
+        "file": "Exam Eventlog 2026.xes",
+        "sha256": "dec0bf06495bcad44e9aa04eac19a193e4fb3e6b5be82add7f751c2d422d16f7"
+      }
+    ],
+    "custom_boxes": [],
+    "seeds": {},
+    "results": {
+      "n1": "7627273b837b23e55f36a2ed95347d911908078fae49460a14ba814fa4544f31",
+      "n2": "b9e12394c7df2dd02b611513d29c42e1917696c2d17c3ebfc5efc68a8fa721eb",
+      "n3": "e63974cd95b4f0ac8f1f478db06b05dd4c479b66876bdbd53c0493bedc2aa9c2",
+      "n4": "017d213fb21b2661cc16fcda1f7cf31a9e754b2951b1e212201c4e5e007cf5c4",
+      "n5": "82749a4597ec459cc2ca2412cdb5d790034dec3861f40dc61c5ff6e8e9ccb7bd",
+      "n6": "3a0a8458f379ac7014895f35bd198128c28fa3cbeecf2233f9378d965aea1ba2",
+      "n7": "2300a491e0e3df0ef0f71db3e0d124c107e0c888c2684b25a55bcfd2c6a3d304",
+      "n9": "d70a16d9169b876aa123cb1a199f3b2b8f31daeca13f733e8415ff6aad388c84",
+      "n10": "55dba3c417dbb61e9042b49e0e20176657c33b0b2abbca0ed0e2172346aa9061",
+      "n11": "6ad7a8b0885cf69f4fb13edab480d62fcb239c71ba82f8b84fe0172dd59331e1",
+      "n12": "9651ab428396ff1b720686d4948ad1a781f49e8f2f23703ca6e604065667dbd7",
+      "n13": "4dc2e3d1c969eaa33c388b09a9703855a458ef9fada496269979b9e3b101268d",
+      "n14": "bc64818b7cd72f5934551e4c4110f339a88aae460a401f8d990d1ae76eca3aa8",
+      "n33": "4ab200356692c39adff14e23409ec9ee8a6299fda223b3d9c021e72b6f459b34",
+      "n34": "20c281b5f7b9a935ba14fd341247c86464a19caf3e7035b429b2d221042d1cb1",
+      "n35": "08cf58259ab7da3c5b8ad762cc61f2c460182c6adec783475aaeec2925475af5",
+      "n36": "b108f20b927dca66d235b799c504f9fb3076259e67b3a7a28d9101f2361d4e01",
+      "n37": "071c7b6fdc98b29a0d98a963c1c5e6f3c2cff7a59f674145618e20325188900f",
+      "n16": "1c26efa29bf931181cb6369a2c87b4a2303efc5e0e2bf8a0a460646da93e61ff",
+      "n18": "ac1e025230fb41b69d29b9b46e057d4a69e87882fa289e2522d404b3dd18ece3",
+      "n20": "e5cb521732faf997f9d738a58b30d446705b69a8ec34c2126208dbc7cc693386",
+      "n22": "e818a650665ad637bf53ecdf9bd2197c5dfe872019729de256ecd7632b0955f6",
+      "n24": "318b14b30387314dcc38f50ce1f8518a83443508c330ee4fa8516fabfe18c5c3",
+      "n17": "43ad6af1408b3142fa1b8985f29fed95c667d1c3580a06b26e03627e9c2a4843",
+      "n19": "06956c5132814076ac58de222d70914e7832f07f6b0e032f01247903abd8e916",
+      "n21": "30a390367e96acecb20ccc8c552a0ac7f093fe6318f5ec62a058faf85415fc2d",
+      "n23": "69a682b1803abf531f06435dbe3aa2badbea31ed56659c268e2d2185f8487661",
+      "n26": "2e48da71986396576d29ba6522b2e1dc77cbdc952bae1f23ba2d60f977dac835",
+      "n28": "06b6284128866a474db2c68d52e7ef5f12c117c374b50188630b46eef5d593a5",
+      "n30": "5c7cbd174628aadf70809de5828575cf6600962b727f382f5e793ee3fae7ebc1",
+      "n27": "6d08ebd31c449f8bcb04e4eb1b800dc02218523e63a499ac92b78daa1956298d",
+      "n29": "662d5cdaaef6a35abfe57101e3032b37273701a93402e27903db9f4836dfa0af",
+      "n31": "dfb3162ad6a3c29d0cbabc452896895f3f27d5b35d9b2ffe60be735c6040ca0b"
+    },
+    "fingerprint": 2,
+    "saved": "2026-10-25T12:12:33+00:00",
+    "history": []
+  }
+}

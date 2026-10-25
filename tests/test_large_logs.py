@@ -177,3 +177,28 @@ def test_a_large_graph_is_laid_out_with_every_node_placed():
     edges = [(f"n{random.randrange(300)}", f"n{random.randrange(300)}") for _ in range(900)]
     result = layered_layout(nodes, edges)
     assert set(result.positions) == set(nodes)
+
+
+def test_the_reader_reports_how_much_it_has_read_and_can_be_stopped(tmp_path):
+    """The loading page shows the share of the file read, and Cancel stops the reader."""
+    import gzip as gz
+    path = tmp_path / "big.xes"
+    cases = "".join(f'<trace><string key="concept:name" value="c{i}"/>'
+                    f'<event><string key="concept:name" value="a"/></event></trace>' for i in range(2000))
+    path.write_text(f'<?xml version="1.0"?><log>{cases}</log>')
+    (tmp_path / "big.xes.gz").write_bytes(gz.compress(path.read_bytes()))
+    for source in (path, tmp_path / "big.xes.gz"):
+        for columnar in (True, False):
+            seen = []
+            read_xes(source, columnar=columnar, progress=lambda n, share: seen.append((n, share)))
+            assert [n for n, _ in seen] == [500, 1000, 1500, 2000]
+            shares = [share for _, share in seen]
+            assert all(0 < a <= b <= 1 for a, b in zip(shares, shares[1:]))
+
+    class Stop(Exception):
+        pass
+
+    def stop(n, share):
+        raise Stop
+    with pytest.raises(Stop):
+        read_xes(path, columnar=True, progress=stop)
