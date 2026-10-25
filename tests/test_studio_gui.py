@@ -2819,3 +2819,27 @@ def test_a_large_dotted_chart_is_worked_out_in_the_background(app, monkeypatch):
         app.processEvents()
         _time.sleep(0.02)
     assert panel.chart.data is not None and len(panel.chart.data) == 90 and panel.chart.busy_text == ""
+
+
+def test_a_workflow_opened_from_another_folder_reads_its_files_from_there(app, tmp_path):
+    """Double-clicking an example's .cpnflow: its log is beside it, not in the open folder."""
+    from openprocess.flow import Workflow, save
+    from openprocess.gui.studio.app import StudioWindow
+    from openprocess.gui.studio.documents import WorkflowDocument
+    example, elsewhere = tmp_path / "example", tmp_path / "elsewhere"
+    example.mkdir()
+    elsewhere.mkdir()
+    (example / "log.txt").write_text("[<a,b,c>^3, <a,c,b>]")
+    wf = Workflow("Example")
+    wf.connect(wf.add("open_log", {"file": "log.txt"}), wf.add("alpha_miner"))
+    save(wf, example / "Example.cpnflow", folder=example)
+    window = StudioWindow()
+    window.show()
+    assert window.open_workspace(str(elsewhere))
+    window.open_path(str(example / "Example.cpnflow"))
+    document = next(d for d in window.documents if isinstance(d, WorkflowDocument))
+    page = window.pages[document.id]
+    end = time.time() + 15
+    while time.time() < end and (page._running or page.run is None):
+        _pump(app, 0.05)
+    assert page.run is not None and all(page.run.status(n) == "done" for n in page.workflow.nodes.values())

@@ -23,6 +23,7 @@ from dataclasses import dataclass
 
 from PySide6.QtGui import QColor
 
+from ...palette import CATEGORICAL_DARK, CATEGORICAL_LIGHT, OTHER_DARK, OTHER_LIGHT
 from .. import theme
 
 
@@ -78,11 +79,7 @@ def qc(hex_value: str, alpha: float = 1.0) -> QColor:
 # ---------------------------------------------------------------------------
 # Data colours
 # ---------------------------------------------------------------------------
-CATEGORICAL_LIGHT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100",
-                     "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
-CATEGORICAL_DARK = ["#3987e5", "#d95926", "#199e70", "#c98500",
-                    "#d55181", "#008300", "#9085e9", "#e66767"]
-OTHER_LIGHT, OTHER_DARK = "#a8a7a0", "#6b6a66"
+# The categorical hues and "Other" are in openprocess.palette (no Qt), for figures too.
 
 SEQUENTIAL_BLUE = ["#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7",
                    "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b"]

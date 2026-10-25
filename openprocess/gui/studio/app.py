@@ -1590,8 +1590,7 @@ class StudioWindow(QMainWindow):
             page = ComparePage(document)
             page.tabs.changed.connect(lambda i: self.remembered.__setitem__("compare_tab", i))
         elif isinstance(document, WorkflowDocument):
-            page = WorkflowPage(document, self.library(),
-                                self.workspace.folder if self.workspace is not None else None)
+            page = WorkflowPage(document, self.library(), self._workflow_folder(document))
             page.open_document.connect(lambda doc, source=document: self.add_document(doc, near=source.path))
             page.edit_requested.connect(lambda net, origin, doc=document: self.edit_petri_net(net, origin, doc))
             page.keep_requested.connect(lambda doc=document: self.keep_workflow(doc))
@@ -2844,6 +2843,18 @@ class StudioWindow(QMainWindow):
         self.add_document(WorkflowDocument(workflow))
         self.statusBar().showMessage(f"{document.name} against {Path(path).name}: click Check fit for the "
                                      "scores and how they were computed", 10000)
+
+    def _workflow_folder(self, document) -> str | None:
+        """The folder a workflow's files are relative to: the open folder, or
+        the workflow file's own folder when it was opened from somewhere else
+        (an example double-clicked, a file from a download), as
+        ``openprocess run`` reads it."""
+        folder = self.workspace.folder if self.workspace is not None else None
+        if document.path:
+            own = Path(document.path).resolve().parent
+            if folder is None or not own.is_relative_to(Path(folder).resolve()):
+                return str(own)
+        return folder
 
     def library(self):
         """The boxes available in this window (the folder's boxes/ included)."""

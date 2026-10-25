@@ -8,7 +8,9 @@ import pytest
 
 from openprocess.flow.boxes.check import alignments, compare_to_true_net
 from openprocess.flow.boxes.filter import case_attribute
-from openprocess.flow.boxes.measure import compliance_by, order_rule, segregation_of_duties, time_between
+from openprocess.flow.boxes.measure import (
+    compliance_by, dotted_chart, order_rule, segregation_of_duties, time_between, who_does_what,
+)
 from openprocess.flow.boxes.predict import FrequencyModel, predict, prefixes, split_by_time
 from openprocess.flow.boxes.science import _bootstrap_difference
 from openprocess.flow.types import Dataset, Table
@@ -65,6 +67,28 @@ def test_segregation_of_duties_finds_who_did_both():
     table = segregation_of_duties(purchase_log(), "Record Invoice", "Clear Invoice", by="User", value="worth")
     assert table.rows == [["u2", 2, 110.0]]                    # cases 1 and 3; u4 and u5 split case 2
 
+
+
+def test_who_does_what_counts_each_activity_per_person():
+    table = who_does_what(purchase_log(), by="User")
+    assert table.columns == ["activity", "u2", "u1", "u3", "u4", "u5", "events"]     # busiest first
+    rows = {row[0]: row[1:] for row in table.rows}
+    assert rows["Record Invoice"] == [2, 0, 0, 1, 0, 3]
+    assert rows["Create PO"] == [0, 4, 0, 0, 0, 4]
+    with pytest.raises(ValueError):
+        who_does_what(purchase_log(), by="nobody")
+
+
+def test_dotted_chart_draws_one_dot_per_event():
+    figure = dotted_chart(purchase_log())
+    dots = figure.svg.count('r="3.0"')                          # the legend's circles are larger
+    assert dots == 16 and figure.svg.count('r="4.5"') == 5      # 16 events, 5 activities
+    # Dots on the same spot in the same colour are drawn once: u1 creates all four orders on day 0.
+    by_user = dotted_chart(purchase_log(), rows="User", colour="Activity")
+    assert by_user.svg.count('r="3.0"') == 13 and ">u2</text>" in by_user.svg
+    # Without timestamps the chart falls back to the position in the case.
+    untimed = dotted_chart(EventLog.from_simple_log(parse_simple_log("[<a,b,c>^2, <a,c>]")), x="Actual time")
+    assert "Event position in the case" in untimed.svg and untimed.svg.count('r="3.0"') == 8
 
 def test_case_attribute_keeps_values_that_contain_commas():
     log = purchase_log()

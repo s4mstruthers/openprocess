@@ -42,7 +42,7 @@ flowchart BT
     sim["<b>sim</b><br/>CPN simulator"]
     analysis["<b>analysis</b><br/>CPN state space"]
     io["<b>io</b><br/>.cpn files"]
-    core["<b>core</b><br/>top level: citation, references, packages"]
+    core["<b>core</b><br/>top level: citation, references, packages, palette"]
   end
   subgraph framework["Framework · workflows of boxes; no Qt"]
     flow["<b>flow</b><br/>boxes, workflows, runner, record"]
@@ -123,6 +123,7 @@ flowchart BT
   learn --> mining
   learn --> mining_conformance
   learn --> mining_discovery
+  mining --> core
   mining --> mining_conformance
   mining --> mining_discovery
   mining_conformance --> mining
@@ -211,6 +212,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`mining/csv_import.py`](../openprocess/mining/csv_import.py) | Importing event logs from CSV files. |
 | [`mining/definitions.py`](../openprocess/mining/definitions.py) | Mathematical definitions of every property the analyses report. |
 | [`mining/dfg.py`](../openprocess/mining/dfg.py) | Directly-follows graphs (DFGs) -- the "process map" of tools like Disco. |
+| [`mining/dotted.py`](../openprocess/mining/dotted.py) | The dots of a dotted chart, worked out without drawing them. |
 | [`mining/filtering.py`](../openprocess/mining/filtering.py) | Filtering event logs: keep the part of the log you want to look at. |
 | [`mining/footprint.py`](../openprocess/mining/footprint.py) | Ordering relations and footprint matrices (van der Aalst, ch. 6.2 and 8.4). |
 | [`mining/invariants.py`](../openprocess/mining/invariants.py) | The incidence matrix, place invariants and transition invariants. |
@@ -297,13 +299,14 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`io/cpn_reader.py`](../openprocess/io/cpn_reader.py) | Reader for CPN Tools ``.cpn`` files. |
 | [`io/cpn_writer.py`](../openprocess/io/cpn_writer.py) | Writer for CPN Tools ``.cpn`` files. |
 
-### `core` · top level: citation, references, packages
+### `core` · top level: citation, references, packages, palette
 
 | Module | What it is |
 |---|---|
 | [`__init__.py`](../openprocess/__init__.py) | OpenProcess -- Coloured Petri Nets, Petri nets and process mining, on macOS, Windows and Linux. |
 | [`citation.py`](../openprocess/citation.py) | Citations: BibTeX for the app, and for the works each algorithm follows. |
 | [`packages.py`](../openprocess/packages.py) | Optional packages, installed from inside the app. |
+| [`palette.py`](../openprocess/palette.py) | The data colours, without Qt: the Studio's style and the figures that boxes draw (the dotted chart's SVG) take them from here, so a figur… |
 | [`references.py`](../openprocess/references.py) | Where OpenProcess's notation and algorithms come from. |
 
 ### `flow` · boxes, workflows, runner, record
@@ -457,5 +460,5 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 |---|---|
 | [`cli.py`](../openprocess/cli.py) | Command-line interface: ``openprocess <command> [options]``. |
 
-168 modules.
+170 modules.
 <!-- /generated -->

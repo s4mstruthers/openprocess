@@ -20,6 +20,20 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
   faster: the tab of the BPI Challenge 2019 log opens in about a second
   instead of eight. Its colours are right again on a dense chart: the grey
   "Other" values are drawn underneath, not over the named activities.
+- **A dotted chart in a workflow.** The new *Dotted chart* box draws the
+  same chart as the log page (rows, x, colour and sort as you choose) and
+  keeps it as a figure in the workflow and its report, so the charts you
+  base an answer on are saved with it. *Who does what* counts every
+  activity per resource: who only approves, who does the back office.
+- **An example for the 2AMI10 exam log.** `examples/energy_contracts` is
+  the whole study of the 2026 exam log as one workflow: five dotted charts,
+  the α-algorithm, Inductive and Heuristics Miners, their fitness and
+  soundness, where the log deviates from each model, and questions about
+  the process. Put the log from Canvas beside it and open it.
+- **A workflow opened from another folder finds its files.** Double-clicking
+  a `.cpnflow` outside the open folder used to look for its log in the open
+  folder and fail; it now reads it from beside the workflow, as
+  `openprocess run` does.
 
 ## 0.12.0
 

@@ -35,7 +35,7 @@ LAYERS = [
     ("App", "PySide6", ["gui", "gui.studio", "gui.flow", "gui.learn", "cli"]),
 ]
 UNIT_NAMES = {
-    "core": "top level: citation, references, packages",
+    "core": "top level: citation, references, packages, palette",
     "mining": "logs, nets, analysis",
     "mining.discovery": "α, Inductive, Heuristics, regions",
     "mining.conformance": "replay, alignments, quality",
@@ -73,7 +73,7 @@ def dotted(path: Path) -> str:
 def unit_of(module: str) -> str:
     """The package a module belongs to on the map (``openprocess.mining.xes`` → ``mining``)."""
     parts = module.split(".")[1:]
-    if not parts or parts[0] in ("citation", "references", "packages", "__init__"):
+    if not parts or parts[0] in ("citation", "references", "packages", "palette", "__init__"):
         return "core"
     if parts[0] == "cli":
         return "cli"

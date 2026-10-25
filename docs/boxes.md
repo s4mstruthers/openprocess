@@ -7,7 +7,7 @@ How to write your own: [workflows.md](workflows.md#writing-a-box); what a box *i
 
 [Input](#input) · [Filter](#filter) · [Discover](#discover) · [Check](#check) · [Measure](#measure) · [Compare](#compare) · [Output](#output) · [Science](#science) · [Predict](#predict) · [Coloured nets](#coloured-nets) · [Sweep](#sweep)
 
-56 boxes.
+58 boxes.
 
 ## Input
 
@@ -66,10 +66,12 @@ How to write your own: [workflows.md](workflows.md#writing-a-box); what a box *i
 
 | Box | Takes | Gives | Settings | Needs |
 |---|---|---|---|---|
-| **[Time between](../openprocess/flow/boxes/measure.py#L40)**<br/>Throughput: per case, the time from the first *start* to the first *end* after it, summarised (cases, mean, median, 90th percentile, longest), for all cases… | log: Log | Table | `start` = 'Record Invoice Receipt', `end` = 'Clear Invoice', `by` = '', `unit` ∈ {days, hours} | – |
-| **[Order rule](../openprocess/flow/boxes/measure.py#L83)**<br/>Does *first* happen before *then*? Every case falls in one row: *first* before any *then* (and whether *then* follows at all), *then* first, only one of them… | log: Log | cases: Log, table: Table | `first` = 'Remove Payment Block', `then` = 'Record Goods Receipt', `value` = 'Cumulative net worth (EUR)' | – |
-| **[Segregation of duties](../openprocess/flow/boxes/measure.py#L127)**<br/>Four eyes: the cases where the same person (the event attribute *by*) did both *first* and *second*, per person, with the cases' total value, most value firs… | log: Log | Table | `first` = 'Record Invoice Receipt', `second` = 'Clear Invoice', `by` = 'User', `value` = 'Cumulative net worth (EUR)' | – |
-| **[Compliance by attribute](../openprocess/flow/boxes/measure.py#L158)**<br/>For every value of a case attribute (each vendor, say): how many cases, the share that fit the model (replay with no missing or remaining tokens), and their… | model: Petri net, log: Log | Table | `attribute` = 'Vendor', `value` = 'Cumulative net worth (EUR)', `colour` = 'Item Type' | – |
+| **[Time between](../openprocess/flow/boxes/measure.py#L43)**<br/>Throughput: per case, the time from the first *start* to the first *end* after it, summarised (cases, mean, median, 90th percentile, longest), for all cases… | log: Log | Table | `start` = 'Record Invoice Receipt', `end` = 'Clear Invoice', `by` = '', `unit` ∈ {days, hours} | – |
+| **[Order rule](../openprocess/flow/boxes/measure.py#L86)**<br/>Does *first* happen before *then*? Every case falls in one row: *first* before any *then* (and whether *then* follows at all), *then* first, only one of them… | log: Log | cases: Log, table: Table | `first` = 'Remove Payment Block', `then` = 'Record Goods Receipt', `value` = 'Cumulative net worth (EUR)' | – |
+| **[Segregation of duties](../openprocess/flow/boxes/measure.py#L130)**<br/>Four eyes: the cases where the same person (the event attribute *by*) did both *first* and *second*, per person, with the cases' total value, most value firs… | log: Log | Table | `first` = 'Record Invoice Receipt', `second` = 'Clear Invoice', `by` = 'User', `value` = 'Cumulative net worth (EUR)' | – |
+| **[Compliance by attribute](../openprocess/flow/boxes/measure.py#L161)**<br/>For every value of a case attribute (each vendor, say): how many cases, the share that fit the model (replay with no missing or remaining tokens), and their… | model: Petri net, log: Log | Table | `attribute` = 'Vendor', `value` = 'Cumulative net worth (EUR)', `colour` = 'Item Type' | – |
+| **[Dotted chart](../openprocess/flow/boxes/measure.py#L198)**<br/>Every event as a dot (Song & van der Aalst, 2007): *x* says when, the row what it belongs to, the colour one more attribute; the same dots as the dotted char… | log: Log | Figure | `x` ∈ {Actual time, Time since case start, Relative to case duration (%), Logical: order in log, Logical: position in case}, `rows` = 'Case', `colour` = 'Activity', `sort` ∈ {First event, Last event, Duration, Number of events, Name}, `unit` ∈ {Auto, Seconds, Minutes, Hours, Days, Weeks} | – |
+| **[Who does what](../openprocess/flow/boxes/measure.py#L236)**<br/>How often each activity is done by each value of the event attribute *by* (each resource, say): one row per activity, one column per value, most frequent fir… | log: Log | Table | `by` = 'org:resource' | – |
 
 ## Compare
 
