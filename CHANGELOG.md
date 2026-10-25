@@ -34,6 +34,9 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
   a `.cpnflow` outside the open folder used to look for its log in the open
   folder and fail; it now reads it from beside the workflow, as
   `openprocess run` does.
+- **Terminating, in a net's behavioural properties.** The card now says
+  whether every run of the net ends: no cycle in its full reachability
+  graph (an unbounded net never terminates). Thanks to kai for this one.
 
 ## 0.12.0
 
