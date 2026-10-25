@@ -398,17 +398,10 @@ def result_widget(value, page=None, node=None) -> QWidget:
         if value.note:
             add(label(value.note, "muted", wrap=True))
     elif isinstance(value, Figure):
-        shown = False
+        shown, svg = False, None
         if value.svg:
             try:
-                from PySide6.QtSvgWidgets import QSvgWidget
-                svg = QSvgWidget()
-                svg.load(value.svg.encode("utf-8"))
-                svg.setMinimumHeight(260)
-                svg.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-                size = svg.renderer().defaultSize()
-                if size.width() > 0:
-                    svg.setMaximumHeight(int(min(600, max(260, size.height() * 1.4))))
+                svg = SvgFigure(value.svg)
                 add(svg)
                 shown = True
             except ImportError:
@@ -425,8 +418,11 @@ def result_widget(value, page=None, node=None) -> QWidget:
             add(label("The figure has no SVG or PNG form.", "muted"))
         if value.caption:
             add(label(value.caption, "muted", wrap=True))
+        buttons = [button("Open larger", lambda: open_figure(value, svg))] if value.svg and shown else []
         if page is not None:
-            add(hbox(button("Save as SVG…", lambda: page.save_figure(value)), None))
+            buttons.append(button("Save as SVG…", lambda: page.save_figure(value)))
+        if buttons:
+            add(hbox(*buttons, None))
     elif isinstance(value, Text):
         text = QPlainTextEdit(value.text)
         text.setReadOnly(True)
@@ -1047,3 +1043,75 @@ def status_text(result: Result | None) -> tuple[str, str]:
     if result.status == "blocked":
         return result.message or "Not allowed to run yet", "warning"
     return result.message or "Waiting", "muted"
+
+
+class SvgFigure(QWidget):
+    """An SVG figure drawn at the width it is given and in its own
+    proportions, never stretched: text stays readable and nothing is cut
+    off. Click it to see it at full size."""
+
+    def __init__(self, svg: str, parent=None) -> None:
+        from PySide6.QtSvg import QSvgRenderer
+        super().__init__(parent)
+        self.renderer = QSvgRenderer(svg.encode("utf-8"), self)
+        size = self.renderer.defaultSize()
+        self.ratio = size.height() / size.width() if size.width() > 0 else 0.6
+        self.svg = svg
+        policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        policy.setHeightForWidth(True)
+        self.setSizePolicy(policy)
+        self.setMinimumWidth(200)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip("Click to see the figure at full size")
+
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def heightForWidth(self, width: int) -> int:
+        return max(1, round(width * self.ratio))
+
+    def sizeHint(self):
+        from PySide6.QtCore import QSize
+        size = self.renderer.defaultSize()
+        return QSize(size.width(), size.height()) if size.width() > 0 else QSize(560, 336)
+
+    def paintEvent(self, event) -> None:
+        from PySide6.QtCore import QRectF
+        from PySide6.QtGui import QPainter
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        width = min(self.width(), round(self.height() / self.ratio)) if self.ratio else self.width()
+        height = round(width * self.ratio)
+        self.renderer.render(painter, QRectF((self.width() - width) / 2, 0, width, height))
+        painter.end()
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            open_figure(None, self)
+        super().mouseReleaseEvent(event)
+
+
+def open_figure(figure, widget: "SvgFigure | None") -> None:
+    """The figure in a window of its own, as large as the screen allows;
+    resizing the window resizes the figure, in proportion."""
+    if widget is None:
+        return
+    window = QDialog(widget.window())
+    window.setWindowTitle(getattr(figure, "name", None) or "Figure")
+    full = SvgFigure(widget.svg)
+    full.setCursor(Qt.ArrowCursor)
+    full.setToolTip("")
+    full.mouseReleaseEvent = lambda event: None
+    full.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+    layout = QVBoxLayout(window)
+    layout.setContentsMargins(12, 12, 12, 12)
+    layout.addWidget(full)
+    size = full.sizeHint()
+    width, height = size.width() + 24, size.height() + 24
+    screen = widget.screen().availableGeometry() if widget.screen() else None
+    if screen is not None:
+        scale = min(1.0, (screen.width() - 80) / width, (screen.height() - 80) / height)
+        width, height = round(width * scale), round(height * scale)
+    window.resize(width, height)
+    window.setAttribute(Qt.WA_DeleteOnClose)
+    window.show()

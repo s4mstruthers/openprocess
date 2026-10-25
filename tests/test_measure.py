@@ -86,6 +86,8 @@ def test_dotted_chart_draws_one_dot_per_event():
     # Dots on the same spot in the same colour are drawn once: u1 creates all four orders on day 0.
     by_user = dotted_chart(purchase_log(), rows="User", colour="Activity")
     assert by_user.svg.count('r="3.0"') == 13 and ">u2</text>" in by_user.svg
+    # Five activities fit the palette; the caption says how to read the chart.
+    assert "Other" not in figure.svg and "arrival rate" in figure.caption
     # Without timestamps the chart falls back to the position in the case.
     untimed = dotted_chart(EventLog.from_simple_log(parse_simple_log("[<a,b,c>^2, <a,c>]")), x="Actual time")
     assert "Event position in the case" in untimed.svg and untimed.svg.count('r="3.0"') == 8

@@ -20,7 +20,7 @@ from typing import Literal
 
 from ... import flow
 from ...mining.cases import case_value, cases
-from ...mining.dotted import SORT_MODES, X_MODES, DotSettings, Dots, svg
+from ...mining.dotted import SORT_MODES, X_MODES, DotSettings, Dots, how_to_read, svg
 from ...mining.log import EventLog
 from ...mining.petrinet import PetriNet
 from ..box import box
@@ -229,8 +229,7 @@ def dotted_chart(log: EventLog,
                   f"{dots.origin + timedelta(seconds=dots.x_max - dots.x_min):%d %b %Y %H:%M}")
     title = f"{log.name}: {rows.lower()} by {X_MODES[dots.mode].lower()}, colour by {colour.lower()}"
     return Figure("Dotted chart", svg=svg(dots, title, unit),
-                  caption=f"Dotted chart: rows {rows}, x {X_MODES[dots.mode]}, colour {colour}, "
-                          f"sorted by {sort.lower()}.")
+                  caption=f"{how_to_read(settings, dots.mode)} Colour: {colour}.")
 
 
 @box(name="Who does what", group="Measure")

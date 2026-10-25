@@ -6,6 +6,18 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.12.2
+
+- **Figures keep their shape.** A figure in a box's Result was stretched to
+  fill the panel, so its text was squashed and its axis cut off. It is now
+  drawn in its own proportions at the panel's width. Click it, or *Open
+  larger*, to see it in a window of its own that you can resize.
+- **Dotted charts that explain themselves.** Under the chart, a line says
+  what its rows and x axis mean and which patterns to look for (arrival
+  rate, batches, waiting). The grey "Other" in the legend now names the
+  activities it holds when there are three or fewer, so none is hidden. The
+  chart is wider than it is tall, so it fits beside the canvas.
+
 ## 0.12.1
 
 - **Opening a large file no longer looks like a crash.** While a log is read,
