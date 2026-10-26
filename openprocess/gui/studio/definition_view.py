@@ -265,10 +265,18 @@ def guide_markdown(name: str) -> str:
         return text.split("-->", 1)[-1].lstrip()
     from pathlib import Path
     if name == "mcp":
-        from ...mcp import __file__ as mcp
-        return (Path(mcp).parent / "connecting.md").read_text(encoding="utf-8")
-    from ...learn import __file__ as learn
-    return (Path(learn).parent / f"{name}.md").read_text(encoding="utf-8")
+        from ...mcp import __file__ as here
+        path, online = Path(here).parent / "connecting.md", "openprocess/mcp/connecting.md"
+    else:
+        from ...learn import __file__ as here
+        path, online = Path(here).parent / f"{name}.md", f"openprocess/learn/{name}.md"
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        # A build that lacks the file (0.13.0 shipped without the connection guide):
+        # say where to read it rather than fail.
+        return (f"# {GUIDES.get(name, name)}\n\nThis guide is not included in this copy of the app. "
+                f"Read it online: <https://github.com/s4mstruthers/openprocess/blob/main/{online}>\n")
 
 
 def show_guide(name: str, parent: QWidget | None = None) -> QDialog:

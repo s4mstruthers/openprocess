@@ -57,7 +57,11 @@ class LogDocument:
     @property
     def summary(self) -> LogSummary:
         if self._summary is None:
-            self._summary = summarise(self.log, self.classifier)
+            # A large log read by a worker process comes with its summary worked out
+            # there (by the same summarise(), for its default classifier).
+            from ...flow.loading import summary_key
+            ready = (getattr(self.log, "precomputed_summaries", None) or {}).get(summary_key(self.classifier))
+            self._summary = ready if ready is not None else summarise(self.log, self.classifier)
         return self._summary
 
     @property

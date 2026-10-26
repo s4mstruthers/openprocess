@@ -2770,7 +2770,7 @@ def test_a_slow_file_shows_the_loading_page_and_a_fast_one_does_not(app, tmp_pat
             if progress is not None:
                 progress(n, share)
         return real(source, progress=report, columnar=columnar)
-    monkeypatch.setattr(studio_app, "read_xes", slow_read)
+    monkeypatch.setattr(xes, "read_xes", slow_read)          # flow.loading reads through it
     window = StudioWindow()
     window.show()
     window.open_path(str(path))

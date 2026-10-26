@@ -303,6 +303,35 @@ with the values of every variant; nodes after a collector run once. Every
 `context`, so `Table.from_scores` (*Compare*, *Sweep table*) turns them into
 columns.
 
+### 5.7 Parallel work
+
+`parallel_map(function, items, shared=None, setup=None, workers=None,
+progress=None, cost=None)`, called inside a box, evaluates `function` over
+`items` on worker processes and returns, in the items' order,
+
+    [function(context, item) for item in items]     where context = setup(shared) if setup else shared
+
+(`function(item)` when neither is given). **Equivalence**: when `function`
+satisfies the box contract per item -- each value depends only on the item
+and `shared` (§9.1), and random draws use `item_seed(seed, index)`, a fixed
+function of the seed and the item's index -- the returned list is equal to
+the loop's, for every number of workers and every order of completion. The
+explanation is equivalent too: the entries each item records with `note`,
+`steps` and `show` (§6) are appended to the box's explanation in item order.
+A value therefore has the same fingerprint (§7) whether it was computed in
+parallel or not, and parallelism never changes what `--check` compares.
+
+Functions are passed to workers by reference (module, qualified name, file);
+a function without one (a lambda, a nested function, `__main__`) is
+evaluated by the loop in the calling process, with the same result. An item
+that raises makes the call raise `ParallelError` (its index, the message, the
+worker's traceback). The default number of workers is the cores less one, at
+most 8, overridden by `OPENPROCESS_WORKERS`; `workers=1` is the loop.
+When worker processes cannot be started or die (not an item raising: the
+processes themselves), the call is evaluated by the loop, and later calls in
+that process go straight to it; `openprocess.parallel.status()` reports this.
+Either way the result is the loop's, so availability affects time only.
+
 ## 6 Explanations
 
 While a box runs, `flow.note(text)`, `flow.show(value, label)` and
@@ -488,6 +517,10 @@ file with no recorded results also exits 1), `--save` (record the results),
   return type, never stops the run or another branch.
 * `--check` passes only when every recorded result was recomputed and
   matched.
+* Parallel work gives the result of the loop: `parallel_map` (§5.7), and the
+  engine's alignments and token replay, which use it on large logs, return
+  values equal to the sequential computation, field by field, for any number
+  of workers.
 
 **Not promised:**
 
@@ -506,7 +539,7 @@ freeze is planned to cover them, the `.cpnflow` format and the command line
 
 `box`, `Box`, `BoxError`, `BoxSpec`, `Port`, `Setting` (§3);
 `Workflow`, `WorkflowError`, `Node`, `Edge`, `Group`, `workflow`, `to_python` (§4);
-`Runner`, `Run`, `Result`, `Cache`, `Sweep` (§5);
+`Runner`, `Run`, `Result`, `Cache`, `Sweep`, `parallel_map`, `item_seed`, `ParallelError` (§5);
 `Explanation`, `current`, `note`, `show`, `steps` (§6);
 `save`, `load`, `check`, `differences` (§8);
 `Library`, `library_for`, `standard_library` (§10);

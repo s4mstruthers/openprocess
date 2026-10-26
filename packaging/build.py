@@ -121,6 +121,8 @@ def smoke_test() -> None:
                             text=True, timeout=300, env=environment)
     if result.returncode != 0 or not result.stdout.rstrip().endswith("ok"):
         fail("Self-test failed", f"exit {result.returncode}\n{result.stdout}\n{result.stderr}")
+    for line in result.stdout.splitlines()[:-1]:
+        print(f"     {line}")                  # what the self-test checked, in the build's log
     print("   window and state space job: ok")
 
     # b) The worker on its own, with its messages visible if something breaks.
@@ -137,31 +139,12 @@ def smoke_test() -> None:
     # c) The MCP server, as an AI assistant starts it (Help ▸ Connect an AI
     #    Assistant writes exactly this command): `OpenProcess --mcp` on pipes,
     #    the initialize handshake, and the list of tools.
-    import json
-    messages = [
-        {"jsonrpc": "2.0", "id": 1, "method": "initialize",
-         "params": {"protocolVersion": "2025-06-18", "capabilities": {},
-                    "clientInfo": {"name": "build-smoke-test", "version": "1"}}},
-        {"jsonrpc": "2.0", "method": "notifications/initialized"},
-        {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
-    ]
-    result = subprocess.run([str(program), "--mcp"], input="".join(json.dumps(m) + "\n" for m in messages),
-                            capture_output=True, text=True, encoding="utf-8", timeout=180, env=environment)
-    answers = {}
-    for line in result.stdout.splitlines():
-        try:
-            message = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(message, dict) and "id" in message:
-            answers[message["id"]] = message
-    info = (answers.get(1, {}).get("result") or {}).get("serverInfo") or {}
-    tools = (answers.get(2, {}).get("result") or {}).get("tools") or []
-    if info.get("name") != "OpenProcess" or len(tools) < 25:
-        fail("The MCP server did not answer as an assistant expects",
-             f"exit {result.returncode}\nserverInfo {info}, {len(tools)} tools\n"
-             f"{result.stdout[-2000:]}\n{result.stderr[-3000:]}")
-    print(f"   MCP server: {info.get('name')} {info.get('version')}, {len(tools)} tools")
+    sys.path.insert(0, str(ROOT))              # the same handshake as Help ▸ Connect's "Test the connector"
+    from openprocess.mcp.install import handshake
+    answer = handshake([str(program), "--mcp"], timeout=180, environment=environment)
+    if not answer["ok"] or answer["name"] != "OpenProcess" or answer["tools"] < 25:
+        fail("The MCP server did not answer as an assistant expects", str(answer))
+    print(f"   MCP server: {answer['name']} {answer['version']}, {answer['tools']} tools")
 
 
 # ---------------------------------------------------------------------------

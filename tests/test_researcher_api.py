@@ -123,3 +123,34 @@ def test_the_framework_imports_nothing_heavy():
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=ROOT, timeout=120)
     assert done.returncode == 0, done.stderr
     assert done.stdout.strip() == "[]"
+
+
+def test_the_parallel_example_in_the_guide_runs_as_written(tmp_path):
+    """docs/workflows.md, *Parallel work*: the box file from the guide, run on
+    several processes and as a loop, gives the same table and the same notes."""
+    import re
+    from openprocess.flow import Runner, Workflow, library_for
+    from openprocess.flow.boxes.input import typed_log
+    guide = (ROOT / "docs" / "workflows.md").read_text(encoding="utf-8")
+    section = guide.split("### Parallel work", 1)[1]
+    code = re.search(r"```python\n(.*?)```", section, re.S).group(1)
+    (tmp_path / "boxes").mkdir()
+    (tmp_path / "boxes" / "variant_fit.py").write_text(code, encoding="utf-8")
+    library = library_for(tmp_path)
+    spec = next(s for s in library if s.name == "Variant fit")
+    outcomes = []
+    for workers in ("1", "3"):
+        import os
+        os.environ["OPENPROCESS_WORKERS"] = workers
+        try:
+            wf = Workflow("guide", library)
+            log = wf.add(typed_log, {"text": "[<a,b,c,d>^3, <a,c,b,d>^2, <a,e,d>, <a,b,d>, <a,c,d,e>]"})
+            model = wf.add("alpha_miner")
+            fit = wf.add(spec.id)
+            wf.connect(log, model); wf.connect(model, fit, "model"); wf.connect(log, fit, "log")
+            run = Runner(library, folder=tmp_path).run(wf)
+            assert run.status(fit) == "done", run.result(fit).error
+            outcomes.append((run.value(fit).rows, run.result(fit).explanation.notes))
+        finally:
+            del os.environ["OPENPROCESS_WORKERS"]
+    assert outcomes[0] == outcomes[1] and len(outcomes[0][0]) == 5

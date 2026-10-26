@@ -9,6 +9,13 @@ started in three ways:
     Started by the app itself to compute a state space in a separate process
     (see :mod:`openprocess.analysis.state_space_process`).  A frozen app has no
     separate Python to run, so it runs itself with this flag.  No window opens.
+``OpenProcess --openprocess-log-worker LOG OUT``
+    Started by the app to read a large event log in a process of its own
+    (see :mod:`openprocess.flow.loading`), so the window stays responsive.
+``OpenProcess --openprocess-parallel-worker JOB OUT``
+    Started by the app (or a workflow in it) to compute items of a parallel
+    map: alignments and token replay variant by variant, or a box's own
+    ``flow.parallel_map`` (see :mod:`openprocess.parallel`).
 ``OpenProcess --mcp``
     Started by an AI assistant (Claude Desktop, Claude Code, Cursor…) as
     OpenProcess's MCP server, on stdin and stdout; no window opens.  *Help ▸
@@ -167,6 +174,15 @@ def self_test(model_path: str | None = None) -> int:
         return 1
     print(f"install: the standard library is there ({checked} modules import)", flush=True)
 
+    # The guides the Help menu opens are files read by path: each must be in the app
+    # (0.13.0 shipped without the connection guide, and Help ▸ Connect an AI Assistant failed).
+    from openprocess.gui.studio.definition_view import GUIDES, guide_markdown
+    for guide in GUIDES:
+        if "not included in this copy" in guide_markdown(guide):
+            print(f"guides: {guide} is missing from the app", flush=True)
+            return 1
+    print(f"guides: {len(GUIDES)} guides are in the app", flush=True)
+
     # The MCP server (Help ▸ Connect an AI Assistant): the SDK and every tool
     # must be in the app; build.py then starts `OpenProcess --mcp` and does
     # the handshake an assistant does.
@@ -182,6 +198,11 @@ def self_test(model_path: str | None = None) -> int:
         print(f"mcp: only {len(tools)} tools in the app", flush=True)
         return 1
     print(f"mcp: the connector loads, {len(tools)} tools", flush=True)
+
+    failed_check = parallel_self_test()
+    if failed_check:
+        print(failed_check, flush=True)
+        return 1
 
     if model_path:
         import time
@@ -207,6 +228,67 @@ def self_test(model_path: str | None = None) -> int:
     return 0
 
 
+def parallel_self_test() -> str | None:
+    """Parallel work and background reads start copies of the app as workers
+    (``--openprocess-parallel-worker``, ``--openprocess-log-worker``).  Run
+    each with workers on, compare with the plain loop, and require that the
+    workers really ran: the app falls back to the loop when they cannot, which
+    keeps results right but would hide a build whose workers are broken.
+    Returns what failed, or None."""
+    import tempfile
+    from pathlib import Path
+
+    from openprocess import parallel
+    from openprocess.flow import loading, record
+    from openprocess.mining import EventLog, parse_simple_log
+    from openprocess.mining import parallel as variants
+    from openprocess.mining.conformance.alignments import align_log
+    from openprocess.mining.conformance.token_replay import token_replay
+    from openprocess.mining.discovery.inductive import inductive_miner
+    from openprocess.mining.xes import read_xes, write_xes
+
+    # The core: a function from the app, by name, on two workers.
+    expected = [parallel.item_seed(7, i) for i in range(40)]
+    got = parallel.map_items(parallel.item_seed, range(40), shared=7, workers=2)
+    if parallel.unavailable is not None:
+        return f"parallel: the workers do not run in the app: {parallel.unavailable}"
+    if got != expected:
+        return "parallel: the workers gave a different result from the loop"
+
+    # Alignments and replay, variant by variant on workers, against the loop.
+    simple = parse_simple_log("[<a,b,c,d>^3, <a,c,b,d>^2, <a,e,d>, <a,b,d>, <a,d,c>, <a,b,c,e,d>, "
+                              "<a,c,e,b,d>, <b,a,c,d>, <a,b,c,d,d>, <a,e,e,d>, <a,x,d>, <a,c,d>]")
+    net = inductive_miner(parse_simple_log("[<a,b,c,d>^3, <a,c,b,d>^2, <a,e,d>]")).net
+    thresholds = variants.THRESHOLDS
+    variants.THRESHOLDS = {"align": (2, 0), "replay": (2, 0)}       # this small log on workers too
+    try:
+        aligned = (align_log(net, simple, workers=1), align_log(net, simple, workers=2))
+        replayed = (token_replay(net, simple, workers=1), token_replay(net, simple, workers=2))
+    finally:
+        variants.THRESHOLDS = thresholds
+    if parallel.unavailable is not None:
+        return f"parallel: alignments and replay could not use workers: {parallel.unavailable}"
+    if aligned[0].alignments != aligned[1].alignments or aligned[0].log_fitness != aligned[1].log_fitness:
+        return "parallel: alignments on workers differ from the loop"
+    if replayed[0].traces != replayed[1].traces or replayed[0].fitness != replayed[1].fitness:
+        return "parallel: token replay on workers differs from the loop"
+    print(f"parallel: {parallel.workers()} workers here; the map, alignments and replay on 2 workers "
+          "match the loop", flush=True)
+
+    # A large log is read in a worker: the same log, event for event.
+    with tempfile.TemporaryDirectory(prefix="openprocess-self-test-") as folder:
+        path = Path(folder) / "orders.xes"
+        write_xes(EventLog.from_simple_log(simple, "orders"), path)
+        try:
+            in_worker = loading._read_in_process(path, None)
+        except Exception as error:  # noqa: BLE001 - whatever stops the worker
+            return f"loading: the log worker does not run in the app: {type(error).__name__}: {error}"
+        if record.fingerprint(in_worker) != record.fingerprint(read_xes(path)):
+            return "loading: the log worker read a different log"
+    print("loading: the log worker reads the same log", flush=True)
+    return None
+
+
 def main() -> int:
     # Decide what this run is before importing Qt: a state space worker must
     # stay light and must never open a window.
@@ -215,6 +297,14 @@ def main() -> int:
 
     if len(sys.argv) > 1 and sys.argv[1] == WORKER_FLAG:
         return run_worker(sys.argv[2:5])
+    from openprocess.flow.loading import WORKER_FLAG as LOG_WORKER_FLAG, run_worker as run_log_worker
+    if len(sys.argv) > 1 and sys.argv[1] == LOG_WORKER_FLAG:
+        attach_stdio()                          # it reports progress to the app on its pipes
+        return run_log_worker(sys.argv[2:4])    # a large log read for the app, in a process of its own
+    from openprocess.parallel import WORKER_FLAG as PARALLEL_FLAG, run_worker as run_parallel
+    if len(sys.argv) > 1 and sys.argv[1] == PARALLEL_FLAG:
+        attach_stdio()                          # it takes batches and reports on its pipes
+        return run_parallel(sys.argv[2:4])      # items of a parallel map (alignments, replay, a box's own)
     if len(sys.argv) > 1 and sys.argv[1] == PIP_FLAG:
         return run_pip(sys.argv[2:])            # Install… from Connections, in a copy of the app
     activate()                                  # packages installed that way, on the import path

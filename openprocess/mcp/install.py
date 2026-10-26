@@ -125,39 +125,81 @@ def check_server(timeout: float = 60.0) -> dict:
 
     The same check the release build runs on every system, so a connector
     that cannot start is noticed before an assistant tries it."""
+    return handshake(server_command(), timeout)
+
+
+def handshake(command: list[str], timeout: float = 60.0, environment: dict | None = None) -> dict:
+    """Start ``command`` as an MCP server on pipes and talk to it as a client
+    does: ``initialize``, wait for the answer, ``notifications/initialized``,
+    ``tools/list``, wait for the answer, then close its input.  (Writing all of
+    it at once and closing the input lets a server see the end of its input
+    and stop before it answers, on a busy machine.)"""
     import json as _json
-    command = server_command()
-    environment = dict(os.environ, QT_QPA_PLATFORM="offscreen")
+    import threading
+    import time
+    environment = dict(environment or os.environ, QT_QPA_PLATFORM="offscreen")
     try:
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, env=environment)
     except OSError as error:
         return {"ok": False, "error": f"could not start {command[0]}: {error}"}
-    messages = [
-        {"jsonrpc": "2.0", "id": 1, "method": "initialize",
-         "params": {"protocolVersion": "2025-06-18", "capabilities": {},
-                    "clientInfo": {"name": "openprocess-check", "version": "1"}}},
-        {"jsonrpc": "2.0", "method": "notifications/initialized"},
-        {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
-    ]
-    payload = "".join(_json.dumps(m) + "\n" for m in messages).encode("utf-8")
+    answers: dict = {}
+    errors: list[str] = []
+    arrived = threading.Condition()
+
+    def read_answers() -> None:
+        for raw in process.stdout:
+            try:
+                message = _json.loads(raw.decode("utf-8", "replace"))
+            except ValueError:
+                continue
+            if isinstance(message, dict) and "id" in message:
+                with arrived:
+                    answers[message["id"]] = message
+                    arrived.notify_all()
+        with arrived:
+            answers["closed"] = True
+            arrived.notify_all()
+
+    def read_errors() -> None:
+        for raw in process.stderr:
+            errors.append(raw.decode("utf-8", "replace"))
+            del errors[:-20]
+    for target in (read_answers, read_errors):
+        threading.Thread(target=target, daemon=True).start()
+    deadline = time.monotonic() + timeout
+
+    def send(message: dict) -> None:
+        try:
+            process.stdin.write((_json.dumps(message) + "\n").encode("utf-8"))
+            process.stdin.flush()
+        except OSError:
+            pass
+
+    def wait_for(key) -> None:
+        with arrived:
+            arrived.wait_for(lambda: key in answers or "closed" in answers,
+                             timeout=max(0.0, deadline - time.monotonic()))
+    send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+          "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                     "clientInfo": {"name": "openprocess-check", "version": "1"}}})
+    wait_for(1)
+    send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+    send({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
+    wait_for(2)
     try:
-        out, err = process.communicate(payload, timeout=timeout)
+        process.stdin.close()
+    except OSError:
+        pass
+    try:
+        process.wait(timeout=10)
     except subprocess.TimeoutExpired:
         process.kill()
-        out, err = process.communicate()
-    answers = {}
-    for line in out.decode("utf-8", "replace").splitlines():
-        try:
-            message = _json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(message, dict) and "id" in message:
-            answers[message["id"]] = message
+        process.wait()
     info = (answers.get(1, {}).get("result") or {}).get("serverInfo") or {}
     tools = (answers.get(2, {}).get("result") or {}).get("tools")
     if not info or tools is None:
-        tail = err.decode("utf-8", "replace").strip().splitlines()[-6:]
+        tail = "".join(errors).strip().splitlines()[-6:]
         return {"ok": False, "error": "the server did not answer the handshake"
                 + (": " + " / ".join(tail) if tail else "")}
     return {"ok": True, "name": info.get("name"), "version": info.get("version"), "tools": len(tools)}
@@ -228,4 +270,4 @@ def status(include_claude_code: bool = True) -> dict:
 
 
 __all__ = ["CLIENTS", "MCP_FLAG", "NAME", "check_server", "claude_cli", "claude_code_command", "config_path",
-           "install", "server_available", "server_command", "server_entry", "snippet", "status"]
+           "handshake", "install", "server_available", "server_command", "server_entry", "snippet", "status"]

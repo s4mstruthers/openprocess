@@ -413,10 +413,18 @@ def replay_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
     return result
 
 
-def token_replay(net: PetriNet, log: SimpleLog) -> ReplayResult:
-    """Replay every variant once and weight the results by frequency."""
+def token_replay(net: PetriNet, log: SimpleLog, workers: int | None = None) -> ReplayResult:
+    """Replay every variant once and weight the results by frequency.
+
+    A large log is replayed on several processes (:mod:`openprocess.mining.parallel`):
+    each variant's replay depends only on the net and its trace, so the result
+    is the same as replaying them one after the other.  ``workers=1`` does that."""
+    from .. import parallel
+    variants = sorted(log.items(), key=lambda item: (-item[1], item[0]))
+    count = parallel.workers() if workers is None else workers
+    if parallel.worth_it(variants, count, "replay"):
+        return ReplayResult(net, parallel.map_variants("replay", net, variants, count=count))
     paths: dict = {}
     searcher = _SilentSearch(net)
-    traces = [replay_trace(net, trace, count, paths, searcher)
-              for trace, count in sorted(log.items(), key=lambda item: (-item[1], item[0]))]
+    traces = [replay_trace(net, trace, count, paths, searcher) for trace, count in variants]
     return ReplayResult(net, traces)

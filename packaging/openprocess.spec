@@ -93,7 +93,10 @@ analysis = Analysis(
     # listed so they are never missed.  certifi brings its certificate file
     # (PyInstaller's hook), which the update check needs to reach GitHub: the
     # bundled Python cannot use the system's.
-    hiddenimports=["openprocess.analysis.state_space_process", "certifi", "openprocess.packages",
+    hiddenimports=["openprocess.analysis.state_space_process", "openprocess.flow.loading",
+                   "openprocess.parallel", "openprocess.mining.parallel", "openprocess.flow.parallel",
+                   "certifi",
+                   "openprocess.packages",
                    "openprocess.mcp", "openprocess.mcp.server", "openprocess.mcp.api", "openprocess.mcp.install"]
                   + collect_submodules("openprocess.flow.boxes") + PIP_HIDDEN + MCP_HIDDEN + STDLIB,
     # Not needed by the app.  PM4Py is an optional extra (AGPL-3.0) and is
