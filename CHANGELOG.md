@@ -8,6 +8,14 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
 ## Unreleased
 
+- **Dotted chart: overlapping dots no longer fade into slivers, and Dot
+  size always does something.** Every dot wore a ring in the background
+  colour to set it apart from its neighbours, so where events crowd (a
+  resource's events by time since the case started, say) each dot erased
+  most of the one before it and the row looked washed out. The ring is now
+  only on the selected case's dots. And on a chart with thousands of rows,
+  where dots are kept small enough for the rows, the Dot size slider did
+  nothing; it now scales that size (4 is the size as before).
 - **Closing a workflow from the sidebar no longer shows an error.** Clicking
   a row's ✕ removed the row and then handed the same click to the row that
   was gone, which raised "'NoneType' object has no attribute 'data'". The

@@ -403,7 +403,14 @@ class DottedChart(QWidget):
         self._paint_axes(painter, rect, t, s.grid_lines)
 
         row_h = rect.height() / max(self.vy1 - self.vy0, 1e-9)
-        radius = max(1.6, min(s.dot_size, row_h * 0.45 if row_h < 2.2 * s.dot_size else s.dot_size))
+        # The dot size the rows allow (4 px when they are tall, down to 1.6 px
+        # when a row is a hairline), scaled by the Dot size setting (4 is 1×):
+        # the slider always does something, and a dense chart stays readable.
+        fitting = max(1.6, min(4.0, row_h * 0.45))
+        radius = max(1.0, fitting * s.dot_size / 4.0)
+        # A ring in the surface colour sets a dot apart from its neighbours;
+        # drawn on every dot it erases overlapping ones into slivers, so it is
+        # kept for the selected case alone, which sits on top.
         ring = 1.2 if radius >= 3.5 else 0.0
         selected = self.selected_case
         painter.save()
@@ -424,7 +431,7 @@ class DottedChart(QWidget):
         for i in on_top:
             point = self.to_screen(d.xs[i], d.rows[i], rect)
             is_dim = selected >= 0 and d.case[i] != selected
-            painter.setPen(ring_pen)
+            painter.setPen(ring_pen if selected >= 0 and not is_dim else Qt.NoPen)
             painter.setBrush(faded if is_dim else colours[d.colour[i]])
             _draw_shape(painter, SHAPES[d.shape[i]] if d.shape[i] < len(SHAPES) else "ring",
                         point, radius)
