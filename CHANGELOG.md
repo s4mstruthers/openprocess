@@ -6,6 +6,14 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.13.2
+
+- **Claude Desktop can open its results in OpenProcess.** When Claude
+  Desktop started the connector, it looked for the app in the wrong place on
+  a Mac, so it said OpenProcess was not running even with the window open,
+  and could not open the models, workflows and exercises it made. It now
+  finds the open app. Claude Code, notebooks and scripts were not affected.
+
 ## 0.13.1
 
 - **Connect an AI assistant with one click.** *Help ▸ Connect an AI
