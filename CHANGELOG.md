@@ -21,6 +21,24 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
   that is missing keeps the fingerprint recorded when it was read.
   `openprocess run FILE --save` keeps the record the same way and says so
   when a box failed.
+- **Dotted chart: overlapping dots no longer fade into slivers, and Dot
+  size always does something.** Every dot wore a ring in the background
+  colour to set it apart from its neighbours, so where events crowd (a
+  resource's events by time since the case started, say) each dot erased
+  most of the one before it and the row looked washed out. The ring is now
+  only on the selected case's dots. And on a chart with thousands of rows,
+  where dots are kept small enough for the rows, the Dot size slider did
+  nothing; it now scales that size (4 is the size as before).
+- **Closing a workflow from the sidebar no longer shows an error.** Clicking
+  a row's ✕ removed the row and then handed the same click to the row that
+  was gone, which raised "'NoneType' object has no attribute 'data'". The
+  click is now ignored once the row is gone.
+- **Records made before 0.14.0 check again.** Two results changed in text
+  but not in content in 0.14.0, so `openprocess run --check` reported them
+  as differing: the dotted chart figure (its dots were written in another
+  order) and the process map (it carried its cached means and medians). The
+  figure is written as before, and a result's private working values are
+  no longer part of its fingerprint.
 
 ## 0.14.0
 

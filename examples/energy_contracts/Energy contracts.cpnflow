@@ -408,6 +408,35 @@
         1380
       ],
       "title": "Application to rejection"
+    },
+    {
+      "id": "n39",
+      "box": "openprocess.flow.boxes.filter.filter_activities",
+      "settings": {
+        "activities": "Approve contract, Reject contract",
+        "mode": "keep events"
+      },
+      "position": [
+        260,
+        780
+      ],
+      "title": "Only the decisions"
+    },
+    {
+      "id": "n40",
+      "box": "openprocess.flow.boxes.measure.dotted_chart",
+      "settings": {
+        "x": "Actual time",
+        "rows": "Resource",
+        "colour": "Activity",
+        "sort": "First event",
+        "unit": "Auto"
+      },
+      "position": [
+        260,
+        910
+      ],
+      "title": "Managers' decisions over time"
     }
   ],
   "connections": [
@@ -680,6 +709,18 @@
       "output": "out",
       "to": "n37",
       "input": "log"
+    },
+    {
+      "from": "n1",
+      "output": "out",
+      "to": "n39",
+      "input": "log"
+    },
+    {
+      "from": "n39",
+      "output": "out",
+      "to": "n40",
+      "input": "log"
     }
   ],
   "groups": [
@@ -692,7 +733,9 @@
         "n4",
         "n5",
         "n6",
-        "n7"
+        "n7",
+        "n39",
+        "n40"
       ],
       "position": [
         260,
@@ -768,31 +811,54 @@
   ],
   "record": {
     "versions": {
-      "openprocess": "0.12.1",
-      "python": "3.12.14"
+      "openprocess": "0.13.1",
+      "python": "3.12.10",
+      "numpy": "2.5.4",
+      "pandas": "3.0.6",
+      "scipy": "1.18.1",
+      "matplotlib": "3.11.2"
     },
     "environment": {
       "platform": "macOS-26.6.2-arm64-arm-64bit",
-      "python": "3.12.14",
+      "python": "3.12.10",
       "packages": {
-        "colorama": "0.4.6",
-        "cpnpy": "0.1.0",
-        "exceptiongroup": "1.3.1",
-        "iniconfig": "2.3.0",
+        "annotated-types": "0.8.0",
+        "anyio": "4.15.1",
+        "attrs": "26.1.0",
+        "click": "8.5.0",
+        "contourpy": "1.4.0",
+        "cryptography": "50.0.2",
+        "cycler": "0.12.1",
+        "fonttools": "4.66.1",
+        "h11": "0.16.0",
+        "httpcore2": "2.16.0",
+        "httpx2": "2.16.0",
+        "jsonschema": "4.26.0",
+        "jsonschema-specifications": "2025.9.1",
+        "kiwisolver": "1.5.1",
+        "matplotlib": "3.11.2",
+        "mcp-types": "2.3.0",
+        "numpy": "2.5.4",
+        "opentelemetry-api": "1.45.1",
         "packaging": "26.3",
-        "pip": "26.2.1",
-        "pluggy": "1.6.0",
-        "pyflakes": "4.0.2",
-        "pygments": "2.21.0",
-        "pypdf": "6.19.0",
-        "pyside6": "6.11.2",
-        "pytest": "9.1.1",
-        "pyyaml": "6.0.3",
-        "setuptools": "84.0.0",
-        "shiboken6": "6.11.2",
-        "tomli": "2.4.1",
-        "typing_extensions": "4.16.0",
-        "wheel": "0.48.0"
+        "pandas": "3.0.6",
+        "pillow": "12.3.0",
+        "pip": "26.2.2",
+        "pluggy": "1.7.0",
+        "pydantic": "2.14.1",
+        "pydantic_core": "2.50.1",
+        "pyjwt": "2.15.1",
+        "pyparsing": "3.3.3",
+        "python-dateutil": "2.9.0.post0",
+        "python-multipart": "0.0.32",
+        "referencing": "0.37.0",
+        "rpds-py": "2026.9.1",
+        "scipy": "1.18.1",
+        "six": "1.17.0",
+        "sse-starlette": "3.6.0",
+        "starlette": "1.10.0",
+        "typing-inspection": "0.4.4",
+        "uvicorn": "0.54.0"
       }
     },
     "inputs": [
@@ -819,29 +885,31 @@
       "n12": "9651ab428396ff1b720686d4948ad1a781f49e8f2f23703ca6e604065667dbd7",
       "n13": "4dc2e3d1c969eaa33c388b09a9703855a458ef9fada496269979b9e3b101268d",
       "n14": "bc64818b7cd72f5934551e4c4110f339a88aae460a401f8d990d1ae76eca3aa8",
+      "n16": "1c26efa29bf931181cb6369a2c87b4a2303efc5e0e2bf8a0a460646da93e61ff",
+      "n17": "43ad6af1408b3142fa1b8985f29fed95c667d1c3580a06b26e03627e9c2a4843",
+      "n18": "ac1e025230fb41b69d29b9b46e057d4a69e87882fa289e2522d404b3dd18ece3",
+      "n19": "06956c5132814076ac58de222d70914e7832f07f6b0e032f01247903abd8e916",
+      "n20": "e5cb521732faf997f9d738a58b30d446705b69a8ec34c2126208dbc7cc693386",
+      "n21": "30a390367e96acecb20ccc8c552a0ac7f093fe6318f5ec62a058faf85415fc2d",
+      "n22": "e818a650665ad637bf53ecdf9bd2197c5dfe872019729de256ecd7632b0955f6",
+      "n23": "69a682b1803abf531f06435dbe3aa2badbea31ed56659c268e2d2185f8487661",
+      "n24": "318b14b30387314dcc38f50ce1f8518a83443508c330ee4fa8516fabfe18c5c3",
+      "n26": "df9394506bec353f377c432a246847ad9b2a68dffb6149e3be3b52455f370029",
+      "n27": "6d08ebd31c449f8bcb04e4eb1b800dc02218523e63a499ac92b78daa1956298d",
+      "n28": "1ac25d25d737bed9128e2a44e7f09df85bbe1cb8e2dc1bf72d0f436e0e8e1576",
+      "n29": "662d5cdaaef6a35abfe57101e3032b37273701a93402e27903db9f4836dfa0af",
+      "n30": "bf81a8a0e40013f9503c43020381471d2aaf103843f7a2194bfa8bde1b01b692",
+      "n31": "dfb3162ad6a3c29d0cbabc452896895f3f27d5b35d9b2ffe60be735c6040ca0b",
       "n33": "4ab200356692c39adff14e23409ec9ee8a6299fda223b3d9c021e72b6f459b34",
       "n34": "20c281b5f7b9a935ba14fd341247c86464a19caf3e7035b429b2d221042d1cb1",
       "n35": "08cf58259ab7da3c5b8ad762cc61f2c460182c6adec783475aaeec2925475af5",
       "n36": "b108f20b927dca66d235b799c504f9fb3076259e67b3a7a28d9101f2361d4e01",
       "n37": "071c7b6fdc98b29a0d98a963c1c5e6f3c2cff7a59f674145618e20325188900f",
-      "n16": "1c26efa29bf931181cb6369a2c87b4a2303efc5e0e2bf8a0a460646da93e61ff",
-      "n18": "ac1e025230fb41b69d29b9b46e057d4a69e87882fa289e2522d404b3dd18ece3",
-      "n20": "e5cb521732faf997f9d738a58b30d446705b69a8ec34c2126208dbc7cc693386",
-      "n22": "e818a650665ad637bf53ecdf9bd2197c5dfe872019729de256ecd7632b0955f6",
-      "n24": "318b14b30387314dcc38f50ce1f8518a83443508c330ee4fa8516fabfe18c5c3",
-      "n17": "43ad6af1408b3142fa1b8985f29fed95c667d1c3580a06b26e03627e9c2a4843",
-      "n19": "06956c5132814076ac58de222d70914e7832f07f6b0e032f01247903abd8e916",
-      "n21": "30a390367e96acecb20ccc8c552a0ac7f093fe6318f5ec62a058faf85415fc2d",
-      "n23": "69a682b1803abf531f06435dbe3aa2badbea31ed56659c268e2d2185f8487661",
-      "n26": "2e48da71986396576d29ba6522b2e1dc77cbdc952bae1f23ba2d60f977dac835",
-      "n28": "06b6284128866a474db2c68d52e7ef5f12c117c374b50188630b46eef5d593a5",
-      "n30": "5c7cbd174628aadf70809de5828575cf6600962b727f382f5e793ee3fae7ebc1",
-      "n27": "6d08ebd31c449f8bcb04e4eb1b800dc02218523e63a499ac92b78daa1956298d",
-      "n29": "662d5cdaaef6a35abfe57101e3032b37273701a93402e27903db9f4836dfa0af",
-      "n31": "dfb3162ad6a3c29d0cbabc452896895f3f27d5b35d9b2ffe60be735c6040ca0b"
+      "n39": "2856f72f7019a4d37ce978a2472f45043fb75667fdd01a764fcc39891e9a3441",
+      "n40": "e238d18b3ec798e3c3b87cb7e40b085aeaf64520bf04d0f4da03ab930a71123a"
     },
     "fingerprint": 2,
-    "saved": "2026-10-25T12:41:21+00:00",
+    "saved": "2026-10-26T10:35:51+00:00",
     "history": []
   }
 }

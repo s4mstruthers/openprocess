@@ -34,7 +34,7 @@ def build() -> Workflow:
         dotted.append(chart.id)
     roles = wf.add("who_does_what", {}, (260, 130 * len(charts)), title="Who does what")
     wf.connect(log, roles)
-    wf.group(dotted + [roles.id], "1 · Dotted charts")
+    charts_group = wf.group(dotted + [roles.id], "1 · Dotted charts")
 
     # 2. Discovery: the process map and the miners of the course.
     process_map = wf.add("directly_follows", {}, (560, 0), title="Process map")
@@ -101,6 +101,18 @@ def build() -> Workflow:
         wf.connect(log, node)
         found.append(node.id)
     wf.group(found, "5 · The process")
+
+    # 1 (continued). The managers' decisions on their own: each day is one
+    #    short vertical dash, because both managers decide in batches.  Added
+    #    last so that the ids of the boxes above stay as they were.
+    decisions = wf.add("filter_activities",
+                       {"activities": "Approve contract, Reject contract", "mode": "keep events"},
+                       (260, 780), title="Only the decisions")
+    wf.connect(log, decisions)
+    decision_chart = wf.add("dotted_chart", {"rows": "Resource"}, (260, 910),
+                            title="Managers' decisions over time")
+    wf.connect(decisions, decision_chart)
+    charts_group.members += [decisions.id, decision_chart.id]
     return wf
 
 

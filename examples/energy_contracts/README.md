@@ -48,22 +48,29 @@ clicking a dot to see its case), click the *Exam event log* box and choose
 | Cases by duration | case, shortest first | time since the case started (hours) | activity |
 | Resources over time | resource | actual time | activity |
 | Activities within a case | activity | share of the case's duration (%) | resource |
+| Managers' decisions over time | resource (only *Approve* / *Reject* events) | actual time | activity |
 
 What they show:
 
 * **Arrivals are steady.** The first dots of the cases form a straight
   diagonal: applications arrive at a steady rate, about 20 a weekday, and
   fewer at weekends (about 5 on a Saturday and 4 on a Sunday).
-* **The back office works in batches, on working days only.** In *Cases over
-  time* the back-office steps form vertical stripes, and they stop at every
-  weekend.
+* **The back office works on weekdays only, spread over office hours.** In
+  *Cases over time* the back-office steps form vertical stripes: one stripe
+  per working day, with gaps for nights and weekends (no back-office event
+  falls on a Saturday or Sunday). These are *not* batches: the back office
+  handles about 22 events a day at about 21 different minutes.
 * **Every resource has fixed working days** (*Resources over time*). SYSTEM
   and WEB are automatic and work at any hour, every day. Charles works Monday,
   Tuesday, Thursday and Friday; George works Tuesday to Friday; Mary works
   every weekday from 11:00 to 19:00; Claire works Monday to Wednesday and
-  Nancy Thursday and Friday, both mornings only (9:00 to 14:00). Of the
-  managers, Noel works Tuesday to Friday, and Joey decides **only on Monday
-  and Tuesday, all at 15:00**: a batch.
+  Nancy Thursday and Friday, both mornings only (9:00 to 14:00). **Both managers decide in batches**
+  (*Managers' decisions over time*: each day is one short vertical dash).
+  Joey decides only on Monday and Tuesday, all at 15:00. Noel decides
+  Tuesday to Friday, each day at one fixed time: Tuesday 9:00, Wednesday and
+  Thursday 14:00, Friday 17:00. That is why a case waits for "the next
+  decision moment", and why cases that finish the back office late in the
+  week wait over the weekend.
 * **How long a case takes** (*Cases from their start*). Half of the cases end
   within 33 hours, and 90 % within 86. The bands of later dots are the cases
   that met a weekend or a manager's day off. From application to approval takes a median of 33
@@ -113,11 +120,25 @@ After *Open file* it requires all three back-office steps, in every round.
 
 **The Heuristics Miner** (dependency 0.9) connects everything the log does,
 but its net is **not sound**: it is unbounded, so tokens can pile up. The
-*Soundness* box gives the firing sequence that shows it.
+*Soundness* box gives the firing sequence that shows it: *Open file* takes
+the binding {customer, meter, cancel}, only *Cancel previous contract* is
+done, *Close file* takes the binding {cancel}, and *Start cancellation*
+loops back with two tokens left behind. Each round can leave two more.
+
+The dependency graph is the same in every implementation (the measures are
+in *How*: *Open file* ⇒ each back-office step, and each step ⇒ *Close file*,
+all about 1.00; the steps among themselves stay far below 0.9). What
+differs is how the splits and joins become a Petri net. OpenProcess, like
+ProM, uses the bindings seen in the log. PM4Py decides AND or XOR pair by
+pair and gets a different, sound net that cannot do *Cancel previous
+contract* in the first round (607 log moves). So the exact HM net depends on
+the tool.
 
 ## 3 · Fitness
 
-Alignments over all 1,201 cases (*Fitness of the models* compares them):
+Alignments over all 1,201 cases (*Fitness of the models* compares them).
+Fitness here is the mean of the cases' trace fitness, as ProM's replayer
+reports it:
 
 | Model | Fitness | Precision | Generalisation | Simplicity | Sound | Cases without a deviation |
 |---|---:|---:|---:|---:|---|---:|
@@ -165,3 +186,23 @@ the log does not have:
 | How long from application to decision? | Time between | Approval: median 33.1 h, mean 41.8 h; rejection: median 32.6 h, mean 41.3 h |
 
 Approvals outnumber rejections two to one (798 to 403).
+
+## Checked
+
+Re-run with OpenProcess 0.13.1 on 26 Oct 2026 (`--check` passes), and
+checked independently with PM4Py 2.7 and pandas on the same log:
+
+* Log facts, variants, the roles table, the order rules (798 / 107 / 296 /
+  298 / 607), segregation of duties (330) and the durations all match.
+* The timestamps in the file are written at +02:00 (Dutch summer time), so
+  every clock time above is the time the log states, as ProM shows it.
+* α-algorithm, IM and IMf 0.2: the same process trees, fitness, precision
+  and generalisation, and the same model moves (594 / 298 / 298 and
+  298 / 298, no log moves). Simplicity differs a little between tools for
+  the IM nets, because it depends on how the tree is drawn as a Petri net.
+* Heuristics Miner: on the same net, PM4Py also finds alignment fitness 1.0
+  and simplicity 0.617; the unboundedness was checked by hand. Its token
+  replay, precision and generalisation differ between tools (0.93 / 0.72 /
+  0.79 in PM4Py), because token replay has to guess which silent
+  transitions to fire, and those measures say little about an unsound net.
+
