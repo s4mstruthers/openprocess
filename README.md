@@ -452,6 +452,9 @@ links to the definitions it builds on; **Help ▸ Definitions** lists them all.
   - Time unit (Auto, or seconds up to years) and a grid step you can type in.
   - Colour and shape by any attribute. The default palette can be changed
     per value: right-click a value in the legend and pick its colour.
+  - A log of a million events (the BPI Challenge logs) pans, zooms and
+    answers the pointer without a pause: the dots are numpy arrays and a
+    dense picture is rasterised a colour at a time, not a dot at a time.
 - **Discover** hands the log to an analysis in Mine (**Discover in Mine →**),
   where the miner is a box with its result, its *How* and its *Code*:
   - α-algorithm, which shows its eight steps;
@@ -717,7 +720,7 @@ renders every page offscreen into `docs/screenshots/`, so run it after a
 change to the app's looks.
 
 The engines (`openprocess.mining`, `openprocess.ml`, `openprocess.sim`, `openprocess.analysis`)
-have **no dependencies**, so they work in a notebook or a script:
+need **nothing but numpy**, so they work in a notebook or a script:
 
 ```python
 from openprocess.mining import read_xes, inductive_miner
@@ -842,7 +845,7 @@ extra) and *Predict the next activity*. Or start empty.
   with the course's miners and checks on the 2AMI10 exam log.
 - **Connections** (at the bottom of the sidebar, or *View ▸ Connections*)
   draws what flows in, OpenProcess and its boxes, what flows out, and the
-  optional tools (pandas, numpy, scipy, matplotlib, …) with whether each is
+  optional tools (pandas, scipy, matplotlib, …) with whether each is
   installed, how to install it and the boxes it brings. All of it is read
   from the box library. *Install…* works in the downloaded app too: it carries
   pip and installs into a folder of your own (on a Mac,
@@ -907,7 +910,7 @@ See [Parallel work](docs/workflows.md#parallel-work) for the rules (each item
 from its own inputs, `flow.item_seed` for randomness). OpenProcess's own
 alignments and token replay run this way on large logs.
 
-`pip install -e ".[science]"` adds the pandas, NumPy, SciPy and matplotlib
+`pip install -e ".[science]"` adds the pandas, SciPy and matplotlib
 boxes (describe, bootstrap intervals, tests, plots).
 
 **Large logs.** A log above 20 MB is read into columns rather than objects,

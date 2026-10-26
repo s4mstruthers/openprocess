@@ -37,8 +37,8 @@ else:
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
-# pip travels inside the app, so Connections ▸ Install… can add pandas, numpy,
-# scipy or matplotlib to a folder of the user's own (openprocess.packages).
+# pip travels inside the app, so Connections ▸ Install… can add pandas, scipy
+# or matplotlib to a folder of the user's own (openprocess.packages).
 PIP_DATAS, PIP_BINARIES, PIP_HIDDEN = collect_all("pip")
 
 # The MCP server (Help ▸ Connect an AI Assistant starts `OpenProcess --mcp`):
@@ -101,7 +101,7 @@ analysis = Analysis(
                   + collect_submodules("openprocess.flow.boxes") + PIP_HIDDEN + MCP_HIDDEN + STDLIB,
     # Not needed by the app.  PM4Py is an optional extra (AGPL-3.0) and is
     # never bundled; the app hides its PM4Py options when it is missing.
-    excludes=["pm4py", "tkinter", "pytest", "matplotlib", "numpy", "pandas", "scipy"],
+    excludes=["pm4py", "tkinter", "pytest", "matplotlib", "pandas", "scipy"],
     noarchive=False,
 )
 

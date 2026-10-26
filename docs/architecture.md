@@ -20,7 +20,7 @@ in CI" is checked on every change.
 
 | Layer | Packages | Depends on | Who uses it |
 |---|---|---|---|
-| **Engines** | `mining` (logs, nets, discovery, conformance), `ml`, `model`, `sim`, `analysis`, `io` | the Python standard library only | everything; a script or notebook directly |
+| **Engines** | `mining` (logs, nets, discovery, conformance), `ml`, `model`, `sim`, `analysis`, `io` | the Python standard library and numpy | everything; a script or notebook directly |
 | **Framework** | `flow`, `flow.boxes` | the engines | the app, `openprocess run`, a script |
 | **Teaching** | `learn` (`teaching` is its old name) | the engines and the framework | Learn mode, `openprocess exercises` |
 | **App** | `gui`, `gui.studio`, `gui.flow`, `gui.learn`, `cli` | all of the above, and PySide6 | people |
@@ -33,7 +33,7 @@ bottom import nothing above them.
 <!-- generated: package-map -->
 ```mermaid
 flowchart BT
-  subgraph engines["Engines · pure Python, no dependencies"]
+  subgraph engines["Engines · pure Python; numpy only"]
     mining["<b>mining</b><br/>logs, nets, analysis"]
     mining_discovery["<b>mining.discovery</b><br/>α, Inductive, Heuristics, regions"]
     mining_conformance["<b>mining.conformance</b><br/>replay, alignments, quality"]

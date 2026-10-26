@@ -22,6 +22,7 @@ import statistics
 from dataclasses import replace
 from datetime import timedelta
 
+import numpy as np
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QStandardItemModel
 from PySide6.QtWidgets import (
@@ -168,7 +169,7 @@ def align_colours(datas: list[DotData]) -> list[str]:
     index = {v: i for i, v in enumerate(shared)}
     for data in datas:
         mapping = [index[v] for v in data.colour_values]
-        data.colour = [mapping[c] for c in data.colour]
+        data.colour = np.asarray(mapping, dtype=np.int32)[data.colour]
         data.colour_counts = {v: data.colour_counts.get(v, 0) for v in shared}
         data.colour_values = list(shared)
     return shared
@@ -428,9 +429,16 @@ class ComparePage(QWidget):
         self._syncing = False
         for widget in (self.x_box, self.colour_box):
             widget.currentIndexChanged.connect(lambda _: self._rebuild_dots())
-        self.size_box.valueChanged.connect(lambda _: self._rebuild_dots())
+        self.size_box.valueChanged.connect(lambda _: self._resize_dots())
         self._rebuild_dots()
         return page
+
+    def _resize_dots(self) -> None:
+        """A new dot size: the same dots, painted again."""
+        for chart in self.charts:
+            if chart.data is not None:
+                chart.data.settings.dot_size = self.size_box.value()
+                chart._invalidate()
 
     def _rebuild_dots(self) -> None:
         settings = replace(self.dot_settings, x_mode=self.x_box.currentIndex(),
