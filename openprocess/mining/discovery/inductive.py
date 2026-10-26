@@ -541,6 +541,23 @@ def _split_on(log: SimpleLog, boundary) -> SimpleLog:
     return result
 
 
+def _split_point(trace: tuple[str, ...], group: set[str], start: int, earlier: set[str]) -> int:
+    """Where the segment of ``group`` ends, reading ``trace`` from ``start``:
+    the position after which the most events of the group, less the events
+    of later groups, have been read (events of earlier groups, already past,
+    count for nothing).  The first such position on a tie, as ProM and PM4Py
+    choose it."""
+    best_cost, best, cost = 0, start, 0
+    for index in range(start, len(trace)):
+        if trace[index] in group:
+            cost -= 1
+        elif trace[index] not in earlier:
+            cost += 1
+        if cost < best_cost:
+            best_cost, best = cost, index + 1
+    return best
+
+
 def split_log(log: SimpleLog, operator: Operator, groups: list[set[str]],
               dfg: DFG) -> list[SimpleLog]:
     """Divide the log over the groups of a cut."""
@@ -551,9 +568,22 @@ def split_log(log: SimpleLog, operator: Operator, groups: list[set[str]],
         for trace, n in log.items():
             best = max(range(len(groups)), key=lambda i: sum(a in groups[i] for a in trace))
             sublogs[best][tuple(a for a in trace if a in groups[best])] += n
-    elif operator in (Operator.SEQUENCE, Operator.PARALLEL):
-        # Projection on each group.  For a sequence cut found on the full DFG
-        # this is exactly the split into consecutive segments.
+    elif operator is Operator.SEQUENCE:
+        # Cut every trace into consecutive segments, one per group, at the
+        # split points that drop the fewest events (Leemans, Fahland & van der
+        # Aalst 2013, the IMf sequence split): an event of a later group that
+        # turns up early, or of an earlier group late, is dropped instead of
+        # being pulled into its group's sublog out of order.  For a sequence
+        # cut that every trace respects (plain IM) this is the projection.
+        for trace, n in log.items():
+            start, earlier = 0, set()
+            for i, group in enumerate(groups):
+                end = _split_point(trace, group, start, earlier)
+                sublogs[i][tuple(a for a in trace[start:end] if a in group)] += n
+                start = end
+                earlier |= group
+    elif operator is Operator.PARALLEL:
+        # Projection on each group (the order between groups carries no meaning).
         for trace, n in log.items():
             for i, group in enumerate(groups):
                 sublogs[i][tuple(a for a in trace if a in group)] += n

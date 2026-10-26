@@ -144,9 +144,12 @@ class ReplayResult:
 # ---------------------------------------------------------------------------
 # Silent moves
 # ---------------------------------------------------------------------------
-def silent_path(net: PetriNet, marking: Marking, goal, max_states: int = 2000) -> list[str] | None:
+def silent_path(net: PetriNet, marking: Marking, goal, max_states: int = 200_000) -> list[str] | None:
     """Shortest sequence of τ transitions from ``marking`` to a marking where
-    ``goal(marking)`` holds.  ``[]`` if it already holds, ``None`` if none found."""
+    ``goal(marking)`` holds.  ``[]`` if it already holds, ``None`` if none found.
+
+    For a goal that is "transition t is enabled", :func:`enabling_path` is
+    exact and much faster on nets with many τ transitions."""
     if goal(marking):
         return []
     silent = [t for t, tr in net.transitions.items() if tr.silent]
@@ -175,19 +178,60 @@ def silent_path(net: PetriNet, marking: Marking, goal, max_states: int = 2000) -
     return None
 
 
-class _SilentSearch:
-    """:func:`silent_path` for one net, on markings as tuples of token
-    counts: the same breadth-first search, visiting the same markings in the
-    same order and returning the same paths, without building a
-    :class:`Marking` per state (a large log's replay asks it thousands of
-    times, each over up to ``max_states`` markings)."""
+_SEARCHERS: "dict[int, tuple[PetriNet, _SilentSearch]]" = {}
 
-    def __init__(self, net: PetriNet, max_states: int = 2000) -> None:
+
+def searcher_for(net: PetriNet) -> "_SilentSearch":
+    """The τ-search of ``net``, built once per net object (it is read-only)."""
+    found = _SEARCHERS.get(id(net))
+    if found is None or found[0] is not net:
+        if len(_SEARCHERS) > 32:
+            _SEARCHERS.clear()
+        found = _SEARCHERS[id(net)] = (net, _SilentSearch(net))
+    return found[1]
+
+
+def enabling_path(net: PetriNet, marking: Marking, transition: str) -> list[str] | None:
+    """Shortest τ moves from ``marking`` after which ``transition`` is enabled
+    (``[]`` if it is, ``None`` if no τ moves enable it); exact."""
+    searcher = searcher_for(net)
+    return searcher.enabling(marking, searcher.requirement(net.pre(transition)))
+
+
+class _SilentSearch:
+    """Shortest τ-sequences for one net, on markings as tuples of token counts.
+
+    Two kinds of question, both answered exactly:
+
+    * :meth:`enabling`: τ moves after which the marking covers a requirement
+      (a transition's preset, or the final marking "at least").  Only τ
+      transitions that can feed a token, through τ moves, into a place that
+      is short can help: firing any other only interleaves independent
+      branches, which in a block-structured net (the Inductive Miner's, with
+      its skips and parallel joins) multiplies the markings to visit without
+      bringing the goal closer.  The search is restricted to those (a
+      backward closure over the τ transitions from the short places).  It is
+      still exact: removing the other τ steps from any enabling sequence
+      leaves an enabling sequence (they put no token anywhere the goal can
+      use, and taking tokens away from them only leaves more), and no longer
+      a one, so the shortest path found is a shortest path of the whole net.
+    * :meth:`path`: τ moves to a marking where any ``goal`` holds (the final
+      marking exactly), restricted to the τ transitions that lead into the
+      goal's places or remove tokens, by the same argument.
+
+    The cap on visited markings is a safety net, not the normal end of a
+    search; when it is hit the replay forces the transition, as before.
+    """
+
+    def __init__(self, net: PetriNet, max_states: int = 200_000) -> None:
         self.net, self.max_states = net, max_states
         self.places = list(net.places)
         index = {place: i for i, place in enumerate(self.places)}
         self.index = index
         self.silent = []
+        #: by τ: the places it takes from and puts into (indices)
+        self._pre: list[frozenset[int]] = []
+        self._post: list[frozenset[int]] = []
         for transition_id, transition in net.transitions.items():
             if not transition.silent:
                 continue
@@ -198,6 +242,9 @@ class _SilentSearch:
             for p, n in net.post(transition_id).items():
                 change[index[p]] += n
             self.silent.append((transition_id, need, [(i, d) for i, d in change.items() if d]))
+            self._pre.append(frozenset(index[p] for p in net.pre(transition_id)))
+            self._post.append(frozenset(index[p] for p in net.post(transition_id)))
+        self._relevant: dict[frozenset, list] = {}
 
     def vector(self, marking: Marking) -> tuple[int, ...]:
         return tuple(marking[p] for p in self.places)
@@ -205,18 +252,53 @@ class _SilentSearch:
     def requirement(self, marking: Marking) -> list[tuple[int, int]]:
         return [(self.index[p], n) for p, n in marking.items()]
 
-    def path(self, marking: Marking, goal) -> list[str] | None:
-        """``goal(vector)`` decides; see :func:`silent_path`."""
+    def relevant(self, places, removers: bool = False) -> list:
+        """The τ transitions that can put a token, through τ moves, into one of
+        ``places``; with ``removers``, also those that put tokens nowhere (they
+        only take tokens away)."""
+        key = (frozenset(places), removers)
+        found = self._relevant.get(key)
+        if found is None:
+            wanted = set(places)
+            chosen: set[int] = set()
+            changed = True
+            while changed:
+                changed = False
+                for k in range(len(self.silent)):
+                    if k not in chosen and (self._post[k] & wanted or (removers and not self._post[k])):
+                        chosen.add(k)
+                        wanted |= self._pre[k]
+                        changed = True
+            found = self._relevant[key] = [self.silent[k] for k in sorted(chosen)]
+        return found
+
+    def enabling(self, marking: Marking, need: list[tuple[int, int]]) -> list[str] | None:
+        """Shortest τ moves after which every ``need`` (place index, tokens) is
+        covered: ``[]`` if it already is, ``None`` if no τ moves do it."""
+        start = self.vector(marking)
+        short = [i for i, n in need if start[i] < n]
+        if not short:
+            return []
+        return self._search(start, lambda v: all(v[i] >= n for i, n in need), self.relevant(short))
+
+    def path(self, marking: Marking, goal, places=None) -> list[str] | None:
+        """``goal(vector)`` decides; see :func:`silent_path`.  ``places``: the
+        places the goal needs tokens in (searching only the τ moves that feed
+        them, or only take tokens away); all τ moves when not given."""
         start = self.vector(marking)
         if goal(start):
             return []
-        if not self.silent:
+        moves = self.silent if places is None else self.relevant(places, removers=True)
+        return self._search(start, goal, moves)
+
+    def _search(self, start: tuple, goal, moves: list) -> list[str] | None:
+        if not moves:
             return None
         parent: dict[tuple, tuple | None] = {start: None}
         queue = deque([start])
         while queue and len(parent) < self.max_states:
             current = queue.popleft()
-            for transition, need, change in self.silent:
+            for transition, need, change in moves:
                 if any(current[i] < n for i, n in need):
                     continue
                 following = list(current)
@@ -258,17 +340,19 @@ def replay_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
             by_label.setdefault(transition.label, []).append(transition.id)
 
     final_vector = searcher.vector(net.final_marking)
-    goals = {("final", "="): lambda v: v == final_vector,
-             ("final", "≥"): lambda v: all(v[i] >= n for i, n in enumerate(final_vector))}
+    final_places = [i for i, n in enumerate(final_vector) if n]
+    final_need = searcher.requirement(net.final_marking)
 
     def search(current: Marking, key) -> list[str] | None:
         found = paths.get((current, key), paths)       # the dict itself: "not searched yet"
         if found is paths:
-            goal = goals.get(key)
-            if goal is None:                           # ("enable", transition)
-                need = searcher.requirement(net.pre(key[1]))
-                goal = lambda v, need=need: all(v[i] >= n for i, n in need)   # noqa: E731
-            found = paths[(current, key)] = searcher.path(current, goal)
+            if key == ("final", "="):
+                found = searcher.path(current, lambda v: v == final_vector, final_places)
+            elif key == ("final", "≥"):
+                found = searcher.enabling(current, final_need)
+            else:                                      # ("enable", transition)
+                found = searcher.enabling(current, searcher.requirement(net.pre(key[1])))
+            paths[(current, key)] = found
         return found
 
     def fire(transition: str, current: Marking) -> Marking:

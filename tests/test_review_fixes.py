@@ -184,3 +184,39 @@ def test_learn_readers():
     assert notation.alignment("log: a b\nmodel: a b") == (["a", "b"], ["a", "b"])
     assert answers.number("−1") == -1 and answers.number("∞") == float("inf")
     assert str(notation.tree("\\rightarrow(a, \\times(b, c))")) == str(notation.tree("→(a, ×(b, c))"))
+
+
+# -- found on BPI 2019 by the cross-check against PM4Py ---------------------------------------
+def test_replay_through_many_silent_steps_keeps_the_inductive_miners_fitness():
+    """The silent-step search gave up after 2,000 markings on a block-structured
+    net with many optional parallel branches, and replay counted the tokens it
+    then had to force: IM fitness 0.935 on the BPI 2019 log instead of 1.
+    Here a trace skips 14 optional branches in parallel: enabling *end* needs
+    every skip, in some order, 2^14 markings for a search over all τ moves."""
+    from openprocess.mining.conformance.quality import precision
+    from openprocess.mining.processtree import Operator, ProcessTree, to_petri_net
+    branches = [ProcessTree.node(Operator.XOR, [ProcessTree.leaf(f"x{i}"), ProcessTree.tau()]) for i in range(14)]
+    tree = ProcessTree.node(Operator.SEQUENCE, [ProcessTree.leaf("start"),
+                                                ProcessTree.node(Operator.PARALLEL, branches),
+                                                ProcessTree.leaf("end")])
+    net = to_petri_net(tree)
+    log = Counter({("start", "end"): 3, ("start", "x3", "x7", "end"): 2, ("start", *[f"x{i}" for i in range(14)], "end"): 1})
+    started = time.time()
+    replay = token_replay(net, log)
+    assert replay.fitness == 1.0 and replay.fitting_traces == replay.trace_count
+    assert 0 < precision(net, log) <= 1
+    assert time.time() - started < 30
+
+
+def test_imf_cuts_a_trace_at_the_best_split_points():
+    """A sequence cut's sublogs are consecutive segments of each trace; an
+    event out of order is dropped, not pulled into its group (Leemans,
+    Fahland & van der Aalst 2013; ProM and PM4Py do the same)."""
+    from openprocess.mining.dfg import dfg_from_simple_log
+    from openprocess.mining.discovery.inductive import split_log
+    from openprocess.mining.processtree import Operator
+    log = Counter({("a", "b", "c"): 5, ("a", "c", "b", "c"): 1})
+    a, b, c = split_log(log, Operator.SEQUENCE, [{"a"}, {"b"}, {"c"}], dfg_from_simple_log(log))
+    assert a == Counter({("a",): 6})
+    assert b == Counter({("b",): 5, (): 1})            # the late b of the odd trace is dropped
+    assert c == Counter({("c",): 5, ("c", "c"): 1})

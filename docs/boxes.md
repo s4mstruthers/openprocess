@@ -60,11 +60,11 @@ How to write your own: [workflows.md](workflows.md#writing-a-box); what a box *i
 | Box | Takes | Gives | Settings | Needs |
 |---|---|---|---|---|
 | **[Check fit](../openprocess/flow/boxes/check.py#L28)**<br/>Replays every case of the log on the model and scores fitness, precision (escaping edges), generalisation and simplicity. | model: Petri net, log: Log | Scores | `method` ∈ {Token replay, Alignments} | – |
-| **[Token replay](../openprocess/flow/boxes/check.py#L54)**<br/>Token-based replay with the counts the course uses: produced, consumed, missing and remaining tokens, per variant. | model: Petri net, log: Log | Replay | – | – |
-| **[Alignments](../openprocess/flow/boxes/check.py#L63)**<br/>Optimal alignments of every variant with the model (A* over the synchronous product, standard cost function). Shown as ProM shows them: the log on the model,… | model: Petri net, log: Log | Alignments | `variants` = 0 | – |
-| **[Soundness](../openprocess/flow/boxes/check.py#L89)**<br/>Is the net a sound WF-net? The three conditions, with each violation's counterexample in the notes. | model: Petri net | Scores | – | – |
-| **[Compare to true net](../openprocess/flow/boxes/check.py#L108)**<br/>Model to model, on behaviour: of the true net's complete traces of up to *max_length* activities, the share the model allows (recall); of the model's, the sh… | model: Petri net, true_net: Petri net | Scores | `max_length` = 12 | – |
-| **[Footprint conformance](../openprocess/flow/boxes/check.py#L142)**<br/>Compares the footprint of the log with the footprint of the net. | log: Log, model: Petri net | Scores | – | – |
+| **[Token replay](../openprocess/flow/boxes/check.py#L59)**<br/>Token-based replay with the counts the course uses: produced, consumed, missing and remaining tokens, per variant. | model: Petri net, log: Log | Replay | – | – |
+| **[Alignments](../openprocess/flow/boxes/check.py#L68)**<br/>Optimal alignments of every variant with the model (A* over the synchronous product, standard cost function). Shown as ProM shows them: the log on the model,… | model: Petri net, log: Log | Alignments | `variants` = 0 | – |
+| **[Soundness](../openprocess/flow/boxes/check.py#L94)**<br/>Is the net a sound WF-net? The three conditions, with each violation's counterexample in the notes. | model: Petri net | Scores | – | – |
+| **[Compare to true net](../openprocess/flow/boxes/check.py#L113)**<br/>Model to model, on behaviour: of the true net's complete traces of up to *max_length* activities, the share the model allows (recall); of the model's, the sh… | model: Petri net, true_net: Petri net | Scores | `max_length` = 12 | – |
+| **[Footprint conformance](../openprocess/flow/boxes/check.py#L147)**<br/>Compares the footprint of the log with the footprint of the net. | log: Log, model: Petri net | Scores | – | – |
 
 ## Measure
 

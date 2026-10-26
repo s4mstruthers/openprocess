@@ -40,6 +40,18 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 - **The α-algorithm on wide choices.** A log where one activity is followed
   by many alternatives (twenty, say) took minutes; it now takes a moment,
   with the same net.
+- **Token replay on large models is right, and faster.** On a big model with
+  many silent steps (the Inductive Miner's model of the BPI Challenge 2019
+  log, say), replay gave up looking for the silent steps that enable an
+  activity and counted tokens as missing: fitness 0.935 where the right
+  answer is 1. It now looks only at the silent steps that can help, which
+  finds the answer exactly, and replays that log in 1.4 s instead of 34.
+  Precision uses the same search, so it is exact on such models too.
+- **IMf splits a log the way the algorithm says.** At a sequence cut, each
+  trace is now cut at the points that drop the fewest events, instead of
+  pulling out-of-order events into their part. On the BPI Challenge 2019
+  logs, IMf's models now match ProM's and PM4Py's on two of the four item
+  categories, and the Inductive Miner's (without noise) on all four.
 - **More reliable results.** A PNML net saved without an initial marking
   (by some tools) now starts in its source place; alignments used to score
   it 0. A Heuristics net whose loop returns to the first activity is a
