@@ -6,7 +6,7 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
-## Unreleased
+## 0.14.0
 
 - **The dotted chart keeps up on a million events.** On a log the size of
   the BPI Challenge 2019 (1.6 million events, 250,000 cases) every wheel
