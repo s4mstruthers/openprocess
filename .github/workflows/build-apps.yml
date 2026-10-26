@@ -96,6 +96,10 @@ jobs:
             os: macos-14
           - name: macOS (Intel)
             os: macos-15-intel
+            # cryptography (for the connector's sign-in support) has no Intel
+            # macOS wheel from 49 on; a copy compiled on the runner does not
+            # load in the app, so the last release with one is used.
+            pins: "cryptography<49"
           - name: Windows
             os: windows-latest
           - name: Linux
@@ -141,7 +145,7 @@ jobs:
         # mcp: the connector for AI assistants travels inside the app.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install ".[app,mcp]" pyinstaller
+          python -m pip install ".[app,mcp]" pyinstaller ${{ matrix.pins }}
 
       - name: Parallel work and background reads on this system (from source)
         # Workers are processes, started as macOS, Windows and Linux each do;

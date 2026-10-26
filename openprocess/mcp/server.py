@@ -27,8 +27,11 @@ try:
     from mcp.server.mcpserver import Context, Image, MCPServer
     from mcp.server.mcpserver.exceptions import ToolError as _SDKToolError
 except ImportError as error:  # pragma: no cover - the message is the point
+    if getattr(error, "name", None) and not str(error.name).startswith("mcp"):
+        # The SDK is there but one of its own dependencies does not load.
+        raise ImportError(f"The MCP Python SDK is installed but does not load: {error}") from error
     raise ImportError("The MCP server needs the MCP Python SDK: pip install \"openprocess[mcp]\" "
-                      "(or pip install \"mcp>=2.3\")") from error
+                      f"(or pip install \"mcp>=2.3\"); {error}") from error
 
 
 INSTRUCTIONS = f"""You are connected to OpenProcess {__version__}: process mining, Petri nets, coloured Petri nets,

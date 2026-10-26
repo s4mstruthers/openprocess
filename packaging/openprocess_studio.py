@@ -192,7 +192,8 @@ def self_test(model_path: str | None = None) -> int:
         from openprocess.mcp.server import build_server
         tools = asyncio.run(build_server().list_tools())
     except Exception as error:  # noqa: BLE001 - whatever the bundle lacks
-        print(f"mcp: the connector does not load in the app: {type(error).__name__}: {error}", flush=True)
+        cause = f" (because {type(error.__cause__).__name__}: {error.__cause__})" if error.__cause__ else ""
+        print(f"mcp: the connector does not load in the app: {type(error).__name__}: {error}{cause}", flush=True)
         return 1
     if len(tools) < 25:
         print(f"mcp: only {len(tools)} tools in the app", flush=True)
