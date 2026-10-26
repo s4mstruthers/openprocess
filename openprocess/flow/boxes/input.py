@@ -32,15 +32,11 @@ def open_log(file: Path) -> EventLog:
     file: the log file. Choose… picks it; a name alone means a file in the workflow's folder
     """
     path = _resolve(file)
-    lower = path.name.lower()
-    if lower.endswith(".csv"):
-        from ...mining.csv_import import read_csv
-        log = read_csv(path)
-    elif lower.endswith(".txt"):
-        log = EventLog.from_simple_log(parse_simple_log(path.read_text(encoding="utf-8")), path.stem)
-    else:
-        from ...mining.xes import read_xes
-        log = read_xes(path)
+    # Read once for everyone: the app's log page and other workflows reading
+    # the same file share it, and in the app a large log is read in a process
+    # of its own (openprocess.flow.loading).
+    from ..loading import read_log
+    log = read_log(path)
     flow.note(f"{path.name}: {len(log)} cases, {log.event_count} events, "
               f"classifier {log.default_classifier().name}")
     return log

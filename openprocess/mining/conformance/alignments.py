@@ -292,25 +292,37 @@ def align_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
 
 
 def align_log(net: PetriNet, log: SimpleLog, max_states: int = MAX_STATES,
-              progress=None) -> AlignmentResult:
+              progress=None, workers: int | None = None) -> AlignmentResult:
     """Align every variant; fitness per trace uses the empty-trace cost.
 
     A variant whose search gave up (see :func:`align_trace`) counts as
     fitness 0, and ``result.notes`` says how many did and, when the net is
     unbounded, that this is why.
+
+    A large log is aligned on several processes (:mod:`openprocess.mining.parallel`):
+    each variant's search is independent, so the result is the same, variant for
+    variant, as aligning them one after the other.  ``workers=1`` does that;
+    ``None`` lets the machine decide.
     """
+    from .. import parallel
     compiled = _CompiledNet(net)
     empty = align_trace(net, (), 1, max_states, compiled)
     result = AlignmentResult(net, empty_trace_cost=empty.cost)
     variants = sorted(log.items(), key=lambda item: (-item[1], item[0]))
+    count = parallel.workers() if workers is None else workers
+    if parallel.worth_it(variants, count, "align"):
+        searched = parallel.map_variants("align", net, variants, {"max_states": max_states}, progress, count)
+    else:
+        searched = None
     for number, (trace, count) in enumerate(variants, 1):
-        alignment = align_trace(net, trace, count, max_states, compiled)
+        alignment = searched[number - 1] if searched is not None else align_trace(net, trace, count, max_states,
+                                                                                   compiled)
         worst = len(trace) + empty.cost
         alignment.fitness = 1 - alignment.cost / worst if worst else 1.0
         if not alignment.complete:
             alignment.fitness = 0.0
         result.alignments.append(alignment)
-        if progress is not None:
+        if progress is not None and searched is None:
             progress(number, len(variants))
     gave_up = result.incomplete
     if not empty.complete:

@@ -200,6 +200,19 @@ class PetriNet:
         self._ids = itertools.count(1)
         self._cache: dict | None = None
 
+    # A net travels to worker processes (parallel alignments and replay) pickled:
+    # the id counter and the structure cache stay behind and are made afresh
+    # (new ids skip those in use; the cache is rebuilt when first needed).
+    def __getstate__(self) -> dict:
+        state = dict(self.__dict__)
+        state.pop("_ids", None)
+        state["_cache"] = None
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        self.__dict__.update(state)
+        self._ids = itertools.count(1)
+
     # -- construction -----------------------------------------------------
     def _fresh_id(self, prefix: str) -> str:
         while True:

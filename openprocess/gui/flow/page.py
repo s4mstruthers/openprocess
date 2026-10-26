@@ -161,7 +161,20 @@ class WorkflowPage(QWidget):
         root.setSpacing(0)
         self.header = PageHeader(self.workflow.name, self._subtitle())
         #: Reproducibility, as last computed (a run finishing, a save): see refresh_title.
-        self._repro = reproducibility.status(self.workflow, getattr(document, "record", None), None, self.folder)
+        #: The first check hashes the inputs on disk (a 700 MB log takes a second or two),
+        #: so it runs in the background; hashing does not hold Python's lock.
+        record = getattr(document, "record", None)
+        self._repro = reproducibility.Status("unchecked", "Checking the inputs…") if record is not None \
+            and record.results else reproducibility.status(self.workflow, record, None, self.folder)
+        if record is not None and record.results:
+            workflow, folder = self.workflow, self.folder
+
+            def first_check(status) -> None:
+                if self.run is None:                     # a run finished meanwhile has the newer word
+                    self._repro = status
+                    self.refresh_title()
+            run_in_background(lambda: reproducibility.status(workflow, record, None, folder), first_check,
+                              lambda _message: None)
         # Canvas: the boxes and wires.  Summary: every result's figure, and the process map.
         self.summary_switch = SegmentedControl(["Canvas", "Summary", "Runs"], compact=True)
         self.summary_switch.setToolTip("Canvas: the boxes and wires.\nSummary: every result's key "
@@ -579,8 +592,19 @@ class WorkflowPage(QWidget):
         def work():
             if blocked:
                 # Custom boxes wait for the user's OK: run with them marked unavailable.
-                return self._run_with_blocked(workflow, changed, previous, stop, relay, blocked)
-            return self.runner.run(workflow, changed, previous, stop, on_status=relay.status.emit)
+                run = self._run_with_blocked(workflow, changed, previous, stop, relay, blocked)
+            else:
+                run = self.runner.run(workflow, changed, previous, stop, on_status=relay.status.emit)
+            # The reproducibility badge, the snapshot and a save fingerprint every result;
+            # do it here, off the window's thread, and they find the codes remembered.
+            from ...flow.record import fingerprint
+            for result in list(run.results.values()):
+                if result.status == DONE:
+                    try:
+                        fingerprint(result.value, remember=True)
+                    except Exception:  # noqa: BLE001 - a value that cannot be fingerprinted is reported later
+                        pass
+            return run
 
         run_in_background(work, relay.finished.emit, lambda message: relay.finished.emit(message))
 

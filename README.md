@@ -896,6 +896,17 @@ def last_two(log: EventLog, representation: str = "multiset") -> TransitionSyste
     ...
 ```
 
+Work over many independent items uses every core with one call, and gives
+exactly the result of a loop, notes on the *How* tab included:
+
+```python
+rows = flow.parallel_map(fit_of, variants, shared=model)   # fit_of(model, variant), at the top level
+```
+
+See [Parallel work](docs/workflows.md#parallel-work) for the rules (each item
+from its own inputs, `flow.item_seed` for randomness). OpenProcess's own
+alignments and token replay run this way on large logs.
+
 `pip install -e ".[science]"` adds the pandas, NumPy, SciPy and matplotlib
 boxes (describe, bootstrap intervals, tests, plots).
 
@@ -983,7 +994,9 @@ the clone is older than the latest release. See
 
 OpenProcess comes with an **MCP server**, so Claude (Desktop or Code), Cursor
 or any other assistant that speaks the Model Context Protocol can use it the
-way you do:
+way you do. In the app: **Help ▸ Connect an AI Assistant…**, then **Connect**
+next to your assistant, and restart it. No terminal needed: the connector is
+inside the app. From a pip install:
 
 ```bash
 pip install "openprocess[app,mcp]"

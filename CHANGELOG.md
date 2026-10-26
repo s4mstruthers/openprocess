@@ -6,6 +6,44 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.13.1
+
+- **Connect an AI assistant with one click.** *Help ▸ Connect an AI
+  Assistant…* (or *Connect…* on the Connections page) has a Connect button
+  for Claude Desktop, Claude Code, Cursor and Windsurf, and *Copy settings*
+  for any other assistant. No terminal and nothing to install: the connector
+  is inside the app. *Test the connector* checks that it answers. In 0.13.0
+  the menu item failed with "No such file or directory" in the downloaded
+  app, and the connector only worked from a pip install.
+- **Opening a folder with large files no longer freezes the window.** A
+  large log is now read by a process of its own, so the window keeps working
+  while it loads; the same file is read once for everyone (a log page and a
+  workflow reading it share one read); and the pages of the files a folder
+  reopens are built when you first look at them, not all at once. On a
+  course folder with the 728 MB BPI Challenge 2019 log and 24 other files,
+  the window was frozen for 36 seconds after opening; now for under one, and
+  clicking any of the files answers in under half a second.
+- **Alignments and token replay use all your cores.** A large log's variants
+  are aligned or replayed on several processes at once, on macOS, Windows
+  and Linux. The results are exactly the same as one variant after the other
+  (the tests compare them move for move); only the time changes, and by how
+  much depends on the log: on the BPI Challenge 2019 log, replaying one
+  category went from 67 to 34 seconds and aligning another from 40 to 9,
+  while a category with a few very long searches gained nothing. A machine
+  that cannot start the extra processes gets the same results, one variant
+  after the other.
+- **Parallel work in your own boxes.** `flow.parallel_map(function, items,
+  shared=model)` runs a box's per-item work on every core and returns
+  exactly what a loop returns, in the same order, with the notes each item
+  writes on the *How* tab in order too, so the record and `openprocess run
+  --check` are unaffected. `flow.item_seed(seed, index)` keeps random work
+  reproducible whatever the number of workers. See *Parallel work* in
+  docs/workflows.md.
+- **The reproducibility badge is worked out in the background**, so a large
+  analysis no longer pauses the window after its run.
+- *Test the connector* no longer reports a working connector as broken on a
+  busy machine.
+
 ## 0.13.0
 
 - **Connect Claude (or another AI assistant) to OpenProcess.** OpenProcess

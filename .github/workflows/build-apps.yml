@@ -16,7 +16,9 @@
 # unfinished run.
 #
 # First the test suite runs (on Linux, offscreen); only if it passes are the
-# apps built.  PyInstaller cannot cross-compile, so each app is built on a
+# apps built.  Worker processes start differently on each system, so each
+# build job also runs the parallel-work and background-read tests from
+# source, and the app's self-test runs them in the built app.  PyInstaller cannot cross-compile, so each app is built on a
 # machine running that system.  Every run smoke-tests the app
 # (packaging/build.py) and keeps the result as a downloadable artifact on the
 # run's page.  Pushing a version
@@ -94,6 +96,10 @@ jobs:
             os: macos-14
           - name: macOS (Intel)
             os: macos-15-intel
+            # cryptography (for the connector's sign-in support) has no Intel
+            # macOS wheel from 49 on; a copy compiled on the runner does not
+            # load in the app, so the last release with one is used.
+            pins: "cryptography~=48.0"      # no shell symbols: it goes on the pip command line as is
           - name: Windows
             os: windows-latest
           - name: Linux
@@ -136,9 +142,18 @@ jobs:
           python packaging/release_notes.py "$version" > /dev/null
 
       - name: Install OpenProcess and PyInstaller
+        # mcp: the connector for AI assistants travels inside the app.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install ".[app]" pyinstaller
+          python -m pip install ".[app,mcp]" pyinstaller ${{ matrix.pins }}
+
+      - name: Parallel work and background reads on this system (from source)
+        # Workers are processes, started as macOS, Windows and Linux each do;
+        # the results must equal the plain loop's on every one of them.
+        timeout-minutes: 10
+        run: |
+          python -m pip install pytest
+          python -m pytest -q -o faulthandler_timeout=120 tests/test_parallel_and_loading.py tests/test_parallel_boxes.py
 
       - name: Build and smoke-test the app
         run: python packaging/build.py

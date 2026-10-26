@@ -47,6 +47,7 @@ space you left, exactly as it was.
 from __future__ import annotations
 
 import json
+import functools
 import os
 import shutil
 import subprocess
@@ -72,6 +73,7 @@ from PySide6.QtWidgets import (
 from ...mining.csv_import import ColumnMapping, guess_mapping, read_csv, sniff
 from ...mining.log import EventLog, parse_simple_log
 from ...mining.pnml import read_pnml, write_pnml
+from ...flow.loading import read_log
 from ...mining.xes import read_xes, write_xes
 from .. import theme
 from . import motion, style
@@ -458,6 +460,48 @@ class CsvDialog(QDialog):
 # ---------------------------------------------------------------------------
 # Main window
 # ---------------------------------------------------------------------------
+class _LazyPages(dict):
+    """Pages (or their holders) by document id, built when first asked for.
+
+    ``unbuilt`` (shared by the window's pages and holders) maps a document id
+    to the call that builds both; asking for either -- ``[]``, ``get``, ``in``
+    -- builds them.  Iterating sees only built pages, which is what loops
+    over all pages want: restyling or reloading a page that is not built yet
+    is not needed, it is built with the current state."""
+
+    def __init__(self, unbuilt: dict) -> None:
+        super().__init__()
+        self._unbuilt = unbuilt
+
+    def _build(self, key) -> None:
+        build = self._unbuilt.pop(key, None)
+        if build is not None:
+            build()
+
+    def __getitem__(self, key):
+        if not dict.__contains__(self, key):
+            self._build(key)
+        return dict.__getitem__(self, key)
+
+    def get(self, key, default=None):
+        if not dict.__contains__(self, key):
+            self._build(key)
+        return dict.get(self, key, default)
+
+    def __contains__(self, key) -> bool:
+        return dict.__contains__(self, key) or key in self._unbuilt
+
+    def built(self, key):
+        """The page if it has been built, without building it (None otherwise):
+        for updates that an unbuilt page does not need (it is built up to date)."""
+        return dict.get(self, key)
+
+
+@functools.lru_cache(maxsize=8192)
+def _path_key(path: str) -> str:
+    return os.path.normcase(str(Path(path).resolve()))
+
+
 class StudioWindow(QMainWindow):
     """The Studio window.
 
@@ -474,9 +518,13 @@ class StudioWindow(QMainWindow):
         self.setWindowTitle(APPLICATION_NAME)
         self.setAcceptDrops(True)
         self.documents: list[LogDocument | ModelDocument] = []
-        self.pages: dict[int, QWidget] = {}
+        #: A document's page and its holder in the stack.  A folder reopens many files, but
+        #: shows one: the others' pages are built the first time anything asks for them
+        #: (showing, saving, a menu), so opening a folder does not build 25 pages at once.
+        self._unbuilt: dict[int, object] = {}
+        self.pages: dict[int, QWidget] = _LazyPages(self._unbuilt)
         self.items: dict[int, QTreeWidgetItem] = {}
-        self.holders: dict[int, QWidget] = {}
+        self.holders: dict[int, QWidget] = _LazyPages(self._unbuilt)
         self.persist = persist
         self.settings = QSettings("OpenProcess", "Studio")
         if not self.settings.allKeys():                 # first start since CPNpy: keep its settings
@@ -592,6 +640,7 @@ class StudioWindow(QMainWindow):
         #: The hub picture: what flows in and out, and the tools that plug in (index 1).
         self.connections_page = ConnectionsPage()
         self.connections_page.install_requested.connect(self.install_tool)
+        self.connections_page.connect_requested.connect(self.connect_assistant)
         self.content.addWidget(self.connections_page)
         #: What the main area shows while a file you opened is read (see _start_loading).
         self.loading_page = LoadingPage()
@@ -1471,7 +1520,7 @@ class StudioWindow(QMainWindow):
                      lambda: self.show_guide("exercise-packs"))
         self._action(help_menu, "Cite OpenProcess…", None, self.cite_app)
         self._action(help_menu, "Review AI Changes…", None, self.review_changes)
-        self._action(help_menu, "Connect an AI Assistant…", None, lambda: self.show_guide("mcp"))
+        self._action(help_menu, "Connect an AI Assistant…", None, self.connect_assistant)
         self._action(help_menu, "Check for Updates…", None,
                      lambda: self.check_for_updates(manual=True))
         self._action(help_menu, f"About {APPLICATION_NAME}", None, self._about)
@@ -1553,7 +1602,13 @@ class StudioWindow(QMainWindow):
         self.documents.append(document)
         if options:
             self.open_options[document.id] = options
-        self._make_page(document)
+        # A file reopened with its folder that is not the one to show: its page is
+        # built when it is first needed (see _LazyPages).
+        key = self._key(document.path) if document.path else None
+        if key is not None and key in self._restore_paths and self._restore_selected not in (None, key):
+            self._unbuilt[document.id] = lambda doc=document: self._make_page(doc)
+        else:
+            self._make_page(document)
         # A view of a box's result waits for Keep in folder (a model has its own Keep,
         # which _materialise shows); everything else becomes a file now.
         if not keep_unsaved and (not self.is_view(document) or isinstance(document, ModelDocument)):
@@ -1952,6 +2007,9 @@ class StudioWindow(QMainWindow):
     close_current = remove_selected
 
     def _drop_page(self, document) -> None:
+        if self._unbuilt.pop(document.id, None) is not None:
+            self.banners.pop(document.id, None)          # never shown: nothing was built
+            return
         page = self.pages.pop(document.id)
         if hasattr(page, "shutdown"):
             page.shutdown()
@@ -2581,7 +2639,9 @@ class StudioWindow(QMainWindow):
                     self.add_document(LogDocument(log, path=path))
                     self.statusBar().showMessage(f"Opened {name}: {len(log):,} cases", 6000)
 
-                run_in_background(lambda: read_xes(path, progress=loading.report), loaded,
+                # One read per file for everyone (a workflow's Open log box shares it), and a
+                # large log in a process of its own, so the window keeps working meanwhile.
+                run_in_background(lambda: read_log(path, progress=loading.report), loaded,
                                   lambda message: self._load_failed(path, message, size))
             else:
                 QMessageBox.information(self, "Unsupported file",
@@ -2908,7 +2968,7 @@ class StudioWindow(QMainWindow):
             self._library.load_folder(Path(self.workspace.folder) / "boxes")
         for document in self.documents:
             if isinstance(document, WorkflowDocument):
-                page = self.pages.get(document.id)
+                page = self.pages.built(document.id)
                 if page is not None:
                     page.reload_library()
         self._watch_open_files()                     # an editor's safe save replaced the file: watch the new one
@@ -3216,6 +3276,12 @@ class StudioWindow(QMainWindow):
             self.open_workspace(folder)
 
     # -- an assistant's changes --------------------------------------------------------
+    def connect_assistant(self) -> None:
+        """Help ▸ Connect an AI Assistant…: OpenProcess as Claude's (or another
+        assistant's) connector, one click per assistant, no terminal."""
+        from .connect import show_connect
+        show_connect(self)
+
     def refresh_review(self) -> None:
         """Show (or hide) the pill counting the AI changes not reviewed yet, and
         watch the folder's journal so a new change shows up by itself."""
@@ -3309,6 +3375,15 @@ class StudioWindow(QMainWindow):
         entries = [e for e in state["open"] if Path(e["path"]).exists()]
         self._restore_paths = {self._key(e["path"]): e for e in entries}
         selected = state["selected"]
+        if not (selected and self._key(selected) in self._restore_paths) and entries:
+            # Nothing was selected last time: show the first file of the folder's
+            # space (an analysis before a log in Mine, a net in Model), so only that
+            # page is built now and the others when they are first shown.
+            wanted = ((".cpnflow",), (".xes", ".xes.gz", ".csv", ".txt")) if self.space == MINE \
+                else ((".pnml", ".cpn", ".bpmn"),)
+            chosen = next((e["path"] for suffixes in wanted for e in entries
+                           if e["path"].lower().endswith(suffixes)), entries[0]["path"])
+            selected = chosen
         self._restore_selected = (self._key(selected) if selected and
                                   self._key(selected) in self._restore_paths else None)
         self._restoring = True
@@ -3356,6 +3431,7 @@ class StudioWindow(QMainWindow):
         return True
 
     def _rescan_workspace(self, force: bool = False) -> None:
+        _path_key.cache_clear()                      # files may have moved or become links
         """Bring the sidebar in line with the folder's files (and watch its subfolders)."""
         if self.workspace is None:
             return
@@ -3728,8 +3804,9 @@ class StudioWindow(QMainWindow):
 
     @staticmethod
     def _key(path: str | Path) -> str:
-        """One spelling per file, for comparing paths."""
-        return os.path.normcase(str(Path(path).resolve()))
+        """One spelling per file, for comparing paths (remembered: the sidebar asks
+        thousands of times while a folder opens; forgotten at every rescan)."""
+        return _path_key(str(path))
 
     def _update_welcome(self) -> None:
         """The welcome page's top card: "Work in a folder", or about the open one."""
@@ -3920,7 +3997,7 @@ class StudioWindow(QMainWindow):
         autosave = self._autosaves(document)
         if autosave != document.autosave:
             document.autosave = autosave
-            page = self.pages.get(document.id)
+            page = self.pages.built(document.id)
             if page is not None:
                 page.refresh_title()
             if document.id in self.items:
@@ -3942,7 +4019,7 @@ class StudioWindow(QMainWindow):
         timer.start()
 
     def _autosave(self, document) -> None:
-        page = self.pages.get(document.id)
+        page = self.pages.built(document.id)              # a page never built has no edits to save
         if page is None or not document.autosave or document.id in self._conflicts:
             return
         if not Path(document.path).exists():
@@ -4178,7 +4255,7 @@ class StudioWindow(QMainWindow):
                     done(read_csv(path, ColumnMapping(**mapping) if mapping
                                   else guess_mapping(sniff(path)[1])))
                 else:
-                    run_in_background(lambda: read_xes(path), done, failed)
+                    run_in_background(lambda: read_log(path), done, failed)
             elif isinstance(document, CpnDocument):
                 done(self._read_net(path))
             elif isinstance(document, ModelDocument):
@@ -4211,7 +4288,7 @@ class StudioWindow(QMainWindow):
 
     def _replace_page(self, document) -> None:
         """Rebuild a document's page (after reloading it), keeping it in view."""
-        shown = self.content.currentWidget() is self.holders.get(document.id)
+        shown = self.content.currentWidget() is self.holders.built(document.id)
         self._drop_page(document)
         self._make_page(document)
         self._update_autosave(document)
@@ -4786,6 +4863,10 @@ def main(argv: list[str] | None = None) -> int:
             pass
     from ... import packages
     packages.activate()                           # packages installed from Connections
+    # Large logs are read by a worker process: a read in a thread holds Python's
+    # interpreter lock and leaves the window waiting for it (flow/loading.py).
+    from ...flow import loading
+    loading.use_processes = True
     application = QApplication.instance() or QApplication(argv)
     application.setApplicationName(APPLICATION_NAME)
     application.setWindowIcon(app_icon())

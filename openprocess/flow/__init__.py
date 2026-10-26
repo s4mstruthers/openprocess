@@ -26,12 +26,16 @@ Python::
     print(run.value(fit).metrics)
     save(wf, "demo.cpnflow", run)      # with the record that makes it reproducible
 
+Work over many independent items (variants, cases, resamples) runs on all
+cores with :func:`parallel_map`, with exactly the result of a loop.
+
 See ``docs/workflows.md``.
 """
 
 from .box import Box, BoxError, BoxSpec, Port, Setting, box
 from .explain import Explanation, current, note, show, steps
 from .library import Library, library_for, standard_library
+from .parallel import ParallelError, item_seed, parallel_map
 from .record import check, differences, load, save
 from .runner import Cache, Result, Run, Runner
 from .sweep import Sweep
@@ -47,5 +51,6 @@ __all__ = [
     "Port", "Predictions", "Predictor", "ProcessTree", "Regions", "ReplayResult", "Result", "Run",
     "Runner", "Scores", "Setting", "SimpleLog", "Sweep", "Table", "Text", "TransitionSystem", "Workflow",
     "WorkflowError", "box", "check", "current", "differences", "library_for", "load", "note",
+    "ParallelError", "item_seed", "parallel_map",
     "register_type", "save", "show", "standard_library", "steps", "to_python", "workflow",
 ]

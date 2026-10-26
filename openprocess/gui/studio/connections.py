@@ -83,6 +83,8 @@ class ConnectionsPage(QWidget):
 
     #: *Install…* on a tool's card: the tool's name (the window runs pip).
     install_requested = Signal(str)
+    #: *Connect…* on the AI assistants card (the window opens the Connect dialog).
+    connect_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -204,6 +206,14 @@ class ConnectionsPage(QWidget):
         band("TOOLS", "Optional packages that boxes need. A box whose package is missing is listed "
              "greyed out until it is installed.", tool_cards or [card("None needed", "Every box runs "
                                                                        "with what is installed.", [])])
+
+        assistant = card("AI assistants", "Claude, or another assistant that speaks MCP, can use OpenProcess: "
+                         "discover, check and analyse in your folder, citing its sources, with every change "
+                         "reviewable.", [])
+        connect = button("Connect…", self.connect_requested.emit, kind="primary",
+                         tooltip="Help ▸ Connect an AI Assistant…")
+        assistant.add(hbox(connect, None))
+        band("AI ASSISTANTS", "", [assistant])
 
         outputs = []
         for title, text, names in OUTPUTS:

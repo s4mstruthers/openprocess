@@ -124,6 +124,84 @@ The *Science* boxes in `openprocess/flow/boxes/science.py` (pandas, NumPy, SciPy
 matplotlib) are written to be copied: each is a few lines around one
 library call.
 
+### Parallel work
+
+A box whose work is the same computation over many independent items (the
+variants of a log, its cases, the resamples of a bootstrap, the candidate
+places of a miner) can use every core with one call, and get exactly the
+result a loop would give:
+
+```python
+# Week 5/boxes/variant_fit.py
+import random
+
+from openprocess import flow
+from openprocess.flow import box, EventLog, PetriNet, Table
+from openprocess.mining.conformance.token_replay import replay_trace
+
+
+def fit_of(model: PetriNet, variant):                 # one item; at the top level of the file
+    index, (trace, count) = variant
+    replay = replay_trace(model, trace, count)
+    noise = random.Random(flow.item_seed(42, index)).random()   # random, but per item
+    flow.note(f"⟨{', '.join(trace)}⟩: {replay.missing} missing")  # reaches the How tab
+    return [", ".join(trace), count, replay.missing, noise]
+
+
+@box(group="Check")
+def variant_fit(model: PetriNet, log: EventLog) -> Table:
+    """Replays every variant, on all cores."""
+    variants = list(enumerate(sorted(log.simple_log().items())))
+    rows = flow.parallel_map(fit_of, variants, shared=model)
+    return Table("Fit per variant", ["variant", "cases", "missing", "noise"], rows)
+```
+
+`flow.parallel_map(function, items, shared=…, setup=…, workers=…, progress=…, cost=…)`
+returns `[function(shared, item) for item in items]` (or `function(item)`
+without `shared`): the same values in the same order whatever the number of
+workers, so the record, the fingerprints and `openprocess run --check` see
+the same numbers. What reaches the box's *How* tab is the same too: the
+notes, steps and values each item reports are added in item order.
+
+| Argument | What it does |
+|---|---|
+| `shared` | data every item needs (a model, a log, settings), sent to each worker once |
+| `setup(shared)` | run once per worker; its result is what the function gets instead of `shared` (a compiled model, a cache) |
+| `workers` | how many processes; default the cores less one, at most 8, or `OPENPROCESS_WORKERS`; `1` runs the loop here |
+| `progress(done, total)` | called as items finish |
+| `cost(item)` | an estimate of an item's cost, so the expensive ones start first |
+
+Four rules make the promise hold, and they are the ones a good algorithm
+follows anyway:
+
+1. **Each item from its own inputs.** The function computes an item from the
+   item and `shared` alone: not from what other items did, not from a global
+   that changes. (OpenProcess's alignments and token replay are written this
+   way, and run in parallel on large logs.)
+2. **Randomness per item.** Seed a generator per item with
+   `flow.item_seed(seed, index)`, never one generator shared by all items:
+   then the draws do not depend on which worker took which item.
+3. **At the top level of a module.** Workers find the function by its module
+   and name; a folder's `boxes/` file counts. A lambda, a nested function or
+   one typed into a notebook runs in a loop here instead, with the same result.
+4. **Worth a process.** Starting workers costs a fraction of a second, so use
+   it for items that take milliseconds or more each (an alignment, a replay,
+   a fit), or many thousands of small ones.
+
+An item that fails raises `flow.ParallelError`, which says which item and
+carries the worker's traceback. The machinery is `openprocess.parallel`
+(`map_items`, the same promise without the *How* tab), standard library only,
+so engine code uses it too. Workers are processes, not threads: the work is
+Python, and threads would take turns on one interpreter lock.
+
+It works the same on macOS, Windows and Linux, in a pip install and in the
+downloaded app (which starts copies of itself as workers); every release is
+checked on all three. What a function prints goes to the worker's error
+stream, not into the results. If a machine cannot start worker processes at
+all (a locked-down sandbox, say), `parallel_map` runs the loop instead and
+gives the same result, only slower; `openprocess.parallel.status()` says
+whether workers are available and, if not, why.
+
 ## Workflows in Python
 
 ```python
