@@ -348,12 +348,12 @@ class Workflow:
             "name": self.name,
             "boxes": [{"id": n.id, "box": n.box, "settings": {k: (v.to_json() if is_sweep(v) else _json_value(v))
                                                              for k, v in n.settings.items()},
-                       "position": list(n.position), **({"title": n.title} if n.title else {}),
-                       **({"layout": {k: list(v) for k, v in n.layout.items()}} if n.layout else {})}
+                       "position": _coordinates(n.position), **({"title": n.title} if n.title else {}),
+                       **({"layout": {k: _coordinates(v) for k, v in n.layout.items()}} if n.layout else {})}
                       for n in self.nodes.values()],
             "connections": [{"from": e.source, "output": e.output, "to": e.target, "input": e.input}
                             for e in self.edges],
-            "groups": [{"id": g.id, "name": g.name, "boxes": list(g.members), "position": list(g.position)}
+            "groups": [{"id": g.id, "name": g.name, "boxes": list(g.members), "position": _coordinates(g.position)}
                        for g in self.groups.values()],
         }
 
@@ -385,6 +385,12 @@ class Workflow:
             group = wf.group(item["boxes"], item.get("name", "Group"), id=item.get("id"))
             group.position = tuple(item.get("position", group.position))
         return wf
+
+
+def _coordinates(point) -> list:
+    """A position for the file: the canvas works in floats, but a whole number
+    is written as one (a file opened and saved keeps its ``[0, 360]``)."""
+    return [int(v) if isinstance(v, float) and v.is_integer() else v for v in point]
 
 
 def _stand_in(library, box_id: str) -> str | None:

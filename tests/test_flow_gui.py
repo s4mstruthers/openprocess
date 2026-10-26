@@ -1451,3 +1451,68 @@ def test_a_figure_keeps_its_proportions_at_any_width(app):
                        '<rect width="900" height="450" fill="white"/></svg>')
     assert figure.hasHeightForWidth()
     assert figure.heightForWidth(380) == 190 and figure.heightForWidth(900) == 450
+
+
+def test_opening_and_running_a_workflow_leaves_its_file_alone(app, tmp_path):
+    """Regression: opening the BPI 2019 example in a folder without its log ran
+    the workflow (the Open log box failed), and the run's autosave rewrote the
+    file: the name became the file's stem, the positions floats, and the record
+    of the last successful run (versions, the input's fingerprint, every result)
+    was replaced by an empty one.  Now a run saves nothing unless the workflow
+    was edited, and a save keeps the name, whole-number positions and the
+    record until a successful run replaces it."""
+    import json
+    import shutil
+
+    from openprocess.flow.record import load
+    from openprocess.gui.flow.page import WorkflowPage
+    from openprocess.gui.studio.app import AUTOSAVE_DELAY, StudioWindow
+
+    source = Path(__file__).resolve().parent.parent / "examples" / "bpi2019" / "BPI Challenge 2019.cpnflow"
+    target = tmp_path / source.name
+    shutil.copy(source, target)                    # without BPI_Challenge_2019.xes beside it
+    original = target.read_bytes()
+    before = json.loads(original)
+    assert before["name"] == "BPI Challenge 2019 · purchase to pay" and before["record"]["results"]
+
+    window = StudioWindow()
+    window.show()
+    assert window.open_workspace(str(tmp_path))
+    _pump(app, 0.3)
+    window.open_path(str(target))
+    page = window.current_page()
+    assert isinstance(page, WorkflowPage) and page.document.autosave
+    _wait_run(app, page, 20)
+    assert page.run.failed() and not page.run.ok           # the log is not there
+    assert not page.document.dirty
+    _pump(app, AUTOSAVE_DELAY / 1000 + 1)
+    window._flush_autosaves()
+    assert target.read_bytes() == original, "a run without edits rewrote the file"
+    assert page.workflow.name == "BPI Challenge 2019 · purchase to pay"
+
+    # An edit is saved: the moved box moves, and nothing else changes but the history.
+    node = _node(page, "open_log")
+    node.position = (node.position[0], node.position[1] + 40.0)
+    page._mark_edited("move")
+    assert _wait_for_file(app, target, original, AUTOSAVE_DELAY / 1000 + 3)
+    after = json.loads(target.read_text(encoding="utf-8"))
+    assert after["name"] == before["name"]
+    assert after["boxes"][0]["position"] == [0, 400] and all(
+        isinstance(v, int) for box in after["boxes"] for v in box["position"])
+    assert [b["settings"] for b in after["boxes"]] == [b["settings"] for b in before["boxes"]]
+    assert {k: v for k, v in after["record"].items() if k != "history"} \
+        == {k: v for k, v in before["record"].items() if k != "history"}
+    workflow, record = load(target, page.library)
+    assert workflow.nodes["n1"].position == (0, 400) and record.results == before["record"]["results"]
+    page.document.dirty = False
+    window.close()
+
+
+def _wait_for_file(app, path: Path, original: bytes, seconds: float) -> bool:
+    end = time.time() + seconds
+    while time.time() < end:
+        app.processEvents()
+        if path.read_bytes() != original:
+            return True
+        time.sleep(0.02)
+    return False
