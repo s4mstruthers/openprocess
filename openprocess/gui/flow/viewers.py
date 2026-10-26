@@ -462,9 +462,11 @@ def result_widget(value, page=None, node=None) -> QWidget:
 # ---------------------------------------------------------------------------
 # How
 # ---------------------------------------------------------------------------
-def how_widget(explanation: Explanation, page=None, value=None) -> QWidget:
+def how_widget(explanation: Explanation, page=None, value=None, spec=None, title: str = "") -> QWidget:
     """The box's report in full, with *Step through* to play it one moment at
-    a time over a drawing of ``value`` (the box's result)."""
+    a time over a drawing of ``value`` (the box's result), and *Copy as
+    Markdown* / *LaTeX* for notes and papers (with the algorithm's sources
+    when ``spec`` is given)."""
     from .stepper import StepThrough, moments_of
     host = QWidget()
     layout = QVBoxLayout(host)
@@ -474,6 +476,21 @@ def how_widget(explanation: Explanation, page=None, value=None) -> QWidget:
         layout.addWidget(label("This box has nothing to add: its result is all there is.", "muted", wrap=True))
         return host
     t = style.tokens()
+    heading = title                      # (the loop over steps below reuses the name "title")
+
+    def copy_as(fmt: str) -> None:
+        from ...flow.derivation import derivation
+        text = derivation(explanation, value, heading, spec, fmt)
+        QApplication.clipboard().setText(text)
+        window = page.window() if page is not None and hasattr(page, "window") else None
+        if window is not None and hasattr(window, "statusBar"):
+            window.statusBar().showMessage(f"The derivation is on the clipboard as {fmt}"
+                                           + (", with the sources it follows" if spec is not None else ""), 6000)
+    copy_row = hbox(button("Copy as Markdown", lambda: copy_as("Markdown"),
+                           tooltip="The steps, notes and values as Markdown tables, with the sources the "
+                                   "algorithm follows: paste into notes, a README or a chat"),
+                    button("Copy as LaTeX", lambda: copy_as("LaTeX"),
+                           tooltip="The same as LaTeX (booktabs tables), with BibTeX for the sources"), None)
     full = QWidget()
     full.setObjectName("plain")
     full_layout = QVBoxLayout(full)
@@ -503,6 +520,7 @@ def how_widget(explanation: Explanation, page=None, value=None) -> QWidget:
         step_button.setObjectName("stepThrough")
         layout.addLayout(hbox(label(f"{len(moments_of(explanation))} moments: notes, steps and values, in the "
                                     "order the box reported them.", "muted", wrap=True), step_button))
+    layout.addLayout(copy_row)
     layout.addWidget(full)
     for entry in explanation.entries:
         if entry[0] == "note":

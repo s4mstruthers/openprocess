@@ -997,7 +997,7 @@ class WorkflowPage(QWidget):
         if index == 1:
             if result is None or result.status not in (DONE, FAILED):
                 return label("Runs first, then shows how it got there.", "muted", wrap=True)
-            return how_widget(result.explanation, self, result.value)
+            return how_widget(result.explanation, self, result.value, spec=spec, title=self.workflow.title(node))
         if index == 2:
             return code_widget(spec, self)
         settings = SettingsWidget(spec, node.settings, self.folder,

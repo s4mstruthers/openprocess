@@ -45,7 +45,7 @@ dependencies = []
 # updates (its bundled Python cannot find the system's own).
 app = ["PySide6>=6.6", "certifi"]
 gui = ["PySide6>=6.6", "certifi"]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "mcp>=2.3"]
 # The Science boxes (Describe log, Bootstrap fitness, Compare samples, Correlate,
 # Plot) and the converters to pandas and matplotlib.  Each box says which of
 # these it needs; without them it is listed greyed out.
@@ -55,6 +55,8 @@ predict = ["scikit-learn>=1.3"]
 # Optional: the ILP Miner, PM4Py's heuristics net, and a cross-check of the
 # built-in algorithms.  PM4Py is AGPL-3.0 licensed.
 pm4py = ["pm4py>=2.7"]
+# The MCP server, for Claude and other AI assistants: `openprocess mcp`.
+mcp = ["mcp>=2.3"]
 
 [project.urls]
 Homepage = "https://github.com/s4mstruthers/openprocess"
@@ -64,6 +66,7 @@ Releases = "https://github.com/s4mstruthers/openprocess/releases"
 [project.scripts]
 # Command-line entry points created by `pip install -e .`
 openprocess = "openprocess.cli:main"
+openprocess-mcp = "openprocess.mcp:main"
 
 [project.gui-scripts]
 openprocess-cpn = "openprocess.gui.app:main"
@@ -87,6 +90,8 @@ include = ["openprocess*", "cpnpy"]
 "openprocess" = ["exercises/*.md", "exercises/*/*/*"]
 # The guide shown by Help ▸ Writing Exercise Packs.
 "openprocess.learn" = ["*.md"]
+# The guide shown by Help ▸ Connect an AI Assistant, and served to assistants.
+"openprocess.mcp" = ["*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

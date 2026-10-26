@@ -255,6 +255,13 @@ class Box:
     def __repr__(self) -> str:
         return f"<box {self.spec.id}>"
 
+    def publish(self, name: str | None = None) -> dict:
+        """Make this box, defined in a notebook or a script, a box of the folder
+        open in OpenProcess Studio: its source goes to ``boxes/<name>.py`` there
+        (see :func:`openprocess.flow.studio.publish_box`)."""
+        from .studio import publish_box
+        return publish_box(self, name)
+
 
 # ---------------------------------------------------------------------------
 # Reading the signature

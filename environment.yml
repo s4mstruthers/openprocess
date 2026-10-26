@@ -18,5 +18,6 @@ dependencies:
   - pip
   - pip:
       - -e .
+      - mcp>=2.3               # the MCP server for AI assistants (openprocess mcp)
       # Optional extra miners and a live cross-check (AGPL-3.0); uncomment:
       # - pm4py>=2.7

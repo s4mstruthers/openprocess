@@ -252,7 +252,8 @@ def attach_definition(widget: QWidget, key: str | None, instance: list[str] | No
 # ---------------------------------------------------------------------------
 # Guides: References, Writing Exercise Packs
 # ---------------------------------------------------------------------------
-GUIDES = {"references": "References", "exercise-packs": "Writing Exercise Packs"}
+GUIDES = {"references": "References", "exercise-packs": "Writing Exercise Packs",
+          "mcp": "Connect an AI Assistant"}
 _guides: dict[str, QDialog] = {}
 
 
@@ -263,6 +264,9 @@ def guide_markdown(name: str) -> str:
         text = references.markdown()
         return text.split("-->", 1)[-1].lstrip()
     from pathlib import Path
+    if name == "mcp":
+        from ...mcp import __file__ as mcp
+        return (Path(mcp).parent / "connecting.md").read_text(encoding="utf-8")
     from ...learn import __file__ as learn
     return (Path(learn).parent / f"{name}.md").read_text(encoding="utf-8")
 
