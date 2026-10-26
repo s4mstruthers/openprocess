@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 from ... import flow
+from ...mining.bpmn import BPMN
 from ...mining.log import KEY_NAME, Event, EventLog, Trace, parse_simple_log
 from ...mining.petrinet import PetriNet
 from ...mining.playout import play_out
@@ -93,6 +94,23 @@ def open_net(file: Path) -> PetriNet:
     net = read_pnml(_resolve(file))
     flow.note(f"{Path(file).name}: {net.summary()}")
     return net
+
+
+@box(name="Open BPMN", group="Input")
+def open_bpmn(file: Path) -> BPMN:
+    """Opens a BPMN 2.0 model (a ``.bpmn`` file from Camunda Modeler, bpmn.io,
+    Signavio, ...): its start and end events, tasks, exclusive and parallel
+    gateways and sequence flows. Pools, lanes, message flows and data are
+    read past; what had to be approximated is noted.
+
+    file: the ``.bpmn`` file. Choose… picks it; a name alone means a file in the workflow's folder
+    """
+    from ...mining.bpmn import read_bpmn
+    model = read_bpmn(_resolve(file))
+    flow.note(f"{Path(file).name}: {model.summary()}")
+    for warning in model.warnings:
+        flow.note(f"Warning: {warning}")
+    return model
 
 
 @box(name="Open coloured net", group="Input")

@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 
 from ...mining.analysis import StateGraph
+from ...mining.bpmn import BPMN, END as BPMN_END, GATEWAY_SYMBOLS, START as BPMN_START, TASK
 from ...mining.dfg import DFG, END, START
 from ...mining.discovery.heuristics import DependencyGraph
 from ...mining.petrinet import Marking, PetriNet
@@ -76,6 +77,35 @@ def petri_net_specs(net: PetriNet, marking: Marking | None = None,
     edges = [EdgeSpec(a.source, a.target, text=str(a.weight) if a.weight != 1 else "",
                       width=1.4) for a in net.arcs]
     return nodes, edges
+
+
+# ---------------------------------------------------------------------------
+# BPMN
+# ---------------------------------------------------------------------------
+def bpmn_specs(model: BPMN) -> tuple[list[NodeSpec], list[EdgeSpec], dict[str, tuple[float, float]] | None]:
+    """Nodes, edges and positions for a BPMN model: rounded rectangles for the
+    tasks, diamonds with × or + for the gateways, circles for the events.
+    Positions are the diagram's when every node has one, else None (laid out)."""
+    t = style.tokens()
+    nodes: list[NodeSpec] = []
+    for node in model.nodes.values():
+        if node.kind == TASK:
+            nodes.append(NodeSpec(node.id, "activity", text=node.name, fill=t.surface, stroke=t.border,
+                                  tooltip=f"Task {node.name}"))
+        elif node.kind in (BPMN_START, BPMN_END):
+            what = "Start event" if node.kind == BPMN_START else "End event"
+            nodes.append(NodeSpec(node.id, node.kind, below=node.name,
+                                  tooltip=what + (f" {node.name}" if node.name else "")))
+        else:
+            symbol = GATEWAY_SYMBOLS[node.kind]
+            what = "Exclusive gateway (one path)" if symbol == "×" else "Parallel gateway (every path)"
+            nodes.append(NodeSpec(node.id, "gateway", text=symbol, below=node.name, fill=t.accent_soft,
+                                  stroke=t.accent, tooltip=what + (f": {node.name}" if node.name else "")))
+    edges = [EdgeSpec(f.source, f.target, text=f.name, width=1.4,
+                      tooltip=f"{model.nodes[f.source].name or f.source} → {model.nodes[f.target].name or f.target}")
+             for f in model.flows]
+    positions = {n.id: n.position for n in model.nodes.values()} if model.has_positions() else None
+    return nodes, edges, positions
 
 
 # ---------------------------------------------------------------------------

@@ -2345,8 +2345,8 @@ class StudioWindow(QMainWindow):
     def action_open(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Open", dialog_folder(),
-            "Supported files (*.xes *.gz *.csv *.pnml *.cpn *.cpnflow *.zip);;Event logs (*.xes *.gz *.csv);;"
-            "Petri nets (*.pnml);;CPN Tools models (*.cpn);;Analyses (*.cpnflow);;"
+            "Supported files (*.xes *.gz *.csv *.pnml *.bpmn *.cpn *.cpnflow *.zip);;Event logs (*.xes *.gz *.csv);;"
+            "Petri nets (*.pnml);;BPMN models (*.bpmn);;CPN Tools models (*.cpn);;Analyses (*.cpnflow);;"
             "Exported experiments (*.zip);;All files (*)")
         self.open_files(paths)
 
@@ -2542,8 +2542,8 @@ class StudioWindow(QMainWindow):
                                         if problems else ""), 10000)
             elif lower.endswith(".txt") and file_kind(Path(path)) in ("log", "ts"):
                 self.add_document(self._read_text_file(path))
-            elif file_kind(Path(path)) == "ocel":
-                # An object-centric log has no page of its own: it is a box on an analysis.
+            elif file_kind(Path(path)) in ("ocel", "bpmn"):
+                # An object-centric log or a BPMN model has no page of its own: it is a box on an analysis.
                 self.boxes_for_files([path])
             elif lower.endswith(".csv"):
                 if csv_mapping is not None:          # reopening: reuse the saved mapping
@@ -2585,7 +2585,7 @@ class StudioWindow(QMainWindow):
                                   lambda message: self._load_failed(path, message, size))
             else:
                 QMessageBox.information(self, "Unsupported file",
-                                        f"{name}: open .xes, .csv, .pnml or .cpn files (or a "
+                                        f"{name}: open .xes, .csv, .pnml, .bpmn or .cpn files (or a "
                                         "log in textbook notation named log.txt or "
                                         "….log.txt, a transition system named ts.txt or "
                                         "….ts.txt).")
