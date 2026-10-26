@@ -517,8 +517,11 @@ def command_run(arguments: argparse.Namespace) -> int:
             return 1
         print(f"Every recorded result was reproduced ({len(record.results)} boxes).")
     elif arguments.save:
-        save(workflow, path, run, folder)
-        print(f"Recorded the results in {path.name}")
+        save(workflow, path, run, folder, previous=record)
+        if run.failed() and record.results:
+            print(f"A box failed, so {path.name} keeps the record of its last successful run")
+        else:
+            print(f"Recorded the results in {path.name}")
     return 0 if run.ok else 1
 
 
