@@ -983,7 +983,9 @@ the clone is older than the latest release. See
 
 OpenProcess comes with an **MCP server**, so Claude (Desktop or Code), Cursor
 or any other assistant that speaks the Model Context Protocol can use it the
-way you do:
+way you do. In the app: **Help ▸ Connect an AI Assistant…**, then **Connect**
+next to your assistant, and restart it. No terminal needed: the connector is
+inside the app. From a pip install:
 
 ```bash
 pip install "openprocess[app,mcp]"

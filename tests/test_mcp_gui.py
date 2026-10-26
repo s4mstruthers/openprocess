@@ -138,3 +138,34 @@ def test_copy_as_markdown_on_the_how_tab(app):
     button.click()
     text = QApplication.clipboard().text()
     assert text.startswith("## α") and "Y_L" in text and "**Sources**" in text
+
+
+def test_connect_an_assistant_without_a_terminal(app, tmp_path, monkeypatch):
+    """Help ▸ Connect an AI Assistant: Connect writes the assistant's settings
+    (keeping its other servers) and the card says it is connected."""
+    import json
+    from openprocess.gui.studio import connect as connect_module
+    from openprocess.gui.studio.connect import ConnectDialog
+    from openprocess.mcp import install
+    config = tmp_path / "Claude" / "claude_desktop_config.json"
+    config.parent.mkdir()
+    config.write_text(json.dumps({"mcpServers": {"other": {"command": "x"}}}))
+    monkeypatch.setattr(install, "config_path", lambda client: config if client == "claude-desktop" else None)
+    monkeypatch.setattr(install, "claude_cli", lambda: None)
+    monkeypatch.setattr(install, "server_available", lambda: (True, ""))
+    monkeypatch.setattr(connect_module.install, "server_available", lambda: (True, ""))
+    dialog = ConnectDialog()
+    dialog.show()
+    _pump(app, 0.5)
+    assert dialog.chips["claude-desktop"].text() == "not connected"
+    assert dialog.buttons["claude-desktop"].isEnabled()
+    assert dialog.chips["claude-code"].text() == "not found" and "claude mcp add" in dialog.notes["claude-code"].text()
+    dialog.connect_client("claude-desktop")
+    _pump(app, 1.0)
+    servers = json.loads(config.read_text())["mcpServers"]
+    assert "other" in servers and servers["openprocess"] == install.server_entry()
+    assert dialog.chips["claude-desktop"].text() == "connected"
+    dialog.copy_settings()
+    from PySide6.QtWidgets import QApplication
+    assert '"openprocess"' in QApplication.clipboard().text()
+    dialog.close()

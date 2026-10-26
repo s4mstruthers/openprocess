@@ -41,6 +41,24 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 # scipy or matplotlib to a folder of the user's own (openprocess.packages).
 PIP_DATAS, PIP_BINARIES, PIP_HIDDEN = collect_all("pip")
 
+# The MCP server (Help ▸ Connect an AI Assistant starts `OpenProcess --mcp`):
+# the SDK imports most of its dependencies lazily or by name, and some carry
+# data files (JSON schemas), so each is collected whole.  Missing ones are
+# skipped here; the build's smoke test does the handshake and fails if the
+# server cannot start.
+MCP_DATAS, MCP_BINARIES, MCP_HIDDEN = [], [], []
+for _package in ("mcp", "mcp_types", "pydantic", "pydantic_core", "pydantic_settings", "anyio", "sniffio",
+                 "starlette", "uvicorn", "sse_starlette", "httpx2", "httpcore2", "h11", "jsonschema",
+                 "jsonschema_specifications", "referencing", "rpds", "attrs", "typing_inspection",
+                 "annotated_types", "jwt", "multipart", "python_multipart", "opentelemetry", "dotenv"):
+    try:
+        _d, _b, _h = collect_all(_package)
+    except Exception:                    # noqa: BLE001 - not installed, or nothing to collect
+        continue
+    MCP_DATAS += _d
+    MCP_BINARIES += _b
+    MCP_HIDDEN += _h
+
 # A package installed that way imports what it likes from the standard library
 # (matplotlib wants unittest), and PyInstaller packs only what the app imports:
 # so the whole library is listed (openprocess.packages.stdlib_modules).
@@ -58,14 +76,16 @@ SOURCES = [(str(path), str(pathlib.Path("openprocess") / path.relative_to(ROOT /
 analysis = Analysis(
     [str(PACKAGING / "openprocess_studio.py")],
     pathex=[str(ROOT)],
-    binaries=PIP_BINARIES,
+    binaries=PIP_BINARIES + MCP_BINARIES,
     # Files the code opens by path at run time (the window icon, and the demo
     # exercises that File ▸ Open Demo Exercises copies to Documents).
-    datas=PIP_DATAS + [(str(ROOT / "openprocess" / "gui" / "resources" / "openprocess-icon.png"),
+    datas=PIP_DATAS + MCP_DATAS + [(str(ROOT / "openprocess" / "gui" / "resources" / "openprocess-icon.png"),
             "openprocess/gui/resources"),
            (str(ROOT / "openprocess" / "exercises"), "openprocess/exercises"),
            # Help ▸ Writing Exercise Packs.
-           (str(ROOT / "openprocess" / "learn" / "exercise-packs.md"), "openprocess/learn")]
+           (str(ROOT / "openprocess" / "learn" / "exercise-packs.md"), "openprocess/learn"),
+           # Help ▸ Connect an AI Assistant, and the guide the server gives assistants.
+           (str(ROOT / "openprocess" / "mcp" / "connecting.md"), "openprocess/mcp")]
           + SOURCES,
     # Imported inside functions, or by name (the standard boxes: the library
     # imports openprocess.flow.boxes.<group> at run time, so PyInstaller
@@ -73,8 +93,9 @@ analysis = Analysis(
     # listed so they are never missed.  certifi brings its certificate file
     # (PyInstaller's hook), which the update check needs to reach GitHub: the
     # bundled Python cannot use the system's.
-    hiddenimports=["openprocess.analysis.state_space_process", "certifi", "openprocess.packages"]
-                  + collect_submodules("openprocess.flow.boxes") + PIP_HIDDEN + STDLIB,
+    hiddenimports=["openprocess.analysis.state_space_process", "certifi", "openprocess.packages",
+                   "openprocess.mcp", "openprocess.mcp.server", "openprocess.mcp.api", "openprocess.mcp.install"]
+                  + collect_submodules("openprocess.flow.boxes") + PIP_HIDDEN + MCP_HIDDEN + STDLIB,
     # Not needed by the app.  PM4Py is an optional extra (AGPL-3.0) and is
     # never bundled; the app hides its PM4Py options when it is missing.
     excludes=["pm4py", "tkinter", "pytest", "matplotlib", "numpy", "pandas", "scipy"],

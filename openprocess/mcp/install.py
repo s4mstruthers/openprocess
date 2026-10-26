@@ -1,11 +1,13 @@
-"""Connecting an assistant in one command: ``openprocess mcp install <client>``.
+"""Connecting an assistant: one click in the app, or ``openprocess mcp install <client>``.
 
 Each client keeps a JSON file (or, for Claude Code, a command) naming the
 MCP servers it starts.  This module writes OpenProcess into it -- merging,
-never replacing what is there -- and prints the configuration for clients
-it does not know.  The server command is the ``openprocess-mcp`` script of
-this Python (or the standalone app with ``--mcp``), so the assistant uses
-the same OpenProcess as the user.
+never replacing what is there -- and gives the configuration for clients it
+does not know.  The server command is this install's own: the standalone
+app started with ``--mcp`` (the app downloaded from the releases, which has
+no ``openprocess`` command), or the ``openprocess-mcp`` script of this
+Python.  *Help ▸ Connect an AI Assistant…* in the app calls the same
+functions, so nobody needs a terminal.
 """
 
 from __future__ import annotations
@@ -19,13 +21,20 @@ from pathlib import Path
 
 NAME = "openprocess"
 
+#: The flag that starts the standalone app as the MCP server (no window).
+MCP_FLAG = "--mcp"
+
+#: Clients that can be connected in one step, and how to call them.
+CLIENTS = {"claude-desktop": "Claude Desktop", "claude-code": "Claude Code", "cursor": "Cursor",
+           "windsurf": "Windsurf"}
+
 
 def server_command() -> list[str]:
     """How to start the server from this install: the console script when it
     is beside this Python, else ``python -m openprocess.mcp``; the app itself
     when running as the standalone app."""
     if getattr(sys, "frozen", False):
-        return [sys.executable, "--mcp"]
+        return [sys.executable, MCP_FLAG]
     script = Path(sys.executable).parent / ("openprocess-mcp.exe" if sys.platform == "win32" else "openprocess-mcp")
     if script.is_file():
         return [str(script)]
@@ -75,6 +84,85 @@ def _merge(path: Path) -> str:
     return str(path)
 
 
+def claude_cli() -> str | None:
+    """Claude Code's ``claude`` command.  An app started from the Dock or the
+    Start menu does not have the user's shell PATH, so the usual places are
+    looked at too."""
+    found = shutil.which("claude")
+    if found:
+        return found
+    home = Path.home()
+    candidates = [home / ".claude" / "local" / "claude", home / ".local" / "bin" / "claude",
+                  Path("/opt/homebrew/bin/claude"), Path("/usr/local/bin/claude"),
+                  home / ".npm-global" / "bin" / "claude", home / ".bun" / "bin" / "claude"]
+    if sys.platform == "win32":
+        appdata = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
+        candidates += [appdata / "npm" / "claude.cmd", home / ".local" / "bin" / "claude.exe"]
+    return next((str(c) for c in candidates if c.is_file()), None)
+
+
+def claude_code_command() -> str:
+    """The command that adds OpenProcess to Claude Code, to run by hand."""
+    command = server_command()
+    quoted = " ".join(f'"{part}"' if " " in part else part for part in command)
+    return f"claude mcp add --scope user {NAME} -- {quoted}"
+
+
+def server_available() -> tuple[bool, str]:
+    """Can this install run the server?  (False and why when the MCP SDK is missing.)"""
+    try:
+        import mcp.server.mcpserver  # noqa: F401
+    except ImportError:
+        if getattr(sys, "frozen", False):
+            return False, "This copy of the app was built without the connector."
+        return False, 'The connector needs the MCP Python SDK: pip install "openprocess[mcp]"'
+    return True, ""
+
+
+def check_server(timeout: float = 60.0) -> dict:
+    """Start the server as an assistant would and do the MCP handshake:
+    ``{"ok": True, "name", "version", "tools"}``, or ``{"ok": False, "error"}``.
+
+    The same check the release build runs on every system, so a connector
+    that cannot start is noticed before an assistant tries it."""
+    import json as _json
+    command = server_command()
+    environment = dict(os.environ, QT_QPA_PLATFORM="offscreen")
+    try:
+        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, env=environment)
+    except OSError as error:
+        return {"ok": False, "error": f"could not start {command[0]}: {error}"}
+    messages = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+         "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                    "clientInfo": {"name": "openprocess-check", "version": "1"}}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+    ]
+    payload = "".join(_json.dumps(m) + "\n" for m in messages).encode("utf-8")
+    try:
+        out, err = process.communicate(payload, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        out, err = process.communicate()
+    answers = {}
+    for line in out.decode("utf-8", "replace").splitlines():
+        try:
+            message = _json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(message, dict) and "id" in message:
+            answers[message["id"]] = message
+    info = (answers.get(1, {}).get("result") or {}).get("serverInfo") or {}
+    tools = (answers.get(2, {}).get("result") or {}).get("tools")
+    if not info or tools is None:
+        tail = err.decode("utf-8", "replace").strip().splitlines()[-6:]
+        return {"ok": False, "error": "the server did not answer the handshake"
+                + (": " + " / ".join(tail) if tail else "")}
+    return {"ok": True, "name": info.get("name"), "version": info.get("version"), "tools": len(tools)}
+
+
 def install(client: str) -> str:
     """Write the configuration for ``client``; returns what was done, in words."""
     client = client.lower().replace("_", "-").replace(" ", "-")
@@ -82,10 +170,12 @@ def install(client: str) -> str:
         return snippet()
     if client == "claude-code":
         command = server_command()
-        claude = shutil.which("claude")
+        claude = claude_cli()
         if claude is None:
             return ("Claude Code's command-line tool (claude) was not found. In a terminal where it is, run:\n"
-                    f"  claude mcp add --scope user {NAME} -- {' '.join(command)}")
+                    f"  {claude_code_command()}")
+        # Replace an earlier entry (an older copy of the app, say) rather than fail on the name.
+        subprocess.run([claude, "mcp", "remove", "--scope", "user", NAME], capture_output=True, text=True)
         done = subprocess.run([claude, "mcp", "add", "--scope", "user", NAME, "--", *command],
                               capture_output=True, text=True)
         if done.returncode != 0:
@@ -103,25 +193,39 @@ def install(client: str) -> str:
     return f"Wrote {written}\n{restart}"
 
 
-def status() -> dict:
-    """Which known clients have OpenProcess configured."""
+def status(include_claude_code: bool = True) -> dict:
+    """Which known clients have OpenProcess configured: ``configured``, and
+    ``current`` when the entry starts this install (not an older copy of the
+    app, or another Python)."""
     out = {}
+    wanted = server_entry()
     for client in ("claude-desktop", "cursor", "windsurf"):
         path = config_path(client)
-        configured = False
+        entry = None
         if path is not None and path.is_file():
             try:
-                configured = NAME in (json.loads(path.read_text(encoding="utf-8") or "{}").get("mcpServers") or {})
+                entry = (json.loads(path.read_text(encoding="utf-8") or "{}").get("mcpServers") or {}).get(NAME)
             except ValueError:
-                configured = False
-        out[client] = {"config": str(path) if path else None, "configured": configured}
-    claude = shutil.which("claude")
+                entry = None
+        installed = client != "claude-desktop" or path is None or path.parent.is_dir()
+        out[client] = {"config": str(path) if path else None, "configured": entry is not None,
+                       "current": entry is not None and entry.get("command") == wanted["command"]
+                       and list(entry.get("args") or []) == wanted["args"], "installed": installed}
+    claude = claude_cli() if include_claude_code else None
     if claude:
-        done = subprocess.run([claude, "mcp", "list"], capture_output=True, text=True)
-        out["claude-code"] = {"configured": NAME in (done.stdout or ""), "config": "claude mcp list"}
+        try:
+            done = subprocess.run([claude, "mcp", "get", NAME], capture_output=True, text=True, timeout=20)
+            text = (done.stdout or "") + (done.stderr or "")
+            configured = done.returncode == 0
+            out["claude-code"] = {"configured": configured, "current": configured and server_command()[0] in text,
+                                  "config": "claude mcp get openprocess", "installed": True}
+        except (OSError, subprocess.TimeoutExpired):
+            out["claude-code"] = {"configured": False, "current": False, "config": None, "installed": True}
     else:
-        out["claude-code"] = {"configured": False, "config": None}
+        out["claude-code"] = {"configured": False, "current": False, "config": None,
+                              "installed": claude is not None}
     return out
 
 
-__all__ = ["NAME", "config_path", "install", "server_command", "server_entry", "snippet", "status"]
+__all__ = ["CLIENTS", "MCP_FLAG", "NAME", "check_server", "claude_cli", "claude_code_command", "config_path",
+           "install", "server_available", "server_command", "server_entry", "snippet", "status"]

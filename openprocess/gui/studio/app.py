@@ -592,6 +592,7 @@ class StudioWindow(QMainWindow):
         #: The hub picture: what flows in and out, and the tools that plug in (index 1).
         self.connections_page = ConnectionsPage()
         self.connections_page.install_requested.connect(self.install_tool)
+        self.connections_page.connect_requested.connect(self.connect_assistant)
         self.content.addWidget(self.connections_page)
         #: What the main area shows while a file you opened is read (see _start_loading).
         self.loading_page = LoadingPage()
@@ -1471,7 +1472,7 @@ class StudioWindow(QMainWindow):
                      lambda: self.show_guide("exercise-packs"))
         self._action(help_menu, "Cite OpenProcess…", None, self.cite_app)
         self._action(help_menu, "Review AI Changes…", None, self.review_changes)
-        self._action(help_menu, "Connect an AI Assistant…", None, lambda: self.show_guide("mcp"))
+        self._action(help_menu, "Connect an AI Assistant…", None, self.connect_assistant)
         self._action(help_menu, "Check for Updates…", None,
                      lambda: self.check_for_updates(manual=True))
         self._action(help_menu, f"About {APPLICATION_NAME}", None, self._about)
@@ -3216,6 +3217,12 @@ class StudioWindow(QMainWindow):
             self.open_workspace(folder)
 
     # -- an assistant's changes --------------------------------------------------------
+    def connect_assistant(self) -> None:
+        """Help ▸ Connect an AI Assistant…: OpenProcess as Claude's (or another
+        assistant's) connector, one click per assistant, no terminal."""
+        from .connect import show_connect
+        show_connect(self)
+
     def refresh_review(self) -> None:
         """Show (or hide) the pill counting the AI changes not reviewed yet, and
         watch the folder's journal so a new change shows up by itself."""

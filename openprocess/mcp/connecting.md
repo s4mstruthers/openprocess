@@ -9,13 +9,21 @@ coloured nets. It opens what it made in OpenProcess so you see it.
 
 ## Set it up (once)
 
-Install the connector's one dependency with OpenProcess:
+**If you use the app** (downloaded from the releases): choose
+**Help ▸ Connect an AI Assistant…** (or *Connect…* on the Connections page)
+and click **Connect** next to your assistant. That is all: the app writes the
+assistant's settings so that it starts OpenProcess itself, and *Test the
+connector* checks that it answers. Then restart the assistant (quit and reopen
+Claude Desktop). No terminal, and nothing else to install: the connector is
+inside the app.
+
+**If you installed OpenProcess with pip**, add the connector's dependency:
 
 ```
 pip install "openprocess[app,mcp]"
 ```
 
-Then tell your assistant about it, with one command:
+Then use the same menu item, or one command:
 
 | Assistant | Command |
 |---|---|
@@ -24,10 +32,11 @@ Then tell your assistant about it, with one command:
 | Cursor | `openprocess mcp install cursor` |
 | Anything else | `openprocess mcp install print` prints the JSON to paste into its settings |
 
-The command adds an `openprocess` entry to the assistant's configuration
-and keeps everything else that is there (the old file is kept beside it as
-`….before-openprocess`). `openprocess mcp status` says which assistants have
-it.
+Either way, an `openprocess` entry is added to the assistant's
+configuration and everything else there is kept (the old file is kept
+beside it as `….before-openprocess`). `openprocess mcp status`, or the
+dialog, says which assistants have it. If you move the app, connect again:
+the dialog shows *another copy* until you do.
 
 For a client that connects to a URL instead of starting a program,
 `openprocess mcp --http` serves on `http://127.0.0.1:8765/mcp`.

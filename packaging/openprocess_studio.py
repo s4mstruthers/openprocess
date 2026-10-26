@@ -9,6 +9,11 @@ started in three ways:
     Started by the app itself to compute a state space in a separate process
     (see :mod:`openprocess.analysis.state_space_process`).  A frozen app has no
     separate Python to run, so it runs itself with this flag.  No window opens.
+``OpenProcess --mcp``
+    Started by an AI assistant (Claude Desktop, Claude Code, Cursor…) as
+    OpenProcess's MCP server, on stdin and stdout; no window opens.  *Help ▸
+    Connect an AI Assistant…* writes the assistant's settings to start it
+    this way, so the downloaded app needs no ``openprocess`` command.
 ``OpenProcess --openprocess-self-test [MODEL.cpn]``
     Used by the build script: build the main window without showing it,
     check the update check has certificates to trust and, given a model,
@@ -23,6 +28,62 @@ from __future__ import annotations
 import sys
 
 SELF_TEST_FLAG = "--openprocess-self-test"
+MCP_FLAG = "--mcp"                    # the same as openprocess.mcp.install.MCP_FLAG
+
+
+def attach_stdio() -> None:
+    """Give a windowed app's Python its standard streams back.
+
+    On Windows a program built without a console has ``sys.stdin`` and
+    ``sys.stdout`` set to None, although the process that started it (an
+    assistant running the MCP server) passed it pipes: the pipes are there as
+    the process's standard handles, so they are opened as files again.
+    Elsewhere the streams are already there and nothing changes."""
+    import io
+    import os
+    if sys.stdin is not None and sys.stdout is not None:
+        return
+    if sys.platform != "win32":
+        if sys.stdin is None:
+            sys.stdin = io.TextIOWrapper(io.FileIO(0, "rb", closefd=False), encoding="utf-8")
+        if sys.stdout is None:
+            sys.stdout = io.TextIOWrapper(io.FileIO(1, "wb", closefd=False), encoding="utf-8",
+                                          line_buffering=True)
+        if sys.stderr is None:
+            sys.stderr = open(os.devnull, "w", encoding="utf-8")
+        return
+    import ctypes
+    import msvcrt
+    kernel32 = ctypes.windll.kernel32
+    kernel32.GetStdHandle.restype = ctypes.c_void_p
+
+    def stream(number: int, reading: bool):
+        handle = kernel32.GetStdHandle(number)
+        if handle in (None, 0, ctypes.c_void_p(-1).value):
+            return None
+        try:
+            descriptor = msvcrt.open_osfhandle(handle, os.O_BINARY | (os.O_RDONLY if reading else 0))
+        except OSError:
+            return None
+        raw = io.FileIO(descriptor, "rb" if reading else "wb", closefd=False)
+        if reading:
+            return io.TextIOWrapper(io.BufferedReader(raw), encoding="utf-8")
+        return io.TextIOWrapper(io.BufferedWriter(raw), encoding="utf-8", line_buffering=True)
+    if sys.stdin is None:
+        sys.stdin = stream(-10, True)              # STD_INPUT_HANDLE
+    if sys.stdout is None:
+        sys.stdout = stream(-11, False)            # STD_OUTPUT_HANDLE
+    if sys.stderr is None:
+        sys.stderr = stream(-12, False) or open(os.devnull, "w", encoding="utf-8")
+
+
+def serve_mcp(arguments: list[str]) -> int:
+    """``OpenProcess --mcp``: the MCP server on stdio, without Qt's window."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")    # diagrams render as PNG without a window
+    attach_stdio()
+    from openprocess.mcp.server import main as serve
+    return serve(arguments)
 
 
 def self_test(model_path: str | None = None) -> int:
@@ -106,6 +167,22 @@ def self_test(model_path: str | None = None) -> int:
         return 1
     print(f"install: the standard library is there ({checked} modules import)", flush=True)
 
+    # The MCP server (Help ▸ Connect an AI Assistant): the SDK and every tool
+    # must be in the app; build.py then starts `OpenProcess --mcp` and does
+    # the handshake an assistant does.
+    try:
+        import asyncio
+
+        from openprocess.mcp.server import build_server
+        tools = asyncio.run(build_server().list_tools())
+    except Exception as error:  # noqa: BLE001 - whatever the bundle lacks
+        print(f"mcp: the connector does not load in the app: {type(error).__name__}: {error}", flush=True)
+        return 1
+    if len(tools) < 25:
+        print(f"mcp: only {len(tools)} tools in the app", flush=True)
+        return 1
+    print(f"mcp: the connector loads, {len(tools)} tools", flush=True)
+
     if model_path:
         import time
 
@@ -141,6 +218,8 @@ def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == PIP_FLAG:
         return run_pip(sys.argv[2:])            # Install… from Connections, in a copy of the app
     activate()                                  # packages installed that way, on the import path
+    if len(sys.argv) > 1 and sys.argv[1] == MCP_FLAG:
+        return serve_mcp(sys.argv[2:])          # an AI assistant started the app as its MCP server
     if len(sys.argv) > 1 and sys.argv[1] == SELF_TEST_FLAG:
         return self_test(sys.argv[2] if len(sys.argv) > 2 else None)
 

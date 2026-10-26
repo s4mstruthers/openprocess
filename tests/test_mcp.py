@@ -283,3 +283,40 @@ def test_bpmn_round_trip_and_cpn_performance(folder):
     assert api.draw(str(folder / "model.bpmn"), fmt="svg")["svg"].startswith("<svg")
     performance = api.cpn_performance(str(ROOT / "examples" / "timed_conveyor.cpn"), runs=2, steps=20)
     assert performance["rows"] and "throughput" in performance["columns"]
+
+
+def test_the_downloaded_app_starts_the_server_with_its_flag():
+    """The packaged app has no `openprocess` command: an assistant starts the
+    app itself with --mcp.  The packaging entry point must answer the MCP
+    handshake (the release build checks the frozen app the same way)."""
+    pytest.importorskip("mcp")
+    import sys
+    from unittest import mock
+    from openprocess.mcp import install
+    entry = str(ROOT / "packaging" / "openprocess_studio.py")
+    with mock.patch.object(install, "server_command", lambda: [sys.executable, entry, install.MCP_FLAG]):
+        result = install.check_server(timeout=120)
+    assert result["ok"], result
+    assert result["name"] == "OpenProcess" and result["tools"] >= 25
+
+
+def test_a_frozen_app_is_what_the_assistant_starts(monkeypatch):
+    import sys
+    from openprocess.mcp import install
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", "/Applications/OpenProcess.app/Contents/MacOS/OpenProcess")
+    assert install.server_entry() == {"command": "/Applications/OpenProcess.app/Contents/MacOS/OpenProcess",
+                                      "args": ["--mcp"]}
+    assert "OpenProcess.app/Contents/MacOS/OpenProcess" in install.claude_code_command()
+
+
+def test_status_tells_an_older_copy_from_this_one(tmp_path, monkeypatch):
+    from openprocess.mcp import install
+    target = tmp_path / "Claude" / "claude_desktop_config.json"
+    target.parent.mkdir()
+    target.write_text(json.dumps({"mcpServers": {"openprocess": {"command": "/old/OpenProcess", "args": ["--mcp"]}}}))
+    monkeypatch.setattr(install, "config_path", lambda client: target if client == "claude-desktop" else None)
+    state = install.status(include_claude_code=False)["claude-desktop"]
+    assert state["configured"] and not state["current"]
+    install.install("claude-desktop")
+    assert install.status(include_claude_code=False)["claude-desktop"]["current"]

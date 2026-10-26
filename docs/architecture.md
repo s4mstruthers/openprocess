@@ -418,6 +418,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`gui/studio/cite.py`](../openprocess/gui/studio/cite.py) | *Cite*: BibTeX for the app and for the works an algorithm follows, to copy. |
 | [`gui/studio/command_palette.py`](../openprocess/gui/studio/command_palette.py) | The command palette: one key, type, Enter. |
 | [`gui/studio/compare_page.py`](../openprocess/gui/studio/compare_page.py) | Compare two or more event logs side by side. |
+| [`gui/studio/connect.py`](../openprocess/gui/studio/connect.py) | *Connect an AI Assistant…*: OpenProcess as a connector for Claude and others, in one click. |
 | [`gui/studio/connections.py`](../openprocess/gui/studio/connections.py) | The *Connections* view: what flows into OpenProcess, what flows out, and the tools that plug in, drawn as a hub. |
 | [`gui/studio/cpn_page.py`](../openprocess/gui/studio/cpn_page.py) | The coloured-Petri-net workspace: edit, simulate and analyse a CPN model. |
 | [`gui/studio/definition_view.py`](../openprocess/gui/studio/definition_view.py) | Definitions on screen: hover tooltips, click pop-ups and the reference dialog. |
@@ -488,8 +489,8 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`mcp/__init__.py`](../openprocess/mcp/__init__.py) | OpenProcess for AI assistants: an MCP server, and the plain API behind it. |
 | [`mcp/__main__.py`](../openprocess/mcp/__main__.py) | ``python -m openprocess.mcp``: the MCP server on stdio. |
 | [`mcp/api.py`](../openprocess/mcp/api.py) | What the MCP server does, as plain functions: no MCP SDK, no Qt in here. |
-| [`mcp/install.py`](../openprocess/mcp/install.py) | Connecting an assistant in one command: ``openprocess mcp install <client>``. |
+| [`mcp/install.py`](../openprocess/mcp/install.py) | Connecting an assistant: one click in the app, or ``openprocess mcp install <client>``. |
 | [`mcp/server.py`](../openprocess/mcp/server.py) | The MCP server: OpenProcess's tools for Claude and other AI assistants. |
 
-183 modules.
+184 modules.
 <!-- /generated -->

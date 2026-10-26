@@ -21,7 +21,8 @@ The steps:
 1. run PyInstaller on ``packaging/openprocess.spec``;
 2. smoke-test the result: start it with ``--openprocess-self-test`` (builds the
    window off-screen and computes a state space through a worker process, as
-   the app does), then run the worker on its own;
+   the app does), then run the worker on its own, then start it as the MCP
+   server (``--mcp``) and do an assistant's handshake;
 3. pack it into the file people download.
 
 ``--skip-tests`` skips step 2; ``--no-package`` skips step 3.
@@ -132,6 +133,35 @@ def smoke_test() -> None:
             fail("State space worker failed",
                  f"exit {result.returncode}\n{result.stdout}\n{result.stderr}")
     print("   state space worker: ok")
+
+    # c) The MCP server, as an AI assistant starts it (Help ▸ Connect an AI
+    #    Assistant writes exactly this command): `OpenProcess --mcp` on pipes,
+    #    the initialize handshake, and the list of tools.
+    import json
+    messages = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+         "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                    "clientInfo": {"name": "build-smoke-test", "version": "1"}}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+    ]
+    result = subprocess.run([str(program), "--mcp"], input="".join(json.dumps(m) + "\n" for m in messages),
+                            capture_output=True, text=True, encoding="utf-8", timeout=180, env=environment)
+    answers = {}
+    for line in result.stdout.splitlines():
+        try:
+            message = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(message, dict) and "id" in message:
+            answers[message["id"]] = message
+    info = (answers.get(1, {}).get("result") or {}).get("serverInfo") or {}
+    tools = (answers.get(2, {}).get("result") or {}).get("tools") or []
+    if info.get("name") != "OpenProcess" or len(tools) < 25:
+        fail("The MCP server did not answer as an assistant expects",
+             f"exit {result.returncode}\nserverInfo {info}, {len(tools)} tools\n"
+             f"{result.stdout[-2000:]}\n{result.stderr[-3000:]}")
+    print(f"   MCP server: {info.get('name')} {info.get('version')}, {len(tools)} tools")
 
 
 # ---------------------------------------------------------------------------
