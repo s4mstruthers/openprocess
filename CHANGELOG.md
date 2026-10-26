@@ -6,6 +6,17 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## Unreleased
+
+- **The BPI Challenge 2019 example follows the exact token replay.** Its
+  record and the figures in its README were made with 0.12.0, so on 0.13
+  `--check` reported five results as differing (the fit of each category's
+  model, the alignments and the compliance per vendor). They are re-recorded
+  with 0.13.2: fitness 0.98 to 1.00 for the four models (was 0.94 to 1.00),
+  the 2-way match model is the one IMf's corrected sequence cut finds
+  (precision 0.80, was 0.62), and two vendors that seemed to comply at 61 and
+  67 % comply at 94 and 98 %.
+
 ## 0.13.2
 
 - **Claude Desktop can open its results in OpenProcess.** When Claude

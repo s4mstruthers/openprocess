@@ -56,12 +56,12 @@ One model per item category: a *Case attribute* filter whose value is
 
 | Item category | Fitness | Precision | Generalisation | Simplicity |
 |---|---:|---:|---:|---:|
-| 3-way match, invoice before GR | 0.993 | 0.323 | 0.894 | 0.593 |
-| 3-way match, invoice after GR | 0.936 | 0.123 | 0.637 | 0.643 |
+| 3-way match, invoice before GR | 0.996 | 0.322 | 0.897 | 0.593 |
+| 3-way match, invoice after GR | 0.985 | 0.131 | 0.869 | 0.643 |
 | Consignment | 0.996 | 0.777 | 0.761 | 0.610 |
-| 2-way match | 0.986 | 0.620 | 0.748 | 0.670 |
+| 2-way match | 0.984 | 0.805 | 0.878 | 0.714 |
 
-The models fit (fitness 0.94 to 1.00) but the two 3-way categories are
+The models fit (fitness 0.98 to 1.00) but the two 3-way categories are
 imprecise: they allow much more than happens. That is the price of a single
 model for behaviour in which goods receipts and invoices repeat in any
 number and order (one item can have many monthly invoices). Click a model's
@@ -103,16 +103,16 @@ it).
 
 Per vendor (*Compliance by attribute*: cases, the share that replays on the
 model without a missing or remaining token, and their total value), the
-large vendors comply at 89–98 %. A few vendors with a hundred or more items
+large vendors comply at 91–99 %. A few vendors with a hundred or more items
 stand out:
 
 | Vendor | Cases | Compliance | Value (EUR) |
 |---|---:|---:|---:|
 | vendorID_0188 | 108 | 54.6 % | 78,225 |
-| vendorID_1466 | 142 | 61.3 % | 9,768 |
-| vendorID_0259 | 203 | 67.0 % | 10,057,877 |
 | vendorID_0571 | 102 | 73.5 % | 38,888 |
 | vendorID_0148 | 169 | 77.5 % | 26,499 |
+| vendorID_0119 | 817 | 78.8 % | 119,382 |
+| vendorID_0278 | 1,316 | 83.4 % | 287,174 |
 
 *Bubble chart* draws all 1,374 vendors: cases across (log scale),
 compliance up, value as the bubble's area, colour by item type, as CKM
@@ -143,9 +143,9 @@ the box's code says exactly what is counted here.
 
 * **Size.** Reading the 728 MB file takes 12 to 15 s and about 250 MB of
   memory (the log is kept in columns, not as 1.6 million objects); every box
-  after it takes under a second except the miner (1 s), the model check (11 s
-  for replay and precision on 221,000 cases), compliance per vendor (5 s) and
-  the alignments (50 s for 200 variants).
+  after it takes under a second except the miner (1 s), the model check (2 s
+  for replay and precision on 221,000 cases), compliance per vendor (2 s) and
+  the alignments (7 s for 200 variants, on all cores).
 * **Reproducibility.** Re-running the workflow in a new Python session gives
   the same fingerprint for every one of its 18 results (`--check` passes).
 * **Transparency.** Every box's *Code* tab shows the few lines of the box and
