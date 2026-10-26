@@ -116,6 +116,11 @@ def filter_time_frame(log: EventLog, start: datetime, end: datetime,
     """Cases *contained* in, *started* in, or *intersecting* ``[start, end]``."""
     if mode not in TIME_MODES:
         raise ValueError(f"mode must be one of {TIME_MODES}")
+    from datetime import timezone
+    if start.tzinfo is None:                      # a naive bound is UTC, like a naive stamp
+        start = start.replace(tzinfo=timezone.utc)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
     kept = []
     for index, span in enumerate(_spans(log)):
         if span is None:

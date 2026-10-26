@@ -96,7 +96,7 @@ def _time(value) -> datetime | None:
     except ValueError:
         for pattern in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
             try:
-                return datetime.strptime(text, pattern)
+                return datetime.strptime(text, pattern).replace(tzinfo=timezone.utc)
             except ValueError:
                 continue
     return None

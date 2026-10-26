@@ -208,6 +208,8 @@ def read_xes(source: str | Path | BinaryIO, progress=None, columnar: bool | None
         for kind, element in ET.iterparse(stream, events=("start", "end")):
             tag = _strip_namespace(element.tag)
             if kind == "start":
+                if not stack and tag != "log":
+                    raise ValueError(f"not an XES event log: the file's root element is <{tag}>, not <log>")
                 stack.append(tag)
                 continue
 

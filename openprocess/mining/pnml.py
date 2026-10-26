@@ -114,6 +114,17 @@ def parse_pnml(text: str | bytes) -> PetriNet:
         if _local(element.tag) == "toolspecific" and element.get("tool") == "OpenProcess" \
                 and element.get("namesOutside") == "true":
             net.info["names_outside"] = "true"
+    for place_id in initial:
+        if place_id not in net.places:
+            raise ValueError(f"the initial marking names a place that is not in the net: {place_id}")
+    if not initial:
+        # No initial marking stored (a file from a tool that keeps none): for a
+        # workflow net the obvious choice is one token in the source place, as
+        # for the final marking below.  Without it every conformance check
+        # would start from an empty net and report nothing fits.
+        sources = net.source_places()
+        if len(sources) == 1:
+            initial = {sources[0]: 1}
     net.initial_marking = Marking(initial)
 
     final: dict[str, int] = {}
@@ -126,6 +137,9 @@ def parse_pnml(text: str | bytes) -> PetriNet:
                 if tokens and tokens.isdigit() and int(tokens) > 0:
                     final[place.get("idref")] = int(tokens)
     if final:
+        for place_id in final:
+            if place_id not in net.places:
+                raise ValueError(f"the final marking names a place that is not in the net: {place_id}")
         net.final_marking = Marking(final)
     else:
         # No final marking stored: for a workflow net the obvious choice is

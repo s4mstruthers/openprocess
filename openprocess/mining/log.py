@@ -94,7 +94,12 @@ class Event:
     @property
     def timestamp(self) -> datetime | None:
         value = self.attributes.get(KEY_TIME)
-        return value if isinstance(value, datetime) else None
+        if not isinstance(value, datetime):
+            return None
+        if value.tzinfo is None:                 # a naive stamp counts as UTC, as the readers do
+            from datetime import timezone
+            return value.replace(tzinfo=timezone.utc)
+        return value
 
     @property
     def lifecycle(self) -> str | None:

@@ -306,9 +306,13 @@ def _remove_redundant_silent_steps(net) -> None:
             p, q = ins[0].source, outs[0].target
             if p == q:
                 continue
-            if len(out_of.get(p, [])) == 1 and not net.final_marking[p]:
+            if len(out_of.get(p, [])) == 1 and not net.final_marking[p] \
+                    and not (net.initial_marking[p] and len(into.get(q, [])) > 1):
                 # p only feeds τ: whatever filled p fills q.  (Not when p is in
-                # the final marking: removing it would change where runs end.)
+                # the final marking: removing it would change where runs end;
+                # nor when p is the start place and q is also filled by a loop
+                # back: the start would lose its source place and the net would
+                # no longer be a WF-net.)
                 for arc in list(into.get(p, [])):
                     net.add_arc(arc.source, q, arc.weight)
                 if net.initial_marking[p]:

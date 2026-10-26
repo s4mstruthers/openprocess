@@ -101,6 +101,9 @@ REFERENCES: tuple[Reference, ...] = (
               "Computer and System Sciences 3(2):147–195, 1969."),
     Reference("desel1995", "J. Desel and J. Esparza. *Free Choice Petri Nets*. Cambridge "
               "Tracts in Theoretical Computer Science 40. Cambridge University Press, 1995."),
+    Reference("desel2019", "J. Desel. *Can a Single Transition Stop an Entire Petri Net?* Algorithms "
+              "& Theories for the Analysis of Event Data (ATAED 2019), CEUR Workshop Proceedings "
+              "Vol. 2371, pp. 23–35, 2019.", "https://ceur-ws.org/Vol-2371/ATAED2019-23-35.pdf"),
     Reference("cortadella1998", "J. Cortadella, M. Kishinevsky, L. Lavagno and A. Yakovlev. "
               "*Deriving Petri Nets from Finite Transition Systems*. IEEE Transactions on "
               "Computers 47(8):859–882, 1998."),
@@ -217,9 +220,11 @@ TOPICS: tuple[tuple[str, tuple[Topic, ...]], ...] = (
         Topic("Free-choice, well-structured, S-coverable",
               "Structural properties and the handles behind a problem.",
               ("aalst2000", "desel1995"), "openprocess.mining.structure"),
-        Topic("Boundedness, liveness, deadlocks, reversibility",
+        Topic("Boundedness, liveness, deadlocks, reversibility, termination",
               "Decided on the reachability graph, or the coverability graph for unbounded "
-              "nets.", ("murata1989", "karp1969"), "openprocess.mining.analysis"),
+              "nets. A bounded net terminates iff its reachability graph has no cycle, and an "
+              "unbounded net never does.", ("murata1989", "karp1969", "desel2019"),
+              "openprocess.mining.analysis"),
         Topic("Incidence matrix and invariants", "P- and T-invariants.", ("murata1989",),
               "openprocess.mining.invariants"),
         Topic("CPN simulation and state spaces", "Bindings, enabling and the state space "

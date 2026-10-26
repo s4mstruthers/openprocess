@@ -98,6 +98,8 @@ def check(exercise: Exercise, task: Task, answer, context: Context | None = None
         return checker(context, task, answer)
     except AnswerSyntaxError as error:
         return Result(UNKNOWN, f"Could not read your answer: {error}.")
+    except TaskError as error:
+        return Result(UNKNOWN, f"This answer cannot be checked: {error}.")
 
 
 def _partial(hits: int, total: int, what: str = "item") -> tuple[str, float, str]:
@@ -166,10 +168,15 @@ def _check_choice(context, task, answer) -> Result:
     right = {i for i, option in enumerate(task.options) if option.correct}
     if not right and task.get("compute"):
         # The right option is the one whose text matches the computed value.
-        value = str(compute(context, task))
-        right = {i for i, option in enumerate(task.options)
-                 if answers.name(option.text) == answers.name(value)
-                 or answers.name(value) in answers.name(option.text)}
+        value = compute(context, task)
+        value = ("yes" if value else "no") if isinstance(value, bool) else str(value)
+        wanted = answers.name(value)
+        right = {i for i, option in enumerate(task.options) if answers.name(option.text) == wanted}
+        if not right:                       # "yes, it is sound": the one option that contains it
+            containing = {i for i, option in enumerate(task.options)
+                          if re.search(rf"(?<!\w){re.escape(wanted)}(?!\w)", answers.name(option.text))}
+            if len(containing) == 1:
+                right = containing
     if chosen == right:
         return Result(CORRECT, "Right.")
     if len(right) > 1 and chosen & right:
@@ -425,8 +432,9 @@ def _check_marking(context, task, answer) -> Result:
         parts.append(f"{sum(missing.values())} missing")
     total = sum(right.values()) or 1
     hits = sum((Counter(mine) & Counter(right)).values())
-    return Result(PARTIAL if hits and not extra else INCORRECT,
-                  "Not yet: " + ", ".join(parts) + ".", share=max(0.0, (hits - sum(extra.values())) / total))
+    partial = bool(hits) and not extra
+    return Result(PARTIAL if partial else INCORRECT, "Not yet: " + ", ".join(parts) + ".",
+                  share=hits / total if partial else 0.0)
 
 
 def _check_markings(context, task, answer) -> Result:
@@ -832,6 +840,12 @@ def model_answer_text(exercise: Exercise, task: Task, context: Context | None = 
     """The right answer in words, for *Show answer* (the block's ``solution`` first)."""
     if task.solution:
         return task.solution
+    return computed_answer_text(exercise, task, context)
+
+
+def computed_answer_text(exercise: Exercise, task: Task, context: Context | None = None) -> str:
+    """The right answer as the app works it out, whatever ``solution`` says
+    (for authors: ``openprocess exercises check --answers``)."""
     context = context or Context(exercise)
     try:
         if task.type == "choice":
@@ -887,6 +901,10 @@ def validate(exercise: Exercise) -> list[str]:
     if exercise.error:
         problems.append(exercise.error)
     context = Context(exercise, student=exercise.student() or "the author")
+    from .sheet import FRONT_KEYS
+    for key in getattr(exercise.sheet, "settings", {}) or {}:
+        if key not in FRONT_KEYS:
+            problems.append(f"front matter: unknown key “{key}” (known: {', '.join(sorted(FRONT_KEYS))})")
     for task in exercise.sheet.tasks:
         where = f"answer block “{task.id}” (line {task.line})" if task.line else \
             f"answer “{task.id}”"
@@ -909,6 +927,10 @@ def validate(exercise: Exercise) -> list[str]:
             elif task.type == "footprint":
                 _footprint_pairs(task, footprint_of(context, task))
             elif task.type == "trace":
+                ends = (task.get("ends") or "any").lower()
+                if ends not in ("any", "final", "deadlock", "stuck", "no completion", "cannot complete",
+                                "improper", "improper completion"):
+                    raise TaskError(f"unknown “ends: {ends}” (use any, final, deadlock, stuck or improper)")
                 if task.get("fits"):
                     _model_answer(context, task.get("fits"), task)
                 else:
@@ -923,6 +945,9 @@ def validate(exercise: Exercise) -> list[str]:
                 context.net(task.get("of") or task.get("net"))
             elif task.type == "alignment":
                 context.net(task.get("of") or task.get("net"))
+                wanted = (task.get("answer") or "optimal").strip().casefold()
+                if wanted not in ("optimal", "sub-optimal", "not an alignment"):
+                    raise TaskError(f"“answer: {wanted}” is not one of optimal, sub-optimal, not an alignment")
                 if task.get("trace"):
                     answers.trace(task.get("trace"))
                 if task.get("alignment"):
@@ -935,6 +960,9 @@ def validate(exercise: Exercise) -> list[str]:
             elif task.type == "predict":
                 if not task.get("box"):
                     raise TaskError("a predict block needs “box:”")
+                kind = (task.get("as") or "").strip().lower()
+                if kind and kind not in ("set", "number", "yesno", "text"):
+                    raise TaskError(f"“as: {kind}” is not one of set, number, yesno, text")
                 compute(context, task, f"box({task.get('box')})" +
                         ("." + task.get("value") if task.get("value") else ""))
             elif task.type == "workflow":
