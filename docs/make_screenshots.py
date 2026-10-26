@@ -178,15 +178,17 @@ class Shooter:
         check.select(fit.id, 0)
         self.shot("studio-conformance")
         check.close_panel()
-        check.show_view(1)                              # Summary, with the process map
+        check.show_view(0)                              # Report: every box's result, with the process map
         self.pump(0.3)
-        if check.summary.add_map_button.isVisible():
-            check.summary.add_map_button.click()
+        if check.report.add_map_button.isVisible():
+            check.report.add_map_button.click()
             self.wait_run(check)
-            check.show_view(1)
+            check.show_view(0)
             self.pump(0.3)
-        self.shot("workflow-summary")
-        check.show_view(0)
+        check.report.flush()
+        self.pump(0.3)
+        self.shot("workflow-report")
+        check.show_view(1)
 
         w.action_new_workflow(TEMPLATES[1][1])          # Compare discovery: three miners side by side
         compare_page = w.current_page()

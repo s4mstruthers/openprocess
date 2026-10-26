@@ -21,6 +21,23 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
   that is missing keeps the fingerprint recorded when it was read.
   `openprocess run FILE --save` keeps the record the same way and says so
   when a box failed.
+- **An analysis opens on its Report: every box's result, in run order, on
+  one page.** Reading results meant clicking box after box on the canvas
+  and resizing the side panel so that each table or figure fitted beside
+  the diagram. The page now opens on **Report**: a section per box with the
+  group it is in, its name, the line the canvas shows under it, its status,
+  the result as the side panel shows it (a table scrolls sideways inside
+  its section when it is wider, a figure keeps its proportions, a score
+  gets a key-figure tile), its settings as chips, and *Open ›*, *How* and
+  *Code*, which open the box in the side panel on the canvas. A slim
+  *Steps* outline on the left lists the boxes, grouped as the canvas groups
+  them, with each one's key figure; a click scrolls to the section, and on
+  a narrow window the outline folds into a *Steps* menu. While a run goes,
+  each section is redrawn as its box finishes; a box that has not run says
+  so, a failed one shows its error in place. The header switch is now
+  **Report | Canvas | Runs**: the Summary's key figures are in the outline,
+  and its process map is the *Directly-follows graph* box's section (an
+  analysis with a log and no such box is still offered one in one click).
 - **Dotted chart: overlapping dots no longer fade into slivers, and Dot
   size always does something.** Every dot wore a ring in the background
   colour to set it apart from its neighbours, so where events crowd (a

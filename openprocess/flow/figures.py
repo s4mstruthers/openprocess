@@ -1,6 +1,6 @@
 """The key figure of a result: one number and a line, for a tile or a report.
 
-Shared by the Summary (:mod:`openprocess.gui.flow.summary`) and the HTML
+Shared by the Report (:mod:`openprocess.gui.flow.report`) and the HTML
 report (:mod:`openprocess.flow.report`), so both say the same thing about a
 result: a score's first metric, a table's size, a log's cases, a net's
 places and transitions, a map's activities and paths.

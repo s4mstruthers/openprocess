@@ -1,9 +1,11 @@
-"""The Workflows page: the canvas, *+ Add box*, and a side panel on demand.
+"""The Workflows page: the Report, the canvas, *+ Add box*, and a side panel on demand.
 
-The page opens with the workflow alone on its canvas.  *+ Add box* in the
-header (or a double-click on the canvas) opens the box picker
-(:mod:`.picker`).  Click a box and the side panel appears beside the
-canvas, on *Result* (the viewer for its output type); its other tabs are
+The page opens on its *Report* (:mod:`.report`): every box's result, in run
+order, on one scrolling page.  *Canvas* in the header is the boxes and
+wires, *Runs* every finished run.  *+ Add box* (or a double-click on the
+canvas) opens the box picker (:mod:`.picker`).  Click a box on the canvas
+(or *Open ›* under its section of the Report) and the side panel appears
+beside the canvas, on *Result* (the viewer for its output type); its other tabs are
 *How* (what it reported while it ran: notes, intermediate values, the
 derivation), *Code* (its source) and *Settings* (one control per setting).
 Click the canvas, or the panel's ✕, and the panel goes again.  Change a
@@ -50,11 +52,13 @@ from ..studio.widgets import (Card, ElidedLabel, NoticeBar, PageHeader, Segmente
 from ..studio.workers import run_in_background
 from .canvas import WorkflowScene, WorkflowView
 from .picker import BoxPicker, input_box_for
+from .report import ReportWidget
 from .runs import RunsWidget
-from .summary import SummaryWidget
 from .viewers import SettingsWidget, code_widget, how_widget, pop_out, result_widget, status_text
 
 TABS = ["Result", "How", "Code", "Settings"]
+#: The header switch's views, and the body's pages in the same order.
+REPORT, CANVAS, RUNS = 0, 1, 2
 HINT = "Click a box to see what it gives. Drag from the dot on its right to connect it to another."
 
 
@@ -176,15 +180,15 @@ class WorkflowPage(QWidget):
                     self.refresh_title()
             run_in_background(lambda: reproducibility.status(workflow, record, None, folder), first_check,
                               lambda _message: None)
-        # Canvas: the boxes and wires.  Summary: every result's figure, and the process map.
-        self.summary_switch = SegmentedControl(["Canvas", "Summary", "Runs"], compact=True)
-        self.summary_switch.setToolTip("Canvas: the boxes and wires.\nSummary: every result's key "
-                                       "figure, and the process map.\nRuns: every finished run, two compared.")
+        # Report: every box's result, in run order.  Canvas: the boxes and wires.
+        self.view_switch = SegmentedControl(["Report", "Canvas", "Runs"], compact=True)
+        self.view_switch.setToolTip("Report: every box's result, in the order the boxes run.\nCanvas: the "
+                                    "boxes and wires.\nRuns: every finished run, two compared.")
         record = getattr(document, "record", None)
         #: The last runs, with what changed before each (kept in the workflow file).
         self.history = snapshots.History.from_dict(record.history if record is not None else [])
-        self.summary_switch.changed.connect(self.show_view)
-        self.header.actions.addWidget(self.summary_switch)
+        self.view_switch.changed.connect(self.show_view)
+        self.header.actions.addWidget(self.view_switch)
         self.keep_button = button("Keep", self.keep_requested.emit, kind="primary",
                                   tooltip="Save this workflow into the folder")
         self.keep_button.setVisible(False)
@@ -259,16 +263,15 @@ class WorkflowPage(QWidget):
         splitter.reset_requested.connect(self.reset_layout)
         wrapper = QWidget()
         wrapper.setLayout(vbox(splitter, margins=(20, 0, 20, 16)))
-        self.summary = SummaryWidget(self)
-        self.summary.tile_clicked.connect(self._tile_clicked)
-        summary_wrapper = QWidget()
-        summary_wrapper.setLayout(vbox(scroll(self.summary), margins=(20, 0, 20, 16)))
+        self.report = ReportWidget(self)
+        report_wrapper = QWidget()
+        report_wrapper.setLayout(vbox(self.report, margins=(20, 0, 20, 16)))
         self.runs = RunsWidget(self)
         runs_wrapper = QWidget()
         runs_wrapper.setLayout(vbox(scroll(self.runs), margins=(20, 0, 20, 16)))
         self.body = QStackedWidget()
+        self.body.addWidget(report_wrapper)
         self.body.addWidget(wrapper)
-        self.body.addWidget(summary_wrapper)
         self.body.addWidget(runs_wrapper)
         root.addWidget(self.body, 1)
         self._picker: BoxPicker | None = None
@@ -283,6 +286,8 @@ class WorkflowPage(QWidget):
                   if self.selected in self.workflow.groups else None)
         self._refresh_custom_bar()
         self._render_panel()
+        # A workflow opens on its Report; an empty one on the canvas, where boxes are added.
+        self.show_view(REPORT if self.workflow.nodes else CANVAS)
         QTimer.singleShot(0, self.view.fit)
         if not self.workflow.nodes:
             self.status.emit("An empty workflow: press + Add box, or double-click the canvas")
@@ -303,17 +308,17 @@ class WorkflowPage(QWidget):
         self.select(None)
 
     def show_view(self, index: int) -> None:
-        """Canvas (0), Summary (1) or Runs (2); the latter two are rebuilt when shown."""
+        """Report (0), Canvas (1) or Runs (2); the Report and Runs are brought up to date when shown."""
         if self.body.currentIndex() != index:
             self.body.setCurrentIndex(index)
             motion.lift(self.body)
-        if self.summary_switch.index() != index:
-            self.summary_switch.blockSignals(True)
-            self.summary_switch.buttons[index].setChecked(True)
-            self.summary_switch.blockSignals(False)
-        if index == 1:
-            self.summary.refresh()
-        elif index == 2:
+        if self.view_switch.index() != index:
+            self.view_switch.blockSignals(True)
+            self.view_switch.buttons[index].setChecked(True)
+            self.view_switch.blockSignals(False)
+        if index == REPORT:
+            self.report.refresh()
+        elif index == RUNS:
             self.runs.refresh()
 
     def apply_snapshot(self, snapshot: snapshots.Snapshot) -> None:
@@ -336,15 +341,18 @@ class WorkflowPage(QWidget):
             return
         self._mark_edited()
         self._render_panel()
-        self.show_view(0)
+        self.show_view(REPORT)                      # the results of those settings, as they come
         self.status.emit(f"Settings of the run at {snapshot.taken.replace('T', ' ')} are back on "
                          f"{len(changed)} box{'es' if len(changed) != 1 else ''}; running")
         self.run_from(changed)
 
-    def _tile_clicked(self, node_id: str) -> None:
-        """A Summary tile: that box's Result, on the canvas."""
-        self.show_view(0)
-        self.select(node_id, 0)
+    def open_box(self, node_id: str, tab: int = 0) -> None:
+        """A Report section's *Open ›*, *How* or *Code*: that box in the side panel, on the canvas."""
+        self.select(node_id, tab)
+
+    def result_view(self, node, result: Result | None) -> QWidget:
+        """The side panel's Result tab for ``node`` showing ``result``; the Report draws each box with it."""
+        return self._tab_widget(node, self.workflow.spec(node), result, 0)
 
     @property
     def dock(self) -> str:
@@ -461,7 +469,8 @@ class WorkflowPage(QWidget):
         return QPointF(rect.left() + 30 + count * 24, rect.bottom() - 150 - count * 12)
 
     def add_box_in_view(self, box_id: str, settings: dict | None = None):
-        """Add ``box_id`` where it can be seen."""
+        """Add ``box_id`` where it can be seen: on the canvas, brought up if another view is showing."""
+        self.show_view(CANVAS)
         return self.add_box(box_id, self.free_spot(), settings)
 
     def quick_add(self, where: QPointF) -> None:
@@ -492,8 +501,9 @@ class WorkflowPage(QWidget):
 
     def add_box_fed_by(self, box_id: str, source_id: str | None):
         """Add a box and connect it to ``source_id``'s output (the first input
-        that takes it), as dropping a wire would; then it runs."""
-        node = self.add_box_in_view(box_id)
+        that takes it), as dropping a wire would; then it runs.  The page stays
+        on the view it was asked from (the Report offers the process map this way)."""
+        node = self.add_box(box_id, self.free_spot())
         if source_id is not None and source_id in self.workflow.nodes:
             ok, detail = self.workflow.can_connect(source_id, node.id)
             if ok:
@@ -629,6 +639,10 @@ class WorkflowPage(QWidget):
         self._show_status(result)
         if self.selected == result.node:
             self._render_panel()
+        if self.body.currentIndex() == REPORT:
+            self.report.update_box(result)
+        else:
+            self.report.stale = True
 
     def _show_status(self, result: Result) -> None:
         if result.variant != 0:
@@ -662,14 +676,16 @@ class WorkflowPage(QWidget):
         self._render_panel()
         if isinstance(outcome, Run) and not outcome.stopped and not self._has_queue:
             if self.history.add(snapshots.take(self.workflow, outcome, self.history.latest)) \
-                    and self.body.currentIndex() == 2:
+                    and self.body.currentIndex() == RUNS:
                 self.runs.refresh()
             if self._record_pending:
                 self._record_pending = False
                 self.document.dirty = True
             self.ran.emit()
-        if self.body.currentIndex() == 1:
-            self.summary.refresh()
+        if self.body.currentIndex() == REPORT:
+            self.report.refresh()
+        else:
+            self.report.stale = True
         if self._has_queue or (isinstance(outcome, Run) and outcome.stopped):
             queued, self._queued, self._has_queue = self._queued, None, False
             if queued is not None and isinstance(outcome, Run) and outcome.stopped:
@@ -832,6 +848,8 @@ class WorkflowPage(QWidget):
         if tab is not None:
             self.tab = tab
             self._opening_tab = tab
+        if node_id is not None:
+            self.show_view(CANVAS)                  # the side panel lives beside the canvas
         # The scene clears its selection before selecting: without the guard,
         # the panel would close and reopen (back on Result) at every select.
         self._selecting = True

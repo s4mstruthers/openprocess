@@ -349,7 +349,11 @@ def stylesheet() -> str:
     QPushButton#reproBadge:hover {{ text-decoration: underline; }}
 
     /* The Summary's tiles and the Model palette. */
-    #summaryValue {{ font-size: 22px; font-weight: 600; }}
+    #reportTitle {{ font-size: 16px; font-weight: 700; }}
+    #reportGroup {{ font-size: 14px; font-weight: 700; }}
+    QFrame#outlineRow {{ background: transparent; border-radius: 6px; }}
+    QFrame#outlineRow:hover {{ background: {qc(t.text, 0.06).name(QColor.HexArgb)}; }}
+    QFrame#outlineRow[current="true"] {{ background: {t.accent_soft}; }}
     QPushButton#paletteTool {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: 7px;
         padding: 5px 8px; text-align: left; color: {t.text_secondary}; }}
     QPushButton#paletteTool:hover {{ color: {t.text}; }}

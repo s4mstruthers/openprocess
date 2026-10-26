@@ -749,14 +749,28 @@ Miner, a fitness check), *Compare discovery* (three miners side by side),
 confidence* (bootstrap intervals, a test and a plot; needs the `science`
 extra) and *Predict the next activity*. Or start empty.
 
-| The canvas: *Compare discovery*, three miners side by side | Summary: every box's key figure, and the process map |
+| The canvas: *Compare discovery*, three miners side by side | Report: every box's result, in run order, on one page |
 |---|---|
-| ![The canvas of a Compare discovery analysis, the Compare box's table beside it](docs/screenshots/workflow-canvas.png) | ![The Summary view: a tile per box, the process map under them](docs/screenshots/workflow-summary.png) |
+| ![The canvas of a Compare discovery analysis, the Compare box's table beside it](docs/screenshots/workflow-canvas.png) | ![The Report view: a section per box with its result, a Steps outline beside them](docs/screenshots/workflow-report.png) |
 
-- **The page is the canvas.** Its header has **Canvas | Summary**, then
-  **+ Add box**, **Run ▶**, and **⋯** for Re-run, Record, Export experiment
-  and Save. The sidebar beside it lists the folder's analyses and, folded
-  under them, its logs.
+- **An analysis opens on its Report.** Its header has **Report | Canvas |
+  Runs**, then **+ Add box**, **Run ▶**, and **⋯** for Re-run, Record,
+  Export experiment and Save. The sidebar beside it lists the folder's
+  analyses and, folded under them, its logs.
+- **Report** is every box's result, in the order the boxes run, on one
+  scrolling page: a section per box with the group it is in, its name, the
+  line the canvas shows under it, its status, the result as the side panel
+  shows it (a table scrolls sideways inside its section when it is wider; a
+  figure keeps its proportions; a score gets a key-figure tile), its
+  settings as chips, and *Open ›*, *How* and *Code*, which open the box in
+  the side panel on the canvas. A slim *Steps* outline on the left lists
+  the sections, grouped as the canvas groups the boxes, with each box's
+  key figure; a click scrolls to the section, and on a narrow window the
+  outline folds into a *Steps* menu. Nothing is computed there: while a
+  run goes, each section is redrawn as its box reports; a box that has not
+  run says so, a failed one shows its error. The process map is the
+  *Directly-follows graph* box's result; an analysis without that box is
+  offered one in one click.
 - **+ Add box** (or a double-click on the canvas) opens every box, one
   section per group (Input, Filter, Discover, Check, Measure, Compare, Output,
   then Science, Predict, Coloured nets, Sweep and your own boxes), in a list that
@@ -770,12 +784,6 @@ extra) and *Predict the next activity*. Or start empty.
   notation…* in the sidebar land as boxes on the current analysis (or a new
   one named after the file). In a box's **Settings**, *Choose…* picks the
   file and the list beside it offers only the files the box can read.
-- **Summary** is the key figure of every box, in one place: a tile per box,
-  in the order the boxes run (a score's first metric, a table's size, a
-  log's cases, a net's places and transitions). Nothing is computed there:
-  a tile is the box's result, as on the canvas, and a tile opens the box.
-  The process map under the tiles is the *Directly-follows graph* box's
-  result; an analysis without that box offers to add it in one click.
 - **Connect** by dragging from the dot on the right of a box: while you drag,
   only the inputs that take that kind of result light up, so a wrong
   connection cannot be made. Click a wire and press Delete to remove it.
@@ -852,8 +860,8 @@ extra) and *Predict the next activity*. Or start empty.
   `~/Library/Application Support/OpenProcess/packages`), and the boxes that
   need the package come alive without a restart. PM4Py needs a Python
   install (`pip install pm4py`), as parts of it are built from source.
-- **Motion** is kept short: a space switch, the side panel and Canvas ↔
-  Summary settle in a fifth of a second, and a box pulses once when it
+- **Motion** is kept short: a space switch, the side panel and Report ↔
+  Canvas settle in a fifth of a second, and a box pulses once when it
   finishes. `OPENPROCESS_NO_MOTION=1` turns it off.
 
 ## Workflows from Python
