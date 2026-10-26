@@ -459,18 +459,46 @@ def differences(record: Record, workflow: Workflow, folder: str | Path | None = 
 # Files
 # ---------------------------------------------------------------------------
 def save(workflow: Workflow, path: str | Path, run: Run | None = None,
-         folder: str | Path | None = None, lock: bool = True, history: list[dict] | None = None) -> Record:
+         folder: str | Path | None = None, lock: bool = True, history: list[dict] | None = None,
+         previous: Record | None = None) -> Record:
     """Write the workflow and its record to ``path``; returns the record.
-    ``history``: the analysis's snapshots (see :mod:`.snapshots`), kept in the file."""
+    ``history``: the analysis's snapshots (see :mod:`.snapshots`), kept in the file.
+    ``previous``: the file's record so far; see :func:`carried`."""
     path = Path(path)
     folder = folder if folder is not None else path.parent
     record = make_record(workflow, run, folder, lock)
+    if previous is not None:
+        record = carried(record, previous, workflow, run)
     record.history = list(history or [])
     data = {"format": FORMAT, **workflow.to_dict(), "record": record.to_dict()}
     text = json.dumps(data, indent=2, ensure_ascii=False, default=str)
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_text(text, encoding="utf-8")
     temporary.replace(path)
+    return record
+
+
+def carried(record: Record, previous: Record, workflow: Workflow, run: Run | None) -> Record:
+    """The record to write, given the file's ``previous`` one: the record of the
+    last successful run stays until a successful run replaces it.
+
+    No run, or a run in which a box failed (the input file was not found, say),
+    leaves the previous record as it was, results of boxes since removed aside.
+    A run in which no box failed replaces it; a box that could not run here (a
+    library it needs is missing) keeps its recorded fingerprint if the scheme is
+    the same, and an input file that is missing now keeps the fingerprint
+    recorded when it was read."""
+    still = {k: v for k, v in previous.results.items() if k in workflow.nodes}
+    if run is None or run.failed():
+        return Record(**{**previous.__dict__, "results": still})
+    if previous.scheme == record.scheme:
+        record.results = {**still, **record.results}
+    for entry in record.inputs:
+        if entry["sha256"] == "missing":
+            then = next((i for i in previous.inputs if i["node"] == entry["node"]
+                         and i["setting"] == entry["setting"] and i["file"] == entry["file"]), None)
+            if then is not None:
+                entry["sha256"] = then["sha256"]
     return record
 
 

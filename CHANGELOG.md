@@ -8,6 +8,19 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
 ## Unreleased
 
+- **Opening a workflow no longer rewrites its file.** Studio saves a workflow
+  in the open folder as you work, and it also saved after every run, so
+  opening a `.cpnflow` whose log was not beside it ran the workflow, the Open
+  log box failed, and the file was written back with the name replaced by the
+  file name, every box position turned into a decimal, and the record of the
+  last successful run (the versions, the log's fingerprint, every result)
+  replaced by an empty one. Now a run saves only when you changed something,
+  a save keeps the workflow's name and whole-number positions, and the record
+  of the last run in which no box failed stays until such a run replaces it:
+  a box that could not run keeps its recorded fingerprint, and an input file
+  that is missing keeps the fingerprint recorded when it was read.
+  `openprocess run FILE --save` keeps the record the same way and says so
+  when a box failed.
 - **An analysis opens on its Report: every box's result, in run order, on
   one page.** Reading results meant clicking box after box on the canvas
   and resizing the side panel so that each table or figure fitted beside

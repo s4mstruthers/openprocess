@@ -1661,7 +1661,11 @@ class StudioWindow(QMainWindow):
             page.edit_requested.connect(lambda net, origin, doc=document: self.edit_petri_net(net, origin, doc))
             page.keep_requested.connect(lambda doc=document: self.keep_workflow(doc))
             page.edited.connect(lambda doc=document: (self._refresh_item(doc), self._schedule_autosave(doc)))
-            page.ran.connect(lambda doc=document: self._schedule_autosave(doc))   # the record follows the run
+            # The record follows the run: of a workflow with edits to save, or of one the
+            # app wrote itself (a new workflow).  Opening a file and running it (or
+            # watching its input fail) leaves the file alone.
+            page.ran.connect(lambda doc=document: self._schedule_autosave(doc)
+                             if doc.dirty or (doc.path and self._key(doc.path) in self._created) else None)
             if self.workspace is not None:
                 page.custom_allowed = bool(self.workspace.settings().get("boxes_allowed"))
                 page._refresh_custom_bar()

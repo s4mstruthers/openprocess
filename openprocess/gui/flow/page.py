@@ -159,6 +159,7 @@ class WorkflowPage(QWidget):
         self._setting_timer.setInterval(400)
         self._setting_timer.timeout.connect(self._apply_pending_settings)
         self._pending: dict[str, dict] = {}
+        self._record_pending = False
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -677,6 +678,9 @@ class WorkflowPage(QWidget):
             if self.history.add(snapshots.take(self.workflow, outcome, self.history.latest)) \
                     and self.body.currentIndex() == RUNS:
                 self.runs.refresh()
+            if self._record_pending:
+                self._record_pending = False
+                self.document.dirty = True
             self.ran.emit()
         if self.body.currentIndex() == REPORT:
             self.report.refresh()
@@ -1194,11 +1198,16 @@ class WorkflowPage(QWidget):
     def write_to(self, path: str, quiet: bool = False) -> None:
         """Save the workflow and its record to ``path`` (the window's Keep / Save As)."""
         target = Path(path)
-        self.workflow.name = target.stem if target.stem else self.workflow.name
+        if target.stem and (not self.document.path or Path(self.document.path) != target):
+            self.workflow.name = target.stem          # Keep / Save As: named after the file; a save keeps the name
         self.document.record = records.save(self.workflow, target, self.run, self.folder or target.parent,
-                                            history=self.history.to_dict())
+                                            history=self.history.to_dict(),
+                                            previous=getattr(self.document, "record", None))
         self.document.path = str(target)
         self.document.dirty = False
+        # Saved while a run was going: the record is of the run before, so the one
+        # finishing wants saving too.
+        self._record_pending = self._running
         self.refresh_reproducibility()
         if not quiet:
             self.status.emit(f"Saved {target.name}")
