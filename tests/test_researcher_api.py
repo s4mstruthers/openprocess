@@ -115,10 +115,11 @@ def test_the_engines_work_without_the_framework():
 
 def test_the_framework_imports_nothing_heavy():
     """``import openprocess.flow`` in a fresh interpreter loads no Qt, no MCP
-    SDK and no data-science library: a notebook gets the framework alone."""
+    SDK and no data-science library beyond numpy (which the engines rely on):
+    a notebook gets the framework alone."""
     code = ("import sys, openprocess, openprocess.flow, openprocess.mining\n"
             "heavy = [m for m in sys.modules if m.split('.')[0] in "
-            "('PySide6', 'mcp', 'pydantic', 'starlette', 'numpy', 'pandas', 'scipy', 'matplotlib')]\n"
+            "('PySide6', 'mcp', 'pydantic', 'starlette', 'pandas', 'scipy', 'matplotlib')]\n"
             "print(heavy)")
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=ROOT, timeout=120)
     assert done.returncode == 0, done.stderr

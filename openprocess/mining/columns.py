@@ -19,8 +19,10 @@ from __future__ import annotations
 
 from array import array
 from collections.abc import MutableSequence
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterator
+
+import numpy as np
 
 #: Standard keys kept in typed arrays; everything else goes to ``extra``.
 KEY_NAME = "concept:name"
@@ -210,20 +212,53 @@ class ColumnStore:
         return Trace(self.case_attributes(case),
                      [Event(self.event_attributes(i)) for i in range(start, end)])
 
+    # -- as numpy arrays (views of the same memory; nothing is copied) --------------
+    @property
+    def micros_array(self) -> np.ndarray:
+        return as_array(self.micros, np.int64)
+
+    @property
+    def offsets_array(self) -> np.ndarray:
+        return as_array(self.offsets, np.int64)
+
+    def case_of_event(self) -> np.ndarray:
+        """Each event's case index."""
+        offsets = self.offsets_array
+        return np.repeat(np.arange(self.case_count), np.diff(offsets))
+
+    def case_spans(self) -> tuple[np.ndarray, np.ndarray]:
+        """Per case, the event indices of its earliest and latest timestamp
+        (-1 where it has none): one pass over the arrays, kept."""
+        spans = getattr(self, "_spans", None)
+        if spans is None or len(spans[0]) != self.case_count:
+            micros, offsets = self.micros_array, self.offsets_array
+            count, n = self.case_count, len(micros)
+            low = np.full(count, -1, dtype=np.int64)
+            high = np.full(count, -1, dtype=np.int64)
+            if n and count:
+                has_time = micros != NO_TIME
+                starts = offsets[:-1]
+                nonempty = np.diff(offsets) > 0
+                # The earliest: the smallest stamp per case (NO_TIME masked out), then
+                # the first event carrying it; the latest likewise.
+                big = np.iinfo(np.int64).max
+                for target, values, pick in ((low, np.where(has_time, micros, big), np.minimum),
+                                             (high, micros, np.maximum)):
+                    best = np.full(count, big if pick is np.minimum else NO_TIME, dtype=np.int64)
+                    best[nonempty] = pick.reduceat(values, starts[nonempty])
+                    hit = (values == np.repeat(best, np.diff(offsets))) & has_time
+                    where = np.where(hit, np.arange(n), n)
+                    first = np.full(count, n, dtype=np.int64)
+                    first[nonempty] = np.minimum.reduceat(where, starts[nonempty])
+                    target[first < n] = first[first < n]
+            spans = self._spans = (low, high)
+        return spans
+
     def span(self, case: int) -> tuple[int, int] | None:
         """The event indices of a case's earliest and latest timestamp (None:
         it has none), read from the array without building an event."""
-        micros, start, end = self.micros, self.offsets[case], self.offsets[case + 1]
-        low = high = None
-        for i in range(start, end):
-            value = micros[i]
-            if value == NO_TIME:
-                continue
-            if low is None or value < micros[low]:
-                low = i
-            if high is None or value > micros[high]:
-                high = i
-        return None if low is None else (low, high)
+        low, high = self.case_spans()
+        return None if low[case] < 0 else (int(low[case]), int(high[case]))
 
     def column_text(self, key: str) -> list[str | None]:
         """Every event's value of one attribute as text (None where absent),
@@ -243,8 +278,127 @@ class ColumnStore:
         seen = {v.lower() for v in self.lifecycle.values}
         return {"start", "complete"} <= seen
 
+    def present_keys(self) -> set[str]:
+        """The event attribute keys some event has, from the arrays."""
+        keys = {key for key, column in self.extra.items() if any(v is not None for v in column)}
+        for key, codes in ((KEY_NAME, self.activity), (KEY_LIFECYCLE, self.lifecycle),
+                           (KEY_RESOURCE, self.resource)):
+            if codes.values and max(codes.codes, default=-1) >= 0:
+                keys.add(key)
+        if self.micros and max(self.micros) != NO_TIME:
+            keys.add(KEY_TIME)
+        return keys
+
+    def first_offset(self) -> int | None:
+        """The UTC offset (minutes) of the first event with a timestamp, or None."""
+        for index, value in enumerate(self.micros):
+            if value != NO_TIME:
+                return self.offset_minutes[index]
+        return None
+
+    def is_plain(self) -> bool:
+        """Nothing but activity names (and case ids): no timestamps, no other attributes."""
+        if any(key != KEY_NAME for keys in set(self.case_keys) for key in keys):
+            return False
+        return self.present_keys() <= {KEY_NAME}
+
+    def event_labels(self, keys: tuple[str, ...]) -> list[str]:
+        """Every event's label under ``keys`` (the classifier's; lifecycles not
+        applied), straight from the arrays."""
+        if len(keys) == 1 and keys[0] == KEY_NAME:
+            values = self.activity.values
+            return ["" if code < 0 else values[code] for code in self.activity.codes]
+        columns = []
+        for key in keys:
+            codes = {KEY_NAME: self.activity, KEY_LIFECYCLE: self.lifecycle,
+                     KEY_RESOURCE: self.resource}.get(key)
+            if codes is not None:
+                values = codes.values
+                columns.append(["" if code < 0 else values[code] for code in codes.codes])
+            else:
+                extra = self.extra.get(key)
+                columns.append(["" if v is None else str(v) for v in extra] if extra is not None
+                               else [""] * self.event_count)
+        return ["+".join(parts) for parts in zip(*columns)] if columns else [""] * self.event_count
+
+    def accepted(self, lifecycles: frozenset[str] | None) -> list[bool] | None:
+        """Per event, whether a classifier keeping ``lifecycles`` keeps it (None: all)."""
+        if lifecycles is None:
+            return None
+        wanted = {v.lower() for v in lifecycles}
+        by_code = [v.lower() in wanted for v in self.lifecycle.values]
+        return [code < 0 or by_code[code] for code in self.lifecycle.codes]
+
+    def select_events(self, kept: list[tuple[int, list[int]]]) -> "ColumnStore":
+        """A store with, per ``(case, event indices)`` in ``kept``, only those
+        events: the "keep events" filter of a large log, still in columns."""
+        from operator import itemgetter
+        new = ColumnStore()
+        new.key_order, new._known = list(self.key_order), set(self._known)
+        new._key_tuples, new._strings = self._key_tuples, self._strings
+        for codes, target in ((self.activity, new.activity), (self.lifecycle, new.lifecycle),
+                              (self.resource, new.resource)):
+            target.values, target._index = list(codes.values), dict(codes._index)
+        indices: list[int] = []
+        for case, events in kept:
+            new.case_ids.append(self.case_ids[case])
+            new.case_keys.append(self.case_keys[case])
+            new.case_values.append(self.case_values[case])
+            indices.extend(events)
+            new.offsets.append(len(indices))
+        if indices:
+            gather = itemgetter(*indices)
+            pick = (lambda column: (gather(column),)) if len(indices) == 1 else gather
+            new.activity.codes.extend(pick(self.activity.codes))
+            new.lifecycle.codes.extend(pick(self.lifecycle.codes))
+            new.resource.codes.extend(pick(self.resource.codes))
+            new.micros.extend(pick(self.micros))
+            new.offset_minutes.extend(pick(self.offset_minutes))
+            new.extra = {key: list(pick(column)) for key, column in self.extra.items()}
+        else:
+            new.extra = {key: [] for key in self.extra}
+        return new
+
+    def accepted_mask(self, lifecycles: frozenset[str] | None) -> np.ndarray | None:
+        """Per event, whether a classifier keeping ``lifecycles`` keeps it (None: all)."""
+        if lifecycles is None:
+            return None
+        wanted = {v.lower() for v in lifecycles}
+        by_code = np.array([v.lower() in wanted for v in self.lifecycle.values] + [True], dtype=bool)
+        codes = as_array(self.lifecycle.codes, np.int32)
+        return by_code[np.where(codes < 0, len(by_code) - 1, codes)]
+
+    def label_codes(self, keys: tuple[str, ...]) -> tuple[np.ndarray, list[str]]:
+        """Every event's label under ``keys`` as a code into the returned table
+        (lifecycles not applied): the labels as small integers."""
+        codes = {KEY_NAME: self.activity, KEY_LIFECYCLE: self.lifecycle,
+                 KEY_RESOURCE: self.resource}.get(keys[0]) if len(keys) == 1 else None
+        if codes is not None:
+            table = list(codes.values) + [""]
+            raw = as_array(codes.codes, np.int32)
+            return np.where(raw < 0, len(table) - 1, raw).astype(np.int64), table
+        labels = self.event_labels(keys)
+        index: dict[str, int] = {}
+        out = np.fromiter((index.setdefault(label, len(index)) for label in labels),
+                          dtype=np.int64, count=len(labels))
+        return out, list(index)
+
     def sequences(self, keys: tuple[str, ...], lifecycles: frozenset[str] | None) -> list[tuple[str, ...]]:
         """Activity sequences under a classifier, straight from the arrays."""
+        if len(keys) == 1 and keys[0] in (KEY_NAME, KEY_LIFECYCLE, KEY_RESOURCE):
+            codes, table = self.label_codes(keys)
+            offsets = self.offsets_array
+            mask = self.accepted_mask(lifecycles)
+            if mask is not None:
+                codes = codes[mask]
+                kept = np.zeros(self.case_count, dtype=np.int64)
+                nonempty = np.diff(offsets) > 0
+                if len(mask):
+                    kept[nonempty] = np.add.reduceat(mask.astype(np.int64), offsets[:-1][nonempty])
+                offsets = np.concatenate(([0], np.cumsum(kept)))
+            labels = np.asarray(table, dtype=object)[codes].tolist()
+            bounds = offsets.tolist()
+            return [tuple(labels[a:b]) for a, b in zip(bounds, bounds[1:])]
         activity, lifecycle, resource = self.activity, self.lifecycle, self.resource
         columns = []
         for key in keys:
@@ -282,7 +436,59 @@ class ColumnStore:
 
 _STANDARD = frozenset((KEY_NAME, KEY_TIME, KEY_LIFECYCLE, KEY_RESOURCE))
 NO_TIME = -(1 << 62)
+
+
+def as_array(values: array, dtype) -> np.ndarray:
+    """A numpy view of an ``array.array`` (no copy; empty arrays have no buffer
+    to view, so those become an empty numpy array)."""
+    if len(values) == 0:
+        return np.zeros(0, dtype=dtype)
+    return np.frombuffer(values, dtype=dtype)
+
+
+def to_array(values: np.ndarray, typecode: str) -> array:
+    """An ``array.array`` holding a numpy array's values (one copy, in C)."""
+    out = array(typecode)
+    out.frombytes(np.ascontiguousarray(values, dtype=_DTYPES[typecode]).tobytes())
+    return out
+
+
+_DTYPES = {"i": np.int32, "q": np.int64}
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_EPOCH_ORDINAL = _EPOCH.toordinal()
+_DAY = 86_400_000_000
+
+
+class IsoFormatter:
+    """ISO 8601 text of a stored timestamp, as ``datetime.isoformat`` writes
+    it, without building the datetime: a writer formats a million of them.
+
+    ``timespec`` is ``"auto"`` (microseconds only when there are any) or
+    ``"milliseconds"``; the days and the offsets seen are remembered.
+    """
+
+    def __init__(self, timespec: str = "auto") -> None:
+        self.timespec = timespec
+        self._days: dict[int, str] = {}
+        self._offsets: dict[int, str] = {}
+
+    def __call__(self, micros: int, offset_minutes: int) -> str:
+        days, rest = divmod(micros + offset_minutes * 60_000_000, _DAY)
+        day = self._days.get(days)
+        if day is None:
+            day = self._days[days] = date.fromordinal(_EPOCH_ORDINAL + days).isoformat()
+        offset = self._offsets.get(offset_minutes)
+        if offset is None:
+            sign, minutes = ("-", -offset_minutes) if offset_minutes < 0 else ("+", offset_minutes)
+            offset = self._offsets[offset_minutes] = f"{sign}{minutes // 60:02d}:{minutes % 60:02d}"
+        seconds, fraction = divmod(rest, 1_000_000)
+        hours, seconds = divmod(seconds, 3600)
+        minutes, seconds = divmod(seconds, 60)
+        if self.timespec == "milliseconds":
+            tail = f".{fraction // 1000:03d}"
+        else:
+            tail = f".{fraction:06d}" if fraction else ""
+        return f"{day}T{hours:02d}:{minutes:02d}:{seconds:02d}{tail}{offset}"
 
 
 def _micros(stamp: datetime) -> int:
@@ -302,21 +508,29 @@ class LazyTraces(MutableSequence):
     def __init__(self, store: ColumnStore) -> None:
         self.store = store
         self._built: list = [None] * store.case_count
-        self._list: list | None = None          # set once the log was edited
+        self._list: list | None = None          # set once a case was added or removed
+        self._modified = False                  # set once a built trace was edited
 
     # -- the fast paths -------------------------------------------------------------
     @property
     def modified(self) -> bool:
-        return self._list is not None
+        """Was the log edited?  Then the arrays are stale and every reader
+        takes the trace objects (built on demand, so nothing is paid up front)."""
+        return self._list is not None or self._modified
+
+    def mark_modified(self) -> None:
+        """A built trace or event was changed in place (the editor's cell
+        edits, renames): say so, or the arrays would still answer for it."""
+        self._modified = True
 
     @property
     def event_count(self) -> int:
-        if self._list is not None:
-            return sum(len(t) for t in self._list)
+        if self.modified:
+            return sum(len(t) for t in self)
         return self.store.event_count
 
     def sequences(self, keys: tuple[str, ...], lifecycles: frozenset[str] | None):
-        return self.store.sequences(keys, lifecycles) if self._list is None else None
+        return None if self.modified else self.store.sequences(keys, lifecycles)
 
     def materialise(self) -> list:
         """Every trace as an object; from then on this is a plain list."""

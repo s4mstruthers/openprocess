@@ -4270,14 +4270,15 @@ class StudioWindow(QMainWindow):
         page = self.pages[document.id]
         if document.path and not document.missing:
             try:
-                page.write_to(document.path, quiet=True)
+                written = page.write_to(document.path, quiet=True)
             except Exception as error:  # noqa: BLE001 - the edit stays, unsaved
                 QMessageBox.warning(self, "Could not save the log",
                                     f"{Path(document.path).name}\n\n{error}\n\nYour changes "
                                     "are still open here: export the log to keep them.")
             else:
-                self.statusBar().showMessage(f"Saved your changes to "
-                                             f"{Path(document.path).name}", 6000)
+                if written:                  # else the page reports as it goes
+                    self.statusBar().showMessage(f"Saved your changes to "
+                                                 f"{Path(document.path).name}", 6000)
         else:
             self._materialise(document)
         self._replace_page(document)
@@ -4289,8 +4290,11 @@ class StudioWindow(QMainWindow):
     def _replace_page(self, document) -> None:
         """Rebuild a document's page (after reloading it), keeping it in view."""
         shown = self.content.currentWidget() is self.holders.built(document.id)
+        previous = self.pages.built(document.id)
         self._drop_page(document)
         self._make_page(document)
+        if previous is not None and hasattr(previous, "successor"):
+            previous.successor = self.pages[document.id]    # a save still running reports to the new page
         self._update_autosave(document)
         if document.missing:
             self._show_missing(document)

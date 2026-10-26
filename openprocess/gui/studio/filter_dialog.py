@@ -1,9 +1,14 @@
 """The Filter… dialog of a log page: ProM's and Disco's log filters in one form.
 
 Each filter is a group box that is switched off until you tick it; the line
-at the bottom previews the result as you change anything.  Accepting opens
-the filtered log as a new document next to the original (see
-:mod:`openprocess.mining.filtering` for what each filter does).
+at the bottom previews the result as you change anything (worked out off
+the GUI thread: on a million events a filter takes a second or two).
+Accepting opens the filtered log as a new document next to the original
+(see :mod:`openprocess.mining.filtering` for what each filter does).
+
+The lists and ranges come from the document's summary, which the log page
+already has, and a columnar log's time range from its arrays, so opening
+the dialog on a large log builds no event.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ from PySide6.QtWidgets import (
 from ...mining.filtering import FilterSettings, apply_filters
 from ...mining.stats import summarise
 from .widgets import button, hbox, label, scroll
+from .workers import run_in_background
 
 ACTIVITY_MODE_TEXT = [
     ("keep events", "Keep only the events of the ticked activities"),
@@ -65,10 +71,13 @@ class FilterDialog(QDialog):
         self.classifier = document.classifier
         self.setWindowTitle(f"Filter {document.name}")
         self.setMinimumWidth(560)
-        sequences = self.log.sequences(self.classifier)
-        cases = len(sequences)
+        summary = document.summary                    # cached on the document
+        cases = summary.case_count
         self._timer = QTimer(self, singleShot=True, interval=150)
         self._timer.timeout.connect(self._preview)
+        #: The newest preview asked for, and the one ``_result`` answers.
+        self._request = 0
+        self._result_request = -1
 
         # -- variants
         self.variants_box = self._group("Variants", "Keep the most frequent behaviour.")
@@ -84,14 +93,14 @@ class FilterDialog(QDialog):
         self.coverage.setValue(80)
         self.coverage.setSuffix(" % of the cases")
         self.count = QSpinBox()
-        self.count.setRange(1, max(len(set(sequences)), 1))
+        self.count.setRange(1, max(summary.variant_count, 1))
         self.count.setValue(min(5, self.count.maximum()))
         self.count.setSuffix(" variants")
         self.variants_box.layout().addLayout(hbox(self.by_coverage, self.coverage, None))
         self.variants_box.layout().addLayout(hbox(self.by_count, self.count, None))
 
         # -- activities
-        activity_cases = Counter(a for s in sequences for a in set(s))
+        activity_cases = Counter({a.name: a.cases for a in summary.activities})
         self.activities_box = self._group("Activities", "Share = the cases the activity "
                                           "occurs in.")
         self.activity_mode = QComboBox()
@@ -107,15 +116,17 @@ class FilterDialog(QDialog):
         # -- start and end activities
         self.start_box = self._group("Start activities", "Keep cases that start with a "
                                      "ticked activity.")
-        self.start_list = _checklist(Counter(s[0] for s in sequences if s), cases)
+        self.start_list = _checklist(Counter({a.name: a.as_start for a in summary.activities
+                                              if a.as_start}), cases)
         self.start_box.layout().addWidget(self.start_list)
         self.end_box = self._group("End activities", "Keep cases that end with a ticked "
                                    "activity, e.g. to drop cases that were still running.")
-        self.end_list = _checklist(Counter(s[-1] for s in sequences if s), cases)
+        self.end_list = _checklist(Counter({a.name: a.as_end for a in summary.activities
+                                            if a.as_end}), cases)
         self.end_box.layout().addWidget(self.end_list)
 
         # -- case length
-        lengths = [len(s) for s in sequences] or [0]
+        lengths = list(summary.events_per_case) or [0]
         self.length_box = self._group("Case length", "Number of events per case (after the "
                                       "activity filter).")
         self.min_length, self.max_length = QSpinBox(), QSpinBox()
@@ -126,14 +137,13 @@ class FilterDialog(QDialog):
                                                 self.max_length, label("events"), None))
 
         # -- time frame
-        stamps = [e.timestamp for t in self.log for e in t if e.timestamp is not None]
+        first, last = _time_range(self.log)
         self.time_box = self._group("Time frame", "Times in UTC.")
         self.time_mode = QComboBox()
         for key, text in TIME_MODE_TEXT:
             self.time_mode.addItem(text, key)
         self.time_from, self.time_to = QDateTimeEdit(), QDateTimeEdit()
-        for edit, stamp in ((self.time_from, min(stamps) if stamps else None),
-                            (self.time_to, max(stamps) if stamps else None)):
+        for edit, stamp in ((self.time_from, first), (self.time_to, last)):
             edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
             edit.setCalendarPopup(True)
             if hasattr(edit, "setTimeZone"):                  # Qt 6.7 and later
@@ -148,7 +158,7 @@ class FilterDialog(QDialog):
         form.addRow("From", self.time_from)
         form.addRow("To", self.time_to)
         self.time_box.layout().addLayout(form)
-        if not stamps:
+        if first is None:
             self.time_box.setEnabled(False)
             self.time_box.setTitle("Time frame (this log has no timestamps)")
 
@@ -229,19 +239,63 @@ class FilterDialog(QDialog):
     def _changed(self, *_args) -> None:
         self._timer.start()
 
+    def _compute(self, settings: FilterSettings):
+        """The filtered log and its summary (nothing ticked: the log as it is)."""
+        result = apply_filters(self.log, settings, self.classifier,
+                               name=self.name.text().strip() or None)
+        if not settings.describe():
+            return result, self.document.summary
+        return result, summarise(result, self.classifier)
+
     def _preview(self) -> None:
-        self._result = apply_filters(self.log, self.settings(), self.classifier,
-                                     name=self.name.text().strip() or None)
-        before = summarise(self.log, self.classifier)
-        after = summarise(self._result, self.classifier)
-        share = after.case_count / max(before.case_count, 1)
-        self.preview.setText(
-            f"Result: {after.case_count:,} of {before.case_count:,} cases ({share:.0%}) · "
-            f"{after.event_count:,} events · {after.variant_count:,} variants · "
-            f"{after.activity_count} activities")
-        self.buttons.button(QDialogButtonBox.Ok).setEnabled(after.case_count > 0)
+        """Work out the result in the background; only the newest request is shown."""
+        self._request += 1
+        request, settings = self._request, self.settings()
+        self.buttons.button(QDialogButtonBox.Ok).setEnabled(False)
+        self.preview.setText("Working out the result…")
+
+        def show(outcome) -> None:
+            if request != self._request:
+                return
+            self._result, after = outcome
+            self._result_request = request
+            before = self.document.summary
+            share = after.case_count / max(before.case_count, 1)
+            self.preview.setText(
+                f"Result: {after.case_count:,} of {before.case_count:,} cases ({share:.0%}) · "
+                f"{after.event_count:,} events · {after.variant_count:,} variants · "
+                f"{after.activity_count} activities")
+            self.buttons.button(QDialogButtonBox.Ok).setEnabled(after.case_count > 0)
+
+        def failed(message: str) -> None:
+            if request == self._request:
+                self.preview.setText(f"The filter failed: {message}")
+        run_in_background(lambda: self._compute(settings), show, failed)
 
     def result_log(self):
-        """The filtered log (named as typed)."""
-        self._preview()
+        """The filtered log (named as typed): the previewed one when it is up to
+        date, else worked out now."""
+        if self._timer.isActive() or self._result_request != self._request:
+            self._timer.stop()
+            self._request += 1
+            self._result, _after = self._compute(self.settings())
+            self._result_request = self._request
         return self._result
+
+
+def _time_range(log):
+    """The earliest and latest timestamp of a log (None, None: it has none);
+    from the arrays of a columnar log."""
+    if log.columnar:
+        import numpy as np
+        from ...mining.columns import NO_TIME
+        store = log.traces.store
+        micros = store.micros_array
+        timed = micros != NO_TIME
+        if not timed.any():
+            return None, None
+        where = np.flatnonzero(timed)
+        values = micros[where]
+        return store.timestamp(int(where[np.argmin(values)])), store.timestamp(int(where[np.argmax(values)]))
+    stamps = [e.timestamp for t in log for e in t if e.timestamp is not None]
+    return (min(stamps), max(stamps)) if stamps else (None, None)

@@ -44,7 +44,7 @@ import gzip
 import io
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Callable, Iterator
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import quoteattr
 
@@ -475,8 +475,14 @@ _STANDARD_EXTENSIONS = [
 ]
 
 
-def xes_string(log: EventLog) -> str:
-    """Serialise a log to an XES document string."""
+def xes_chunks(log: EventLog, progress: Callable[[int, int], None] | None = None) -> Iterator[str]:
+    """The XES document of a log in pieces: the header, then every case, then
+    the end.  Writing them as they come keeps a 700 MB document out of
+    memory.  ``progress(cases_written, cases)`` is called now and then.
+
+    A columnar log is written from its arrays, without building a trace or
+    an event: the same text as the objects would give.
+    """
     out = io.StringIO()
     out.write('<?xml version="1.0" encoding="UTF-8" ?>\n')
     out.write('<!-- Written by OpenProcess -->\n')
@@ -496,26 +502,112 @@ def xes_string(log: EventLog) -> str:
         out.write(f"\t<classifier name={quoteattr(classifier.name)} keys={quoteattr(keys)}/>\n")
     for key, value in log.attributes.items():
         out.write(_format_value(key, value, "\t"))
-    for trace in log.traces:
-        out.write("\t<trace>\n")
-        for key, value in trace.attributes.items():
-            out.write(_format_value(key, value, "\t\t"))
-        for event in trace.events:
-            out.write("\t\t<event>\n")
-            for key, value in event.attributes.items():
-                out.write(_format_value(key, value, "\t\t\t"))
-            out.write("\t\t</event>\n")
-        out.write("\t</trace>\n")
-    out.write("</log>\n")
-    return out.getvalue()
+    yield out.getvalue()
+    if log.columnar:
+        yield from _column_chunks(log.traces.store, progress)
+    else:
+        total = len(log.traces)
+        for index, trace in enumerate(log.traces):
+            parts = ["\t<trace>\n"]
+            for key, value in trace.attributes.items():
+                parts.append(_format_value(key, value, "\t\t"))
+            for event in trace.events:
+                parts.append("\t\t<event>\n")
+                for key, value in event.attributes.items():
+                    parts.append(_format_value(key, value, "\t\t\t"))
+                parts.append("\t\t</event>\n")
+            parts.append("\t</trace>\n")
+            yield "".join(parts)
+            if progress is not None and index % _PROGRESS_EVERY == _PROGRESS_EVERY - 1:
+                progress(index + 1, total)
+    yield "</log>\n"
 
 
-def write_xes(log: EventLog, path: str | Path) -> None:
-    """Write a log to ``path``; a ``.gz`` suffix produces a compressed file."""
-    text = xes_string(log).encode("utf-8")
+_PROGRESS_EVERY = 5000
+
+
+def _column_chunks(store, progress) -> Iterator[str]:
+    """One chunk per case, from the arrays.  An attribute's element is formatted
+    once per distinct value (the activities, lifecycles and resources are
+    codes into a table; the other columns keep a cache), the timestamps
+    straight from the microseconds."""
+    from .columns import NO_TIME, IsoFormatter
+    iso = IsoFormatter("milliseconds")
+    time_key = quoteattr(KEY_TIME)
+    offsets, micros, zones = store.offsets, store.micros, store.offset_minutes
+    code_lines = {key: (codes.codes, [_format_value(key, value, "\t\t\t") for value in codes.values])
+                  for key, codes in ((KEY_NAME, store.activity), (KEY_LIFECYCLE, store.lifecycle),
+                                     (KEY_RESOURCE, store.resource))}
+    # The attributes in the order the events' dicts would have them (see
+    # ColumnStore.event_attributes): the file's order, then the rest.
+    order = list(store.key_order)
+    order += [key for key in (KEY_NAME, KEY_TIME, KEY_LIFECYCLE, KEY_RESOURCE) if key not in order]
+    order += [key for key in store.extra if key not in order]
+    plan: list[tuple] = []
+    for key in order:
+        if key in code_lines:
+            plan.append(("codes", key, *code_lines[key]))
+        elif key == KEY_TIME:
+            plan.append(("time", key, None, None))
+        elif key in store.extra:
+            plan.append(("extra", key, store.extra[key], {}))
+    case_cache: dict[tuple, str] = {}
+    total = store.case_count
+    for case in range(total):
+        parts = ["\t<trace>\n"]
+        for key, value in zip(store.case_keys[case], store.case_values[case]):
+            line = case_cache.get((key, value)) if type(value) is str else None
+            if line is None:
+                line = _format_value(key, value, "\t\t")
+                if type(value) is str:
+                    if len(case_cache) > 100_000:
+                        case_cache.clear()
+                    case_cache[(key, value)] = line
+            parts.append(line)
+        for index in range(offsets[case], offsets[case + 1]):
+            parts.append("\t\t<event>\n")
+            for kind, key, column, lines in plan:
+                if kind == "codes":
+                    code = column[index]
+                    if code >= 0:
+                        parts.append(lines[code])
+                elif kind == "time":
+                    value = micros[index]
+                    if value != NO_TIME:
+                        parts.append(f'\t\t\t<date key={time_key} value="{iso(value, zones[index])}"/>\n')
+                else:
+                    value = column[index]
+                    if value is not None:
+                        line = lines.get(value) if type(value) is str else None
+                        if line is None:
+                            line = _format_value(key, value, "\t\t\t")
+                            if type(value) is str:
+                                if len(lines) > 100_000:
+                                    lines.clear()
+                                lines[value] = line
+                        parts.append(line)
+            parts.append("\t\t</event>\n")
+        parts.append("\t</trace>\n")
+        yield "".join(parts)
+        if progress is not None and case % _PROGRESS_EVERY == _PROGRESS_EVERY - 1:
+            progress(case + 1, total)
+
+
+def xes_string(log: EventLog) -> str:
+    """Serialise a log to an XES document string."""
+    return "".join(xes_chunks(log))
+
+
+def write_xes(log: EventLog, path: str | Path,
+              progress: Callable[[int, int], None] | None = None) -> None:
+    """Write a log to ``path``, streaming case by case; a ``.gz`` suffix
+    produces a compressed file.  ``progress(cases_written, cases)`` is
+    called now and then."""
     path = Path(path)
     if path.suffix == ".gz":
-        with gzip.open(path, "wb") as handle:
-            handle.write(text)
+        handle = gzip.open(path, "wt", encoding="utf-8", newline="\n")
     else:
-        path.write_bytes(text)
+        handle = open(path, "w", encoding="utf-8", newline="\n")
+    with handle:
+        for chunk in xes_chunks(log, progress):
+            handle.write(chunk)
