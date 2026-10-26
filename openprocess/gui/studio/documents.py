@@ -33,8 +33,11 @@ class LogDocument:
 
     def __post_init__(self) -> None:
         self.classifier: Classifier = self.log.default_classifier()
-        self._summary: LogSummary | None = None
-        self._colours: ActivityColours | None = None
+        #: The summary and the colours under each classifier looked at so far
+        #: (by its key, see :func:`~openprocess.flow.loading.summary_key`):
+        #: switching back to a classifier costs nothing.
+        self._summaries: dict[tuple, LogSummary] = {}
+        self._colours: dict[tuple, ActivityColours] = {}
 
     @property
     def name(self) -> str:
@@ -46,29 +49,33 @@ class LogDocument:
         self.log = log
         self.classifier = (classifier if classifier in log.available_classifiers()
                            else log.default_classifier())
-        self._summary = None
-        self._colours = None
+        self._summaries.clear()
+        self._colours.clear()
 
     def set_classifier(self, classifier: Classifier) -> None:
         self.classifier = classifier
-        self._summary = None
-        self._colours = None
 
     @property
     def summary(self) -> LogSummary:
-        if self._summary is None:
+        from ...flow.loading import summary_key
+        key = summary_key(self.classifier)
+        summary = self._summaries.get(key)
+        if summary is None:
             # A large log read by a worker process comes with its summary worked out
             # there (by the same summarise(), for its default classifier).
-            from ...flow.loading import summary_key
-            ready = (getattr(self.log, "precomputed_summaries", None) or {}).get(summary_key(self.classifier))
-            self._summary = ready if ready is not None else summarise(self.log, self.classifier)
-        return self._summary
+            ready = (getattr(self.log, "precomputed_summaries", None) or {}).get(key)
+            summary = ready if ready is not None else summarise(self.log, self.classifier)
+            self._summaries[key] = summary
+        return summary
 
     @property
     def colours(self) -> ActivityColours:
-        if self._colours is None:
-            self._colours = ActivityColours([a.name for a in self.summary.activities])
-        return self._colours
+        from ...flow.loading import summary_key
+        key = summary_key(self.classifier)
+        colours = self._colours.get(key)
+        if colours is None:
+            colours = self._colours[key] = ActivityColours([a.name for a in self.summary.activities])
+        return colours
 
     def simple_log(self):
         return self.log.simple_log(self.classifier)

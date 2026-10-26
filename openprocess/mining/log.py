@@ -282,25 +282,28 @@ class EventLog:
         """The multiset of activity sequences: the input to discovery."""
         return Counter(self.sequences(classifier))
 
+    def metadata(self) -> dict:
+        """Copies of everything but the traces: what a log derived from this
+        one (filtered, edited) starts from."""
+        return dict(attributes=dict(self.attributes), extensions=list(self.extensions),
+                    global_trace_attributes=dict(self.global_trace_attributes),
+                    global_event_attributes=dict(self.global_event_attributes),
+                    declared_classifiers=list(self.declared_classifiers), source_path=self.source_path)
+
     def filtered(self, keep: Iterable[int]) -> "EventLog":
         """A new log containing only the traces at the given indices.  A
         columnar log stays columnar (see :meth:`.columns.ColumnStore.subset`)."""
         indices = list(keep)
         if self.columnar:
-            return EventLog.from_columns(
-                self.traces.store.subset(indices), attributes=dict(self.attributes),
-                extensions=list(self.extensions), global_trace_attributes=dict(self.global_trace_attributes),
-                global_event_attributes=dict(self.global_event_attributes),
-                declared_classifiers=list(self.declared_classifiers), source_path=self.source_path)
-        return EventLog(
-            traces=[self.traces[i] for i in indices],
-            attributes=dict(self.attributes),
-            extensions=list(self.extensions),
-            global_trace_attributes=dict(self.global_trace_attributes),
-            global_event_attributes=dict(self.global_event_attributes),
-            declared_classifiers=list(self.declared_classifiers),
-            source_path=self.source_path,
-        )
+            return EventLog.from_columns(self.traces.store.subset(indices), **self.metadata())
+        return EventLog(traces=[self.traces[i] for i in indices], **self.metadata())
+
+    def with_same_traces(self) -> "EventLog":
+        """A new log of the same cases: over the same columns (a columnar log,
+        whose arrays are never changed in place) or the same trace objects."""
+        if self.columnar:
+            return EventLog.from_columns(self.traces.store, **self.metadata())
+        return EventLog(traces=list(self.traces), **self.metadata())
 
     # -- construction from a simple log ----------------------------------
     @classmethod

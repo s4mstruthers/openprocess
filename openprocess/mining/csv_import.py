@@ -182,21 +182,29 @@ def read_csv(path: str | Path, mapping: ColumnMapping | None = None) -> EventLog
 # ---------------------------------------------------------------------------
 # Writing
 # ---------------------------------------------------------------------------
-def write_csv(log: EventLog, path: str | Path, delimiter: str = ",") -> None:
+def write_csv(log: EventLog, path: str | Path, delimiter: str = ",", progress=None) -> None:
     """Write one row per event, in the column names PM4Py and Disco use.
 
     ``case:concept:name`` (the case id), ``concept:name``, ``time:timestamp``
     (ISO 8601), ``org:resource`` and ``lifecycle:transition`` come first, then
     the other event attributes, then trace attributes as ``case:<name>``.
     :func:`read_csv` recognises the standard columns when the file is opened
-    again.
+    again.  A columnar log is written from its arrays, without building
+    its events.  ``progress(cases_written, cases)`` is called now and then.
     """
     first = [KEY_NAME, KEY_TIME, KEY_RESOURCE, KEY_LIFECYCLE]
-    event_keys = sorted({key for trace in log for event in trace for key in event.attributes}
-                        - set(first))
-    trace_keys = sorted({key for trace in log for key in trace.attributes} - {KEY_NAME})
-    present = [key for key in first
-               if any(key in event.attributes for trace in log for event in trace)]
+    if log.columnar:
+        store = log.traces.store
+        keys = store.present_keys()
+        event_keys = sorted(keys - set(first))
+        trace_keys = sorted({key for case_keys in set(store.case_keys) for key in case_keys} - {KEY_NAME})
+        present = [key for key in first if key in keys]
+    else:
+        event_keys = sorted({key for trace in log for event in trace for key in event.attributes}
+                            - set(first))
+        trace_keys = sorted({key for trace in log for key in trace.attributes} - {KEY_NAME})
+        present = [key for key in first
+                   if any(key in event.attributes for trace in log for event in trace)]
     header = ["case:concept:name"] + present + event_keys + [f"case:{k}" for k in trace_keys]
 
     def cell(value) -> str:
@@ -213,10 +221,59 @@ def write_csv(log: EventLog, path: str | Path, delimiter: str = ",") -> None:
     with open(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle, delimiter=delimiter)
         writer.writerow(header)
-        for trace in log:
+        if log.columnar:
+            total = store.case_count
+            for case, row in enumerate(_column_rows(store, present, event_keys, trace_keys, cell)):
+                writer.writerow(row)
+                if progress is not None and case % 5000 == 4999:
+                    progress(case + 1, total)
+            return
+        total = len(log.traces)
+        for index, trace in enumerate(log):
             case_values = [cell(trace.attributes.get(key)) for key in trace_keys]
             for event in trace:
                 writer.writerow([trace.case_id]
                                 + [cell(event.attributes.get(key)) for key in present]
                                 + [cell(event.attributes.get(key)) for key in event_keys]
                                 + case_values)
+            if progress is not None and index % 5000 == 4999:
+                progress(index + 1, total)
+
+
+def _column_rows(store, present, event_keys, trace_keys, cell):
+    """The rows of :func:`write_csv` from a columnar log's arrays (the case's
+    id, the standard columns, the other event attributes, the case's),
+    formatted a column at a time per case."""
+    from .columns import NO_TIME, IsoFormatter
+    iso = IsoFormatter("auto")
+    micros, zones, offsets = store.micros, store.offset_minutes, store.offsets
+    specs = []
+    for key in present + event_keys:
+        codes = {KEY_NAME: store.activity, KEY_RESOURCE: store.resource,
+                 KEY_LIFECYCLE: store.lifecycle}.get(key)
+        if codes is not None:
+            specs.append(("codes", codes.codes, [cell(v) for v in codes.values]))
+        elif key == KEY_TIME:
+            specs.append(("time", None, None))
+        elif key in store.extra:
+            specs.append(("extra", store.extra[key], None))
+        else:
+            specs.append(("none", None, None))
+    for case in range(store.case_count):
+        attributes = store.case_attributes(case)
+        case_values = [cell(attributes.get(key)) for key in trace_keys]
+        case_id = store.case_ids[case]
+        start, stop = offsets[case], offsets[case + 1]
+        columns = []
+        for kind, column, table in specs:
+            if kind == "codes":
+                columns.append(["" if code < 0 else table[code] for code in column[start:stop]])
+            elif kind == "time":
+                columns.append(["" if m == NO_TIME else iso(m, z)
+                                for m, z in zip(micros[start:stop], zones[start:stop])])
+            elif kind == "extra":            # a string is its own cell
+                columns.append([v if type(v) is str else cell(v) for v in column[start:stop]])
+            else:
+                columns.append([""] * (stop - start))
+        for row in zip(*columns):
+            yield [case_id, *row, *case_values]

@@ -1,6 +1,6 @@
 """Optional packages, installed from inside the app.
 
-Some boxes need a package the app does not ship (pandas, numpy, scipy,
+Some boxes need a package the app does not ship (pandas, scipy,
 matplotlib).  From a Python install, the app runs ``pip`` in that Python.
 The downloaded app has a Python of its own with no pip on any path and no
 writable site-packages, so it carries pip inside, runs it in a copy of

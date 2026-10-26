@@ -8,7 +8,9 @@ classifier in the header recomputes every tab.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt, Signal
+from pathlib import Path
+
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QFileDialog, QGridLayout, QHeaderView, QLabel,
@@ -44,6 +46,15 @@ from .workers import run_in_background
 
 def plural(count: int, singular: str, many: str | None = None) -> str:
     return f"{count:,} {singular if count == 1 else many or singular + 's'}"
+
+
+def _alive(widget) -> bool:
+    """False once the page's widget was deleted (a background write may outlive it)."""
+    try:
+        from shiboken6 import isValid
+    except ImportError:                                  # pragma: no cover
+        return True
+    return isValid(widget)
 
 
 TABS = ["Overview", "Variants", "Cases", "Dotted chart", "Process map", "Footprint", "Discover"]
@@ -84,29 +95,63 @@ class CasesModel(QAbstractTableModel):
 
     def __init__(self, log, summary, parent=None) -> None:
         super().__init__(parent)
-        variant_of: dict[int, int] = {}
-        for number, variant in enumerate(summary.variants, 1):
-            for index in variant.trace_indices:
-                variant_of[index] = number
         #: (case id, events, start, duration) per case; start a datetime or None.
         self.rows: list[tuple] = []
+        #: The rows shown, as indices into ``rows`` (None: all of them).
+        self.visible: list[int] | None = None
+        self._lower: list[str] | None = None      # the case ids in lower case, for the filter
+        self.variant_of: dict[int, int] = {}
+        self.set_summary(summary)
         if log.columnar:
             store = log.traces.store
-            for case in range(store.case_count):
-                span = store.span(case)
-                start = store.timestamp(span[0]) if span else None
-                duration = (store.micros[span[1]] - store.micros[span[0]]) / 1e6 if span else None
-                self.rows.append((store.case_ids[case], store.offsets[case + 1] - store.offsets[case],
-                                  start, duration))
+            low, high = (bounds.tolist() for bounds in store.case_spans())
+            micros = store.micros
+            counts = store.offsets_array
+            counts = (counts[1:] - counts[:-1]).tolist()
+            for case, (case_id, count, first, last) in enumerate(zip(store.case_ids, counts, low, high)):
+                if first < 0:
+                    self.rows.append((case_id, count, None, None))
+                else:
+                    self.rows.append((case_id, count, store.timestamp(first),
+                                      (micros[last] - micros[first]) / 1e6))
         else:
             for trace in log.traces:
                 stamps = [e.timestamp for e in trace.events if e.timestamp]
                 self.rows.append((trace.case_id, len(trace), min(stamps) if stamps else None,
                                   (max(stamps) - min(stamps)).total_seconds() if stamps else None))
+
+    def set_summary(self, summary) -> None:
+        """The variant numbers come from the summary under the current classifier;
+        the other columns do not change with it."""
+        variant_of: dict[int, int] = {}
+        for number, variant in enumerate(summary.variants, 1):
+            for index in variant.trace_indices:
+                variant_of[index] = number
         self.variant_of = variant_of
+        if self.rows:
+            self.dataChanged.emit(self.index(0, 4), self.index(self.rowCount() - 1, 4))
+
+    def set_filter(self, text: str) -> None:
+        """Show the cases whose id contains ``text`` (any case): a pass over the
+        tuples in Python, not a call into the model per row."""
+        needle = text.strip().lower()
+        self.beginResetModel()
+        if not needle:
+            self.visible = None
+        else:
+            if self._lower is None:
+                self._lower = [row[0].lower() for row in self.rows]
+            self.visible = [i for i, case_id in enumerate(self._lower) if needle in case_id]
+        self.endResetModel()
+
+    def trace_index(self, row: int) -> int:
+        """The index in the log of the case shown on ``row``."""
+        return row if self.visible is None else self.visible[row]
 
     def rowCount(self, parent=QModelIndex()) -> int:
-        return 0 if parent.isValid() else len(self.rows)
+        if parent.isValid():
+            return 0
+        return len(self.rows) if self.visible is None else len(self.visible)
 
     def columnCount(self, parent=QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self.HEADERS)
@@ -119,7 +164,7 @@ class CasesModel(QAbstractTableModel):
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid():
             return None
-        row, column = index.row(), index.column()
+        row, column = self.trace_index(index.row()), index.column()
         if role == Qt.UserRole:
             return row                                  # the trace's index in the log
         if role == Qt.TextAlignmentRole and column in (1, 3, 4):
@@ -173,6 +218,8 @@ class LogPage(ConcealsResults, QWidget):
         self.document = document
         self.discover_mode = discover
         self._built: set[int] = set()
+        #: Per built tab that survives a change of classifier: how to tell it.
+        self._reclassify: dict[int, object] = {}
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -218,7 +265,6 @@ class LogPage(ConcealsResults, QWidget):
     # ------------------------------------------------------------------ util
     def _refresh_header(self) -> None:
         s = self.document.summary
-        from pathlib import Path
         where = Path(self.document.path).name if self.document.path else "created in the app"
         self.header.set_text(self.document.name,
                              f"{s.case_count:,} cases · {s.event_count:,} events · "
@@ -228,8 +274,16 @@ class LogPage(ConcealsResults, QWidget):
         self.document.set_classifier(self.classifier_box.currentData())
         self._refresh_header()
         # Rebuild lazily: forget every built tab, then rebuild the visible one.
+        # A tab that can take the new classifier itself (the Cases tab: its
+        # rows do not depend on it) is told instead of being rebuilt.
+        keep = {index: refresh for index, refresh in self._reclassify.items() if index in self._built}
         self._built.clear()
-        for page in self.pages:
+        self._built.update(keep)
+        for refresh in keep.values():
+            refresh()
+        for index, page in enumerate(self.pages):
+            if index in keep:
+                continue
             layout = page.layout()
             while layout.count():
                 item = layout.takeAt(0)
@@ -275,20 +329,80 @@ class LogPage(ConcealsResults, QWidget):
         self.document.notation = notation
         self.edited.emit()
 
-    def write_to(self, path: str, quiet: bool = False) -> None:
+    #: A log with more events than this is written in the background.
+    BACKGROUND_WRITE_ABOVE = 50_000
+
+    def write_to(self, path: str, quiet: bool = False) -> bool:
         """Save the log to ``path`` (XES, CSV, or notation for ``….log.txt``, by its
-        extension); it is then that file."""
+        extension); it is then that file.
+
+        A small log is written before this returns (True).  A large one is
+        written in the background (False): the window keeps working, the
+        status bar counts the cases, the document is that file at once, and
+        :attr:`saved` is emitted when the file is complete -- by this page,
+        or by the page that replaced it meanwhile (see :attr:`successor`).
+        """
         from .workspace import atomic_write
+        log, document = self.document.log, self.document
         if path.lower().endswith(".txt"):
             from ...mining.log import format_simple_log
-            text = self.document.notation or format_simple_log(self.document.simple_log())
+            text = document.notation or format_simple_log(document.simple_log())
             atomic_write(path, lambda temporary: temporary.write_text(text.strip() + "\n",
                                                                        encoding="utf-8"))
-        elif path.lower().endswith(".csv"):
+            self._written(path, quiet)
+            return True
+        if path.lower().endswith(".csv"):
             from ...mining.csv_import import write_csv
-            atomic_write(path, lambda temporary: write_csv(self.document.log, temporary))
+            write = write_csv
         else:
-            atomic_write(path, lambda temporary: write_xes(self.document.log, temporary))
+            write = write_xes
+        if log.event_count <= self.BACKGROUND_WRITE_ABOVE:
+            atomic_write(path, lambda temporary: write(log, temporary))
+            self._written(path, quiet)
+            return True
+        # Large: the document is the file from now on; the bytes follow.
+        previous = document.path
+        document.path = path
+        document.missing = False
+        self._refresh_header()
+        name = Path(path).name
+        self.status.emit(f"Saving {name}…")
+
+        def progress(written: int, total: int) -> None:
+            page = self._live()
+            if page is not None:
+                page.status.emit(f"Saving {name}… {written:,} of {total:,} cases")
+
+        def done(_result) -> None:
+            page = self._live()
+            if page is not None:
+                page._written(path, True)
+                page.status.emit(f"Saved {path}")
+
+        def failed(message: str) -> None:
+            page = self._live()
+            if page is not None:
+                if document.path == path:
+                    document.path = previous
+                    page._refresh_header()
+                page.status.emit(f"Could not save {name}: {message}")
+        run_in_background(lambda report: atomic_write(path, lambda temporary: write(
+            log, temporary, progress=report)), done, failed, on_progress=progress)
+        return False
+
+    #: The page that took this one's place (the app rebuilds a log's page after
+    #: an edit): a save still running then reports to it.
+    successor: "LogPage | None" = None
+
+    def _live(self) -> "LogPage | None":
+        page = self
+        while not _alive(page):
+            page = page.successor
+            if page is None:
+                return None
+        return page
+
+    def _written(self, path: str, quiet: bool) -> None:
         self.document.path = path
         self.document.missing = False
         self._refresh_header()
@@ -424,11 +538,7 @@ class LogPage(ConcealsResults, QWidget):
     # ----------------------------------------------------------------- cases
     def _build_cases(self, layout) -> None:
         log = self.document.log
-        cases = CasesModel(log, self.document.summary, self)
-        shown = QSortFilterProxyModel(self)
-        shown.setSourceModel(cases)
-        shown.setFilterKeyColumn(0)
-        shown.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        cases = shown = CasesModel(log, self.document.summary, self)
         case_table = _table(shown)
         header = case_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)     # sizing to contents would read every row
@@ -440,12 +550,19 @@ class LogPage(ConcealsResults, QWidget):
         search = QLineEdit()
         search.setPlaceholderText("Filter cases…")
         search.setClearButtonEnabled(True)
-        search.textChanged.connect(shown.setFilterFixedString)
+        # Typing filters after a short pause, not at every keystroke: on a
+        # quarter of a million cases each pass is a tenth of a second.
+        debounce = QTimer(search, singleShot=True, interval=200)
+
+        def filter_now() -> None:
+            cases.set_filter(search.text())
+            if shown.rowCount() and not case_table.currentIndex().isValid():
+                case_table.selectRow(0)
+        debounce.timeout.connect(filter_now)
+        search.textChanged.connect(lambda _text: debounce.start())
 
         events = QStandardItemModel(0, 5)
         event_table = _table(events)
-        colours = self.document.colours
-        classifier = self.document.classifier
 
         def show_case(current, _previous=None) -> None:
             events.clear()
@@ -453,6 +570,8 @@ class LogPage(ConcealsResults, QWidget):
                                               "Resource", "Other attributes"])
             if not current.isValid():
                 return
+            colours = self.document.colours                 # under the classifier of the moment
+            classifier = self.document.classifier
             trace = log.traces[shown.data(current, Qt.UserRole)]
             standard = {"concept:name", "time:timestamp", "lifecycle:transition", "org:resource"}
             for number, event in enumerate(trace.events, 1):
@@ -475,6 +594,13 @@ class LogPage(ConcealsResults, QWidget):
             header.setStretchLastSection(True)
 
         case_table.selectionModel().currentRowChanged.connect(show_case)
+
+        def reclassify() -> None:
+            """A new classifier: new variant numbers, and the selected case's
+            events shown under it; the rows stay."""
+            cases.set_summary(self.document.summary)
+            show_case(case_table.currentIndex())
+        self._reclassify[2] = reclassify
 
         left = Card("Cases")
         left.add(search)
@@ -513,7 +639,12 @@ class LogPage(ConcealsResults, QWidget):
             slider.setValue(value)
             slider.setMinimumWidth(70)
             slider.setMaximumWidth(220)
+            # Redraw when the slider is let go, not at every step of a drag (as
+            # the Discover tab does): each redraw lays the whole map out again.
+            slider.setTracking(False)
         activity_label, path_label = label("100%", "muted"), label("100%", "muted")
+        activities.sliderMoved.connect(lambda v: activity_label.setText(f"{v}%"))
+        paths.sliderMoved.connect(lambda v: path_label.setText(f"{v}%"))
         info = ElidedLabel("", "muted")
         legend = Legend()
 

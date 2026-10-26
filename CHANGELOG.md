@@ -8,6 +8,47 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
 ## Unreleased
 
+- **The dotted chart keeps up on a million events.** On a log the size of
+  the BPI Challenge 2019 (1.6 million events, 250,000 cases) every wheel
+  tick, pinch, pan and resize used to redraw the whole log before showing
+  anything, and the first move of the pointer afterwards stalled for most
+  of a second. Now a gesture moves the picture at once and the exact
+  picture follows as soon as it settles; a window of the chart only looks
+  at the dots in it; the dots are worked out five times faster; and the dot
+  size, grid and time unit repaint the chart instead of working the dots
+  out again (on the Compare page too). The lines between a case's events
+  (*Connect events of a case*) are drawn when the window shows fewer than
+  40,000 dots, where they can be read.
+- **numpy comes with OpenProcess.** The engines need numpy (and nothing
+  else) from this version: `pip install openprocess` brings it, the
+  downloaded app carries it, and a box of your own can count on it. The
+  Science boxes still need pandas, SciPy or matplotlib, installed from
+  Connections as before.
+- **A large log's page no longer freezes the window.** Measured on the BPI
+  Challenge 2019 log (1.6 million events, a quarter of a million cases):
+  typing in the Cases tab's filter cost 1.3 s a keystroke and now filters
+  after a short pause in a hundredth of a second; *Filter…* opened in 34 s
+  using 700 MB and now opens in a second using none, and works out its
+  preview in the background while you tick things; *Edit…* opened in 10 s
+  with a copy of the whole log and now opens in a second without one, with
+  a case list that is read as it scrolls and a search that waits for you to
+  stop typing; *Export…* wrote the whole file in memory first and froze the
+  window for 13 s, and now writes it in the background, straight from the
+  log's columns, in 3 s, counting the cases in the status bar (the log is
+  that file at once); dragging the process map's sliders redraws when you
+  let go, as the Discover tab does, and the map itself is worked out in a
+  fifth of the time; the overview's figures and the time filter are worked
+  out from the log's columns at once (with numpy); and switching the
+  classifier back to one you looked at before costs nothing (the Cases tab
+  is kept, with the variant numbers updated).
+- **Edits to a large log were not seen by the views.** Renaming an activity
+  or changing a cell in *Edit…* on a log read into columns changed the
+  saved file but not the overview, the variants or the process map, which
+  kept reading the unchanged columns. An edit now marks the log, so every
+  view reads the edited cases.
+- A filter that keeps only some activities' events, and a filter with
+  nothing ticked, keep a large log in its columns instead of turning it
+  into objects.
 - **The BPI Challenge 2019 example follows the exact token replay.** Its
   record and the figures in its README were made with 0.12.0, so on 0.13
   `--check` reported five results as differing (the fit of each category's
