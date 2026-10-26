@@ -1,5 +1,5 @@
 {
-  "format": "cpnflow/1",
+  "format": "analysis/1",
   "name": "BPI Challenge 2019 · purchase to pay",
   "boxes": [
     {

@@ -74,6 +74,7 @@ from ...mining.csv_import import ColumnMapping, guess_mapping, read_csv, sniff
 from ...mining.log import EventLog, parse_simple_log
 from ...mining.pnml import read_pnml, write_pnml
 from ...flow.loading import read_log
+from ...flow.record import EXTENSION, analysis_name, is_analysis_file
 from ...mining.xes import read_xes, write_xes
 from .. import theme
 from . import motion, style
@@ -2407,8 +2408,9 @@ class StudioWindow(QMainWindow):
     def action_open(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Open", dialog_folder(),
-            "Supported files (*.xes *.gz *.csv *.pnml *.bpmn *.cpn *.cpnflow *.zip);;Event logs (*.xes *.gz *.csv);;"
-            "Petri nets (*.pnml);;BPMN models (*.bpmn);;CPN Tools models (*.cpn);;Analyses (*.cpnflow);;"
+            "Supported files (*.xes *.gz *.csv *.pnml *.bpmn *.cpn *.analysis *.cpnflow *.zip);;"
+            "Event logs (*.xes *.gz *.csv);;"
+            "Petri nets (*.pnml);;BPMN models (*.bpmn);;CPN Tools models (*.cpn);;Analyses (*.analysis *.cpnflow);;"
             "Exported experiments (*.zip);;All files (*)")
         self.open_files(paths)
 
@@ -2583,10 +2585,10 @@ class StudioWindow(QMainWindow):
             return
         size = _signature(path)
         try:
-            if lower.endswith(".cpnflow"):
-                from ...flow.record import load as load_workflow
-                workflow, record = load_workflow(path, self.library())
-                self.add_document(WorkflowDocument(workflow, path=path, record=record))
+            if is_analysis_file(lower):
+                from ...flow.record import load_all
+                workflow, record, versions = load_all(path, self.library())
+                self.add_document(WorkflowDocument(workflow, path=path, record=record, versions=versions))
                 self.statusBar().showMessage(f"Opened {name}: click a box to see its result and how it "
                                              "got there", 10000)
             elif lower.endswith(".pnml"):
@@ -3011,7 +3013,7 @@ class StudioWindow(QMainWindow):
         if self.workspace is None or document.path:
             self.pages[document.id].export()
             return
-        target = unique_path(self.workspace.folder, safe_file_name(document.name) + ".cpnflow")
+        target = unique_path(self.workspace.folder, safe_file_name(document.name) + EXTENSION)
         self.pages[document.id].write_to(str(target), quiet=True)
         self.statusBar().showMessage(f"Kept as {target.name}", 8000)
         self._rebuild_sidebar()
@@ -3376,6 +3378,12 @@ class StudioWindow(QMainWindow):
         self._rescan_workspace(force=True)
 
         state = workspace.load_state()
+        for entry in state["open"]:                 # an analysis renamed on opening (.cpnflow → .analysis)
+            if not Path(entry["path"]).exists() and analysis_name(entry["path"]).exists():
+                entry["path"] = str(analysis_name(entry["path"]))
+        selected = state["selected"]
+        if selected and not Path(selected).exists() and analysis_name(selected).exists():
+            state["selected"] = str(analysis_name(selected))
         entries = [e for e in state["open"] if Path(e["path"]).exists()]
         self._restore_paths = {self._key(e["path"]): e for e in entries}
         selected = state["selected"]
@@ -3383,7 +3391,7 @@ class StudioWindow(QMainWindow):
             # Nothing was selected last time: show the first file of the folder's
             # space (an analysis before a log in Mine, a net in Model), so only that
             # page is built now and the others when they are first shown.
-            wanted = ((".cpnflow",), (".xes", ".xes.gz", ".csv", ".txt")) if self.space == MINE \
+            wanted = ((".analysis", ".cpnflow"), (".xes", ".xes.gz", ".csv", ".txt")) if self.space == MINE \
                 else ((".pnml", ".cpn", ".bpmn"),)
             chosen = next((e["path"] for suffixes in wanted for e in entries
                            if e["path"].lower().endswith(suffixes)), entries[0]["path"])
@@ -3401,9 +3409,12 @@ class StudioWindow(QMainWindow):
             self.content.setCurrentIndex(0)
         self._set_title(self._current_document())
         count = len(self.placeholders) + sum(1 for d in self.documents if d.path)
+        renamed = len(getattr(workspace, "carried_over", []))
         self.statusBar().showMessage(
             f"Opened {workspace.name}: "
-            f"{count} file{'s' if count != 1 else ''} to work with", 6000)
+            f"{count} file{'s' if count != 1 else ''} to work with"
+            + (f" · {renamed} analys{'es' if renamed != 1 else 'is'} renamed from .cpnflow to .analysis"
+               if renamed else ""), 10000 if renamed else 6000)
         return True
 
     def close_workspace(self) -> bool:
@@ -3950,7 +3961,7 @@ class StudioWindow(QMainWindow):
                 target = unique_path(folder, safe_file_name(document.name) + ".ts.txt")
                 page.write_to(str(target), quiet=True)
             elif isinstance(document, WorkflowDocument):
-                target = unique_path(folder, safe_file_name(document.name) + ".cpnflow")
+                target = unique_path(folder, safe_file_name(document.name) + EXTENSION)
                 page.write_to(str(target), quiet=True)
             else:
                 plain = getattr(document.net, "plain", False)

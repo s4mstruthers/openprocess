@@ -227,7 +227,7 @@ cpnpy/               the old name (CPNpy, up to 0.6): `import cpnpy` is `openpro
   cli.py             the `openprocess` command (`run`, `boxes`, `datasets`, `mine`, `exercises`)
   flow/              workflows, no Qt (docs/workflows.md): types.py, box.py (@box),
                      explain.py, workflow.py, runner.py, sweep.py, record.py
-                     (.cpnflow files, fingerprints, the environment lock), convert.py,
+                     (.analysis files, fingerprints, the environment lock), convert.py,
                      library.py (a folder's boxes/, entry points), datasets.py,
                      boxes/ (the standard boxes, one module per group)
   sim/export.py      a simulation's firing history as an event log

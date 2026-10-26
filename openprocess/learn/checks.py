@@ -716,7 +716,7 @@ def _check_workflow(context, task, answer) -> Result:
     ``answer:`` / ``compute:``."""
     from ..flow.record import load
     from ..flow.runner import Cache, Runner
-    path = context.exercise.folder / (answer if isinstance(answer, str) and answer else "my workflow.cpnflow")
+    path = context.exercise.folder / (answer if isinstance(answer, str) and answer else "my workflow.analysis")
     if not path.exists():
         return Result(UNKNOWN, "Build the workflow in the Workflow tab first (it is saved beside "
                                "the question).")

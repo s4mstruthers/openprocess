@@ -1,7 +1,7 @@
 """Build the energy-contract exam log analysis (2AMI10, 2026) as a workflow file.
 
-    python make_workflow.py                   # writes "Energy contracts.cpnflow" beside this file
-    openprocess run "Energy contracts.cpnflow" --report report.html
+    python make_workflow.py                   # writes "Energy contracts.analysis" beside this file
+    openprocess run "Energy contracts.analysis" --report report.html
 
 One group per kind of exam question: the dotted charts, the discovered
 models, their fitness, where the log deviates from them, and properties of
@@ -118,6 +118,6 @@ def build() -> Workflow:
 
 if __name__ == "__main__":
     workflow = build()
-    target = HERE / "Energy contracts.cpnflow"
+    target = HERE / "Energy contracts.analysis"
     save(workflow, target, folder=HERE)
     print(f"Wrote {target.name}: {len(workflow.nodes)} boxes in {len(workflow.groups)} groups")

@@ -38,10 +38,10 @@ def test_the_readme_workflow_runs_as_written(tmp_path, monkeypatch):
     run = Runner().run(wf)
     assert set(run.value(fit).metrics) == {"fitness", "precision", "generalisation", "simplicity"}
     assert run.result(model).explanation.steps
-    save(wf, "orders.cpnflow", run)
+    save(wf, "orders.analysis", run)
 
     from openprocess.flow import check, load
-    again, record = load("orders.cpnflow")
+    again, record = load("orders.analysis")
     assert check(again, record, Runner().run(again)) == []
 
 

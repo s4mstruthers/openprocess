@@ -37,7 +37,7 @@ a log and a net each have a page of their own::
   hints, no answers and nothing to reveal, and when the time is up the
   answers are locked.  ⋯ exports the marks.
 * **A workflow block** adds a *Workflow* tab beside the sheet: the full
-  Workflows page on ``my workflow.cpnflow``, saved as you build.
+  Workflows page on ``my workflow.analysis``, saved as you build.
 
 Nothing here touches the sidebar's documents: *Exit* returns to the window
 exactly as it was.
@@ -755,19 +755,24 @@ class ExerciseView(QWidget):
         return page
 
     def _workflow_page(self, task):
-        """The workflow you build, on the canvas (my workflow.cpnflow), started
+        """The workflow you build, on the canvas (my workflow.analysis), started
         from the block's ``start:`` file or from the exercise's log."""
         from ...flow import Workflow, load
+        from ...flow.record import OLD_EXTENSIONS, is_analysis_file
         from ..flow.page import WorkflowPage
         from ..studio.documents import WorkflowDocument
         target = self.exercise.workflow_path
         library = self.context.library
+        for old in OLD_EXTENSIONS:                       # a try saved before 0.16 goes on under the new name
+            before = target.with_suffix(old)
+            if before.exists() and not target.exists():
+                before.replace(target)
         try:
             if target.exists():
                 workflow, _record = load(target, library)
             else:
                 start = self.exercise.files.file(task.get("start") or "")
-                if start is not None and start.suffix.lower() == ".cpnflow":
+                if start is not None and is_analysis_file(start):
                     workflow, _record = load(start, library)
                 else:
                     workflow = Workflow("my workflow", library)

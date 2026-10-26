@@ -332,14 +332,14 @@ class Workflow:
         """Save the workflow (with ``run``'s record when given) and open it in
         OpenProcess Studio, starting the app if it is not running.
 
-        ``path`` defaults to ``<name>.cpnflow`` in ``folder`` (or the working
+        ``path`` defaults to ``<name>.analysis`` in ``folder`` (or the working
         folder); the app works in ``folder`` when one is given."""
         from pathlib import Path
         from .record import save
         from .studio import open_in_studio
         if path is None:
             safe = "".join(c for c in self.name if c not in '\\/:*?"<>|') or "workflow"
-            path = Path(folder or ".") / f"{safe}.cpnflow"
+            path = Path(folder or ".") / f"{safe}.analysis"
         save(self, path, run)
         return open_in_studio(path, folder=folder)
 

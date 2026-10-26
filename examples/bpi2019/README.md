@@ -8,7 +8,7 @@ plainly wrong (1948, 1993, 2020). It is the log of the
 (van Dongen, 2019, [doi:10.4121/uuid:d06aff4b-79f0-45e6-8ec8-e19730c248f1](https://doi.org/10.4121/uuid:d06aff4b-79f0-45e6-8ec8-e19730c248f1)).
 
 This folder is the whole analysis as one workflow: every number below comes
-from a box whose code, settings and inputs are in `BPI Challenge 2019.cpnflow`,
+from a box whose code, settings and inputs are in `BPI Challenge 2019.analysis`,
 and the file's record lets anyone check that they get the same numbers.
 
 ## Run it
@@ -19,7 +19,7 @@ and the file's record lets anyone check that they get the same numbers.
    *Analyses*; or, from a terminal in this folder:
 
    ```bash
-   openprocess run "BPI Challenge 2019.cpnflow" --check --report report.html
+   openprocess run "BPI Challenge 2019.analysis" --check --report report.html
    ```
 
    `--check` re-runs everything and compares each result with the recorded
@@ -29,7 +29,7 @@ and the file's record lets anyone check that they get the same numbers.
 
 `make_workflow.py` builds the workflow file from Python, so it is also an
 example of the [framework's](../../docs/framework.md) Python side: run it and
-it writes the same `.cpnflow`.
+it writes the same `.analysis`.
 
 ## The process
 

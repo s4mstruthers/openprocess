@@ -193,7 +193,7 @@ def test_replay_alignment_and_the_workflow_tab(app, demo):
     page.workflow.connect(miner, fit, "model")
     page.workflow.connect(log, fit, "log")
     page.edited.emit()
-    assert wait_for(app, lambda: (folder / "my workflow.cpnflow").exists(), 10)
+    assert wait_for(app, lambda: (folder / "my workflow.analysis").exists(), 10)
     workflow.check_button.click()
     assert wait_for(app, lambda: workflow.status is not None, 60)
     assert workflow.status == "correct", workflow.feedback.text()

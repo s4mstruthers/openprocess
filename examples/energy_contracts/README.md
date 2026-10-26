@@ -11,7 +11,7 @@ and a resource on every event.
 The exam asks about the dotted charts of this log, the models that the
 course's discovery algorithms give, their fitness, where the log deviates
 from them, and the properties of the process. This folder is all of that as
-one workflow, `Energy contracts.cpnflow`, with a group of boxes for each.
+one workflow, `Energy contracts.analysis`, with a group of boxes for each.
 
 ## Run it
 
@@ -19,7 +19,7 @@ one workflow, `Energy contracts.cpnflow`, with a group of boxes for each.
    this folder as `Exam Eventlog 2026.xes`. It is course material, so it is
    not in the repository. (OpenProcess also reads the `.gz` directly: rename
    the file in the *Exam event log* box's settings.)
-2. Double-click `Energy contracts.cpnflow`, or open this folder in OpenProcess
+2. Double-click `Energy contracts.analysis`, or open this folder in OpenProcess
    and click *Energy contracts* under *Analyses*. Everything runs in about a
    second. Double-click a group to open it, and click a box to see its result,
    *How* it got there, and its *Code*.
@@ -27,13 +27,13 @@ one workflow, `Energy contracts.cpnflow`, with a group of boxes for each.
 From a terminal in this folder:
 
 ```bash
-openprocess run "Energy contracts.cpnflow" --report report.html
+openprocess run "Energy contracts.analysis" --report report.html
 ```
 
 Add `--check` to re-run everything and compare each result with the one
 recorded in the file. It passes when your copy of the log is the one the
 record was made with. `make_workflow.py` builds the workflow file from
-Python. Run it and it writes the same `.cpnflow`.
+Python. Run it and it writes the same `.analysis`.
 
 For the interactive dotted chart (zooming, choosing other rows and colours,
 clicking a dot to see its case), click the *Exam event log* box and choose

@@ -173,7 +173,7 @@ flowchart LR
   end
   subgraph kept["Kept"]
     result --> fp["fingerprint<br/>(canonical content)"]
-    fp --> record[".cpnflow record<br/>inputs · seeds · versions · results"]
+    fp --> record[".analysis record<br/>inputs · seeds · versions · results"]
     result --> how["How tab<br/>notes · steps · values"]
     spec --> code["Code tab<br/>box + algorithm_calls"]
     record --> badge["Reproducible badge<br/>openprocess run --check"]
@@ -188,7 +188,7 @@ flowchart TB
   window --> mine["Mine"]
   window --> modelspace["Model"]
   window --> learnspace["Learn"]
-  mine --> wfpage["WorkflowPage · gui/flow/page.py<br/>Report, canvas, panel (beside or under), Runs"]
+  mine --> wfpage["WorkflowPage · gui/flow/page.py<br/>Report, canvas, panel (beside or under), Versions"]
   mine --> logpage["LogPage · gui/studio/log_page.py<br/>overview, variants, cases, dotted chart, map"]
   wfpage --> viewers["viewers.py: Result · How · Code · Settings"]
   viewers --> alignview["alignment_view.py<br/>chevrons, the log on the model"]
@@ -344,7 +344,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`flow/loading.py`](../openprocess/flow/loading.py) | Reading event logs once, and large ones in a process of their own. |
 | [`flow/parallel.py`](../openprocess/flow/parallel.py) | Parallel work in a box: ``flow.parallel_map``. |
 | [`flow/provenance.py`](../openprocess/flow/provenance.py) | Where a result came from, carried with it and written into the files it becomes. |
-| [`flow/record.py`](../openprocess/flow/record.py) | The ``.cpnflow`` file: a workflow, and the record that makes it reproducible. |
+| [`flow/record.py`](../openprocess/flow/record.py) | The ``.analysis`` file: a workflow, and the record that makes it reproducible. |
 | [`flow/report.py`](../openprocess/flow/report.py) | An analysis as one HTML page: for a supervisor, a reviewer, a hand-in. |
 | [`flow/reproducibility.py`](../openprocess/flow/reproducibility.py) | Is this analysis reproducible, right now? One status for the header. |
 | [`flow/runner.py`](../openprocess/flow/runner.py) | Running a workflow: in order, only what changed, each box on its own. |
@@ -353,6 +353,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`flow/studio.py`](../openprocess/flow/studio.py) | Talking to a running OpenProcess Studio from Python: open a file, publish a box. |
 | [`flow/sweep.py`](../openprocess/flow/sweep.py) | Sweeps: run the boxes after a setting once per value. |
 | [`flow/types.py`](../openprocess/flow/types.py) | The types boxes exchange. |
+| [`flow/versions.py`](../openprocess/flow/versions.py) | Versions of an analysis: its record, kept each time you say so. |
 | [`flow/workflow.py`](../openprocess/flow/workflow.py) | A workflow: boxes, their settings and the connections between them. |
 
 ### `flow.boxes` · the standard boxes
@@ -467,9 +468,9 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`gui/flow/page.py`](../openprocess/gui/flow/page.py) | The Workflows page: the Report, the canvas, *+ Add box*, and a side panel on demand. |
 | [`gui/flow/picker.py`](../openprocess/gui/flow/picker.py) | The *+ Add box* popover: every box, a click away, without a panel of its own. |
 | [`gui/flow/report.py`](../openprocess/gui/flow/report.py) | The *Report* of an analysis: every box's result, in run order, on one page. |
-| [`gui/flow/runs.py`](../openprocess/gui/flow/runs.py) | The *Runs* view of an analysis: its snapshots, two of them compared. |
 | [`gui/flow/stepper.py`](../openprocess/gui/flow/stepper.py) | Step through an algorithm: the How tab, one moment at a time. |
 | [`gui/flow/templates.py`](../openprocess/gui/flow/templates.py) | Ready-made workflows, so a new workflow never opens as an empty canvas. |
+| [`gui/flow/versions.py`](../openprocess/gui/flow/versions.py) | The *Versions* view of an analysis: where the numbers stand, and every version kept. |
 | [`gui/flow/viewers.py`](../openprocess/gui/flow/viewers.py) | What the side panel shows for a box: its result, how it got there, its code, and its settings. |
 
 ### `gui.learn` · Learn mode
@@ -496,5 +497,5 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`mcp/install.py`](../openprocess/mcp/install.py) | Connecting an assistant: one click in the app, or ``openprocess mcp install <client>``. |
 | [`mcp/server.py`](../openprocess/mcp/server.py) | The MCP server: OpenProcess's tools for Claude and other AI assistants. |
 
-188 modules.
+189 modules.
 <!-- /generated -->

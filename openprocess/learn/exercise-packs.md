@@ -26,7 +26,7 @@ transition system you give, so you do not have to. A pack can also be an
    the app works out, so you can compare them with your own.
 5. **Try it.** Open the pack in OpenProcess, answer a few boxes right and wrong, and
    look at what Check says. Then delete the `my answers.json`, `my answer.pnml`,
-   `my workflow.cpnflow` and `my notes.md` files your try left behind.
+   `my workflow.analysis` and `my notes.md` files your try left behind.
 6. **Share it.** Zip the folder or put it in a shared drive. Students open it
    with *Learn ▸ Open Exercise Pack…*.
 
@@ -94,7 +94,7 @@ Week 3 — Discovery/
   opened beside the worksheet. Other files can be referred to by name
   (`of: m2.pnml`, `over: m1.pnml, m2.pnml`).
 - Students' work is saved next to the question: `my answers.json`,
-  `my answer.pnml` for a drawn net, `my workflow.cpnflow` for a built
+  `my answer.pnml` for a drawn net, `my workflow.analysis` for a built
   workflow and `my notes.md` for their scratch notes. The pack's folder gets
   `my name.txt` (variants) and `my exam.json` (when an exam was started).
   Delete them to reset; leave them out when you share the pack.
@@ -189,7 +189,7 @@ all with what each works out; the main ones:
 **Of a box or a workflow:** `box(alpha_miner).net.transitions` runs a box of
 the workflow library (`openprocess boxes` lists them) on the exercise's log or net
 and follows the path into its result; `settings: {"noise": 0.2}` sets the
-box's settings. `workflow(analysis.cpnflow).Check fit.metrics.fitness` runs a
+box's settings. `workflow(orders.analysis).Check fit.metrics.fitness` runs a
 workflow file given with the exercise and reads one box's result by its title.
 
 ### Nets
@@ -227,8 +227,8 @@ tolerance: 0.01
 ```
 
 The Workflow tab beside the sheet starts with the exercise's log in a box (or
-from `start: given.cpnflow`); the student adds boxes and wires them, and the
-workflow is saved as `my workflow.cpnflow`. Check runs it and looks for the
+from `start: given.analysis`); the student adds boxes and wires them, and the
+workflow is saved as `my workflow.analysis`. Check runs it and looks for the
 boxes in `needs:`, then compares the result named in `result:`.
 
 ## Points, exams and marks

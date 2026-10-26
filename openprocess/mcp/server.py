@@ -46,7 +46,7 @@ every result can be reproduced, every step can be taught. Work the way the app w
    not give you. If something lacks a source, say so rather than inventing one.
 
 2. REPRODUCE. Prefer `build_workflow` over one-off calls when the user will keep the result: a
-   .cpnflow file holds the boxes, settings, connections and a record (input hashes, seeds, versions,
+   .analysis file holds the boxes, settings, connections and a record (input hashes, seeds, versions,
    result fingerprints) that `openprocess run FILE --check` verifies later, and the app shows every
    box's result, how it got there, and its code. Every answer has `reproduce`: the command or Python
    that gives the same numbers. Report fingerprints and seeds when they matter. Deterministic
@@ -64,7 +64,7 @@ every result can be reproduced, every step can be taught. Work the way the app w
    algorithm in a notebook when a box would make it reusable and recorded.
 
 5. BE TRANSPARENT IN THE APP. Work in the user's folder (the logs and nets beside each other; a
-   folder per week of a course). Save models as PNML beside the log, workflows as .cpnflow, and open
+   folder per week of a course). Save models as PNML beside the log, workflows as .analysis, and open
    them with `open_in_studio` so the user sees them in OpenProcess Studio. Every file you write is
    journaled with a backup: the app shows "AI changed N files · Review" with a diff and Undo per
    change, and `journal` lists them. Never overwrite a file you did not create unless the user asks
@@ -253,7 +253,7 @@ def build_server() -> MCPServer:
     @_friendly
     def build_workflow(spec: dict, output: str, folder: str | None = None, run: bool = True, how: bool = True,
                        overwrite: bool = False, ctx: Context = None) -> dict:
-        """Build an analysis as a .cpnflow file, run it and keep the record that makes it reproducible. spec =
+        """Build an analysis as a .analysis file, run it and keep the record that makes it reproducible. spec =
         {"name": "...", "boxes": [{"id": "n1", "box": "open_log", "settings": {"file": "log.xes"}}, {"id":
         "n2", "box": "inductive_miner", "settings": {"noise": 0.2}}, {"id": "n3", "box": "check_fit"}],
         "connections": [{"from": "n1", "to": "n2"}, {"from": "n2", "to": "n3", "input": "model"}, {"from":
@@ -266,7 +266,7 @@ def build_server() -> MCPServer:
     @_friendly
     def run_workflow(path: str, check: bool = False, how: bool = False, report: str | None = None,
                      ctx: Context = None) -> dict:
-        """Run a saved .cpnflow headless; check=true compares every result with the file's record (the
+        """Run a saved .analysis headless; check=true compares every result with the file's record (the
         reproducibility check); report writes the analysis as one HTML page."""
         return api.run_workflow(path, check=check, how=how, report=report, client=_client_name(ctx))
 
@@ -351,7 +351,7 @@ def build_server() -> MCPServer:
     @server.tool(title="Open in OpenProcess")
     @_friendly
     def open_in_studio(paths: list[str], folder: str | None = None, start: bool = True) -> dict:
-        """Open files in OpenProcess Studio so the user sees them: a .cpnflow analysis, a .pnml net, a log, an
+        """Open files in OpenProcess Studio so the user sees them: a .analysis analysis, a .pnml net, a log, an
         exercise pack folder (opens in Learn). Starts the app if it is not running; folder makes the app
         work in that folder."""
         return api.open_in_studio(paths, folder, start)

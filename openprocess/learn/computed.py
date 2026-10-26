@@ -1164,7 +1164,7 @@ def _box(context, argument, task):
 @computed("workflow", of="box")
 def _workflow(context, argument, task):
     """A saved workflow of the exercise run, then a box's result by the box's
-    title: ``workflow(analysis.cpnflow).Check fit.fitness``."""
+    title: ``workflow(orders.analysis).Check fit.fitness``."""
     from ..flow.record import load
     from ..flow.runner import Cache, Runner
     file_name, _, path = argument.partition("|")

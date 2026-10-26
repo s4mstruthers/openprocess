@@ -64,7 +64,7 @@ OpenProcess works and what it expects:
 1. **Cite.** Every result comes with the published works the algorithm
    follows; the assistant repeats them and never invents a source.
 2. **Reproduce.** Results come with the command or the Python that gives
-   the same numbers. Analyses you keep are workflow files (`.cpnflow`) with
+   the same numbers. Analyses you keep are workflow files (`.analysis`) with
    a record that `openprocess run FILE --check` verifies later.
 3. **Show how.** Results carry the derivation the app shows on the *How*
    tab: the α-algorithm's eight steps, the Inductive Miner's cuts, the

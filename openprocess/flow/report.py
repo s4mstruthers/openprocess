@@ -9,7 +9,7 @@ external assets, readable in any browser and printable.
 
 The page is built from the workflow and its run alone; drawings (SVG) are
 passed in by the app, which has the canvas to render them.  So the same
-report can be made without the app (``openprocess run analysis.cpnflow
+report can be made without the app (``openprocess run orders.analysis
 --report report.html``), minus the pictures.
 """
 

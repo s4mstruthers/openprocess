@@ -31,7 +31,7 @@ tools (and, until version 0.7, went by the name CPNpy):
 | **Petri nets & WF-nets** | Draw nets the way the lectures do. Get a soundness verdict with a counterexample for every violation, and replay it in the token game. Also: behavioural properties, P- and T-invariants, the footprint matrix, the reachability graph, PNML import and export. | WoPeD, ProM, pen and paper |
 | **Process mining** | Import XES or CSV logs, OCEL 2.0 object-centric logs, or type textbook logs like `[<a,b,c>^3, <a,c>^2]`. Filter them, explore variants, the dotted chart and the process map. Discover models (α-algorithm, Inductive Miner, Heuristics Miner, state-based regions). Check conformance (token replay, alignments, precision…) and compare logs. | ProM, Disco |
 | **Coloured Petri nets** | Open, edit and save CPN Tools models (`.cpn`), hierarchical ones included. Step through or simulate them, compute the state space, and export a simulation as an event log to mine. | CPN Tools / CPN IDE |
-| **Workflows** | Boxes on a canvas: a log, a miner, a fitness check, a comparison, a sweep over a setting, a prediction pipeline. Click a box to see its result, *how* it got there (the α-algorithm's eight steps, the replay per variant), its code and its settings. Change a setting and only what follows runs again. Saved as a `.cpnflow` file with everything needed to get the same numbers back. Your own algorithm is one Python function in a `boxes/` folder. | RapidProM |
+| **Workflows** | Boxes on a canvas: a log, a miner, a fitness check, a comparison, a sweep over a setting, a prediction pipeline. Click a box to see its result, *how* it got there (the α-algorithm's eight steps, the replay per variant), its code and its settings. Change a setting and only what follows runs again. Saved as a `.analysis` file with everything needed to get the same numbers back. Your own algorithm is one Python function in a `boxes/` folder. | RapidProM |
 | **Learn** | A mode of its own for worksheets, built on the app: answer in boxes on the sheet (sets, markings, matrices, cuts and trees, alignments, a net in the editor or a workflow on the canvas beside it) and press **Check**. Most answers are checked automatically, often against answers worked out from the given log or net. Packs are plain Markdown, can be exams with a clock and points, and a past exam imports as a skeleton pack. Demo exercises included. | Answer sheets, a notes app and guesswork |
 | **Folders** | Open a folder such as *Week 2*: every log and net in it is listed in the sidebar, with its subfolders. The folder and the app stay in step both ways: new nets and edits are saved into it as you go, and changes made in Finder show up by themselves. | Finder windows and *File ▸ Open* every time |
 
@@ -556,7 +556,7 @@ without distractions, and *Exit* brings your folder back exactly as it was.
   writes the marks as CSV. A pack can also give every student a **variant**
   of its own (a log played out from a net with a seed made from their name).
 - **Your work is saved as you go**, in the exercise's folder:
-  `my answers.json`, `my answer.pnml` for a net, `my workflow.cpnflow` for a
+  `my answers.json`, `my answer.pnml` for a net, `my workflow.analysis` for a
   workflow and `my notes.md`.
 
 **Writing a pack** (for a course or an exam) is plain Markdown: put an
@@ -754,9 +754,9 @@ extra) and *Predict the next activity*. Or start empty.
 | ![The canvas of a Compare discovery analysis, the Compare box's table beside it](docs/screenshots/workflow-canvas.png) | ![The Report view: a section per box with its result, a Steps outline beside them](docs/screenshots/workflow-report.png) |
 
 - **An analysis opens on its Report.** Its header has **Report | Canvas |
-  Runs**, then **+ Add box**, **Run ▶**, and **⋯** for Re-run, Record,
-  Export experiment and Save. The sidebar beside it lists the folder's
-  analyses and, folded under them, its logs.
+  Versions**, then **+ Add box**, **Run ▶**, and **⋯** for Run from scratch,
+  Keep as version, Record, Export experiment and Save. The sidebar beside it
+  lists the folder's analyses and, folded under them, its logs.
 - **Report** is every box's result, in the order the boxes run, on one
   scrolling page: a section per box with the group it is in, its name, the
   line the canvas shows under it, its status, the result as the side panel
@@ -804,9 +804,14 @@ extra) and *Predict the next activity*. Or start empty.
 - **Only what changed runs again.** Every box shows a status dot: waiting,
   running, done, failed (the error is on the Result tab; the rest keeps
   working), or waiting for your OK.
-- **Record** shows the workflow as Python and the file with its record;
-  **Re-run** says what changed since it was saved (an input file, a box file,
-  a seed) before running everything again.
+- **Versions** is where the numbers stand against the record and every
+  version kept. The first run with no failure is kept as v1; from then on the
+  badge beside the title says *v1 · reproducible*, *v1 · 2 changes* or
+  *Changed since v1*, and **Keep as version…** records the run as v2 with a
+  note. Any version can be compared with now (the boxes whose result differs,
+  first) or restored whole. **Record** shows the workflow as Python and the
+  file; **Run from scratch** says what changed since the version was kept
+  before computing everything again.
 - **Your own boxes**: a `.py` file in the folder's `boxes/` subfolder (see
   below). The app asks once per folder before running them, and reloads a
   box when its file is saved.
@@ -868,7 +873,7 @@ extra) and *Predict the next activity*. Or start empty.
 
 Every algorithm is also a **box**: a Python function with type hints that
 the app (from 0.7) draws on a canvas. A workflow of boxes runs from Python
-or from the command line, and its `.cpnflow` file records what is needed
+or from the command line, and its `.analysis` file records what is needed
 to get the same numbers again: fingerprints of the input files and of the
 box code, every seed, and the installed packages.
 
@@ -886,12 +891,12 @@ wf.connect(log, model); wf.connect(model, fit, "model"); wf.connect(log, fit, "l
 run = Runner().run(wf)
 print(run.value(fit).metrics)                  # fitness, precision, generalisation, simplicity
 print(run.result(model).explanation.steps)     # how the Inductive Miner got there
-save(wf, "orders.cpnflow", run)
+save(wf, "orders.analysis", run)
 ```
 
 ```bash
-openprocess run orders.cpnflow --check     # re-run; fails if any result differs from the record
-openprocess run orders.cpnflow --sweep noise=0..0.5 step 0.1
+openprocess run orders.analysis --check     # re-run; fails if any result differs from the record
+openprocess run orders.analysis --sweep noise=0..0.5 step 0.1
 openprocess boxes                          # every box (listed in docs/boxes.md), with a folder's boxes/
 openprocess datasets list                  # the BPI Challenge, Sepsis, ... logs by name
 ```

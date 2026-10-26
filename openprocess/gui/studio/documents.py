@@ -141,11 +141,12 @@ class ComparisonDocument:
 
 @dataclass(eq=False)
 class WorkflowDocument:
-    """A workflow of boxes (a ``.cpnflow`` file), with the record of its last save."""
+    """A workflow of boxes (an ``.analysis`` file), with its versions and the record of the latest."""
 
     workflow: object                 # openprocess.flow.workflow.Workflow
     path: str | None = None
     record: object | None = None     # openprocess.flow.record.Record
+    versions: object | None = None   # openprocess.flow.versions.Versions
     id: int = field(default_factory=lambda: next(_ids))
     dirty: bool = False
     autosave: bool = False

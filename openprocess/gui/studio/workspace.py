@@ -40,7 +40,8 @@ KINDS = {
     ".pnml": "petri",
     ".bpmn": "bpmn",
     ".cpn": "cpn",
-    ".cpnflow": "workflow",
+    ".analysis": "workflow",
+    ".cpnflow": "workflow",          # the name before 0.16; renamed when the folder is opened
     ".jsonocel": "ocel",
     ".json": "ocel",
 }
@@ -342,7 +343,9 @@ class Workspace:
         return path if path.is_absolute() else self.folder / path
 
     def _carry_over_old_files(self) -> None:
-        """A folder last opened by CPNpy keeps its state and notes under the new names."""
+        """A folder last opened by CPNpy keeps its state and notes under the new
+        names, and its ``.cpnflow`` analyses become ``.analysis`` files (the
+        content is the same; see :func:`openprocess.flow.record.carry_over`)."""
         for old, new in OLD_FILES.items():
             source, target = self.folder / old, self.folder / new
             if source.is_file() and not target.exists():
@@ -350,6 +353,8 @@ class Workspace:
                     os.replace(source, target)
                 except OSError:
                     pass
+        from ...flow.record import carry_over
+        self.carried_over = carry_over(self.folder, MAX_DEPTH)
 
     # -- what was open -----------------------------------------------------------
     @property

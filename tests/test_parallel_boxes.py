@@ -85,8 +85,8 @@ def test_a_box_runs_on_all_cores_with_the_loops_result(tmp_path):
 def test_the_record_holds_whatever_the_number_of_workers(tmp_path):
     wf, fit, library = _workflow(tmp_path, 3)
     run = Runner(library, folder=tmp_path).run(wf)
-    save(wf, tmp_path / "parallel.cpnflow", run)
-    again, record = load(tmp_path / "parallel.cpnflow", library_for(tmp_path))
+    save(wf, tmp_path / "parallel.analysis", run)
+    again, record = load(tmp_path / "parallel.analysis", library_for(tmp_path))
     again.set(next(n for n in again.nodes.values() if n.settings.get("workers") == 3), workers=1)
     # Settings differ (workers), so compare the box's result itself: same fingerprint.
     from openprocess.flow.record import fingerprint

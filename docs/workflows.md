@@ -4,14 +4,14 @@ The workflow framework is `openprocess.flow`. It has no Qt in it: everything
 here works in a script, a notebook, a test and from `openprocess run`, and the
 app only draws it. For *using* workflows in the app, see the README; this
 page is for people who write boxes, read the code, or want to know what a
-`.cpnflow` file guarantees.
+`.analysis` file guarantees.
 
 ## Three ideas
 
 1. **Every algorithm is a box, and every box is a plain Python function.**
    The decorator reads the function's type hints and docstring; there is no
    base class and no registration call.
-2. **Every analysis is a workflow file.** A `.cpnflow` file records the
+2. **Every analysis is a workflow file.** A `.analysis` file records the
    boxes, their settings and connections, and everything needed to get the
    same numbers again: fingerprints of the input files and of the box code,
    every seed, the versions and the installed packages.
@@ -221,7 +221,7 @@ wf.connect(log, fit, "log")
 run = Runner().run(wf)
 print(run.value(fit).metrics)          # {'fitness': 1.0, 'precision': ..., ...}
 print(run.result(model).explanation.steps)
-save(wf, "demo.cpnflow", run)
+save(wf, "demo.analysis", run)
 ```
 
 `wf.can_connect(a, b)` says whether a connection is allowed and, if not,
@@ -304,18 +304,21 @@ connections (*Compare*, *Plot*, *Sweep table*) collects the results of
 every value; every `Scores` and `Table` made under a sweep carries the
 values in its `context`, which *Sweep table* turns into columns.
 
-## The workflow file
+## The analysis file
 
-A `.cpnflow` file is JSON:
+An `.analysis` file is JSON (before 0.16 it was called `.cpnflow`; the app
+renames those when it opens their folder, and reads them under either name):
 
 ```json
 {
-  "format": "cpnflow/1",
+  "format": "analysis/1",
   "name": "compare discovery",
   "boxes": [{"id": "n1", "box": "openprocess.flow.boxes.input.open_log",
              "settings": {"file": "orders.xes"}, "position": [0, 0]}, ...],
   "connections": [{"from": "n1", "output": "out", "to": "n2", "input": "log"}, ...],
   "groups": [],
+  "versions": [{"number": 1, "note": "First run", "taken": "...", "label": "First run",
+                "workflow": {...}, "record": {...}, "snapshot": {...}}, ...],
   "record": {
     "versions": {"openprocess": "0.6.0", "python": "3.12.4", "numpy": "1.26.4"},
     "environment": {"platform": "...", "packages": {"numpy": "1.26.4", ...}},
@@ -328,9 +331,16 @@ A `.cpnflow` file is JSON:
 }
 ```
 
+- `versions` is every **version** kept (`openprocess.flow.versions`): the
+  whole workflow as it was, its record, a snapshot of every box's key figure,
+  a note and when. `record` is the latest version's. Saving as you work never
+  moves the record: the first run in which no box fails is kept as v1 by
+  itself, and after that only *Keep as version…* (or `openprocess run --save`)
+  makes the next one. So the badge always compares with a version you chose,
+  and an older one can be compared with or restored.
 - `differences(record, workflow, folder)` says what has changed since the
-  file was saved: an input file, a box file, a seed, the OpenProcess version.
-  The app shows it before *Re-run*.
+  version was kept: an input file, a box file, a seed, the OpenProcess version.
+  The app shows it before *Run from scratch*.
 - `check(workflow, record, run)` says which boxes give a different result
   than recorded (by the fingerprint of the result's content).
 - `requirements_lock(record)` is a `requirements.lock` from the record's
@@ -373,16 +383,17 @@ What is in the record, and what is not:
 ### Headless, and in CI
 
 ```bash
-openprocess run experiment.cpnflow                 # run it, print what every box gave
-openprocess run experiment.cpnflow --check         # re-run; exit 1 if any result differs from the record
-                                                   #   (or if nothing was recorded to compare with)
-openprocess run experiment.cpnflow --strict        # also fail a box that changes its inputs
-openprocess run experiment.cpnflow --report r.html # the analysis as one HTML page
-openprocess run experiment.cpnflow --save          # record the results in the file
-openprocess run experiment.cpnflow --sweep noise=0..0.5 step 0.1
-openprocess run experiment.cpnflow -o results/     # every result as a file (CSV, PNML, SVG)
-openprocess run experiment.cpnflow --lock          # write requirements.lock
-openprocess run experiment.cpnflow --export experiment.zip   # the workflow, its record, inputs, boxes,
+openprocess run experiment.analysis                 # run it, print what every box gave
+openprocess run experiment.analysis --check         # re-run; exit 1 if any result differs from the latest
+                                                   #   version (or if nothing was recorded to compare with)
+openprocess run experiment.analysis --check --against 2   # … from version 2
+openprocess run experiment.analysis --strict        # also fail a box that changes its inputs
+openprocess run experiment.analysis --report r.html # the analysis as one HTML page
+openprocess run experiment.analysis --save --note "after the update"   # keep the results as the next version
+openprocess run experiment.analysis --sweep noise=0..0.5 step 0.1
+openprocess run experiment.analysis -o results/     # every result as a file (CSV, PNML, SVG)
+openprocess run experiment.analysis --lock          # write requirements.lock
+openprocess run experiment.analysis --export experiment.zip   # the workflow, its record, inputs, boxes,
                                              # results, requirements.lock and a README: for a paper
 openprocess boxes [folder]                         # the boxes, with a folder's boxes/
 openprocess datasets list | fetch "Sepsis cases" | where

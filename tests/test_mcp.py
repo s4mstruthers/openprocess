@@ -103,14 +103,14 @@ def test_build_and_check_a_workflow(folder):
         {"id": "im", "box": "inductive_miner"}, {"id": "fit", "box": "check_fit"}],
         "connections": [{"from": "log", "to": "im"}, {"from": "im", "to": "fit", "input": "model"},
                         {"from": "log", "to": "fit", "input": "log"}]}
-    built = api.build_workflow(spec, str(folder / "Demo.cpnflow"))
+    built = api.build_workflow(spec, str(folder / "Demo.analysis"))
     assert built["ran"] and not built["problems"]
     assert all(r["status"] == "done" for r in built["results"].values())
     assert "fitness" in built["results"]["fit"]["result"]
-    checked = api.run_workflow(str(folder / "Demo.cpnflow"), check=True)
+    checked = api.run_workflow(str(folder / "Demo.analysis"), check=True)
     assert checked["check"]["status"] == "reproduced"
     with pytest.raises(api.ToolError, match="could not be built"):
-        api.build_workflow({"boxes": [{"id": "x", "box": "no_such_box"}]}, str(folder / "Bad.cpnflow"))
+        api.build_workflow({"boxes": [{"id": "x", "box": "no_such_box"}]}, str(folder / "Bad.analysis"))
 
 
 def test_a_box_is_loaded_before_it_is_written(folder):

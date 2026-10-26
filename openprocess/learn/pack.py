@@ -19,7 +19,7 @@ as numbers (Exercise 2 before Exercise 10).
 
 The student's work is stored next to the question: ``my answers.json``
 (every typed answer and whether it was right), ``my answer.pnml`` for a
-drawn net, ``my workflow.cpnflow`` for a built workflow, and ``my notes.md``
+drawn net, ``my workflow.analysis`` for a built workflow, and ``my notes.md``
 for scratch notes.  Delete those files to start an exercise again.
 
 ``pack.md`` may start with front matter (see :mod:`.sheet`): ``exam: yes``
@@ -51,7 +51,7 @@ MY_ANSWERS = "my answers.json"
 #: Your scratch notes (the Notes pane).
 MY_NOTES = "my notes.md"
 #: Your workflow, when an exercise asks for one.
-MY_WORKFLOW = "my workflow.cpnflow"
+MY_WORKFLOW = "my workflow.analysis"
 #: The optional title page of a pack.
 PACK_FILE = "pack.md"
 #: The student's name, for variants (in the pack's folder).

@@ -19,7 +19,7 @@ Commands
                 ``stats``, ``filter``, ``discover``, ``conform``,
                 ``soundness``, ``invariants``
 ``exercises``   ``check``, ``marks``, ``import``, ``computes``: exercise packs (OpenProcess Learn)
-``run``         run a ``.cpnflow`` workflow headless; ``--check`` re-runs and
+``run``         run a ``.analysis`` workflow headless; ``--check`` re-runs and
                 compares with the record, ``--sweep`` varies a setting,
                 ``--lock`` writes the requirements the record names,
                 ``--export`` and ``--report`` write a zip and an HTML page
@@ -447,12 +447,19 @@ def command_exercises_computes(arguments: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 def command_run(arguments: argparse.Namespace) -> int:
     """Run a workflow file without the app, and say what every box gave."""
-    from .flow import Runner, Sweep, check, differences, library_for, load, save
-    from .flow.record import requirements_lock
+    from .flow import Runner, Sweep, check, differences, library_for, save
+    from .flow.record import load_all, requirements_lock
     path = Path(arguments.workflow)
     folder = path.parent
     library = library_for(folder)
-    workflow, record = load(path, library)
+    workflow, record, versions = load_all(path, library)
+    if arguments.against is not None:
+        version = versions.get(arguments.against)
+        if version is None:
+            print(f"openprocess: {path.name} has no version {arguments.against} "
+                  f"(it has {', '.join(f'v{v.number}' for v in versions.items) or 'none'})", file=sys.stderr)
+            return 2
+        record = version.record
     if arguments.lock:
         target = folder / "requirements.lock"
         target.write_text(requirements_lock(record), encoding="utf-8")
@@ -504,6 +511,8 @@ def command_run(arguments: argparse.Namespace) -> int:
     if arguments.report:
         from .flow.report import write_report
         print(f"Wrote {write_report(arguments.report, workflow=workflow, run=run, folder=folder)}")
+    against = f"v{arguments.against}" if arguments.against is not None else (
+        f"v{versions.latest.number}" if versions.latest else "the record")
     if arguments.check:
         if not record.results:
             # Nothing to compare is not a pass: a CI job would claim a reproduction that never happened.
@@ -513,15 +522,18 @@ def command_run(arguments: argparse.Namespace) -> int:
         report = check(workflow, record, run, complete=True)
         if report:
             for line in report:
-                print(f"DIFFERS: {line}")
+                print(f"DIFFERS from {against}: {line}")
             return 1
-        print(f"Every recorded result was reproduced ({len(record.results)} boxes).")
+        print(f"Every result recorded in {against} was reproduced ({len(record.results)} boxes).")
     elif arguments.save:
-        save(workflow, path, run, folder, previous=record)
-        if run.failed() and record.results:
-            print(f"A box failed, so {path.name} keeps the record of its last successful run")
+        if run.failed():
+            save(workflow, path, run, folder, previous=record, versions=versions)
+            print(f"A box failed, so {path.name} keeps " + (f"{against} as its record" if record.results
+                                                             else "no record yet"))
         else:
-            print(f"Recorded the results in {path.name}")
+            save(workflow, path, run, folder, previous=record, versions=versions, keep=arguments.note or "")
+            print(f"Kept the results as v{versions.latest.number} in {path.name}"
+                  + (f": {arguments.note}" if arguments.note else ""))
     return 0 if run.ok else 1
 
 
@@ -713,11 +725,13 @@ def build_parser() -> argparse.ArgumentParser:
         "computes", help="list every compute: an answer block may use")
     exercise_computes.set_defaults(handler=command_exercises_computes)
 
-    run = subparsers.add_parser("run", help="run a .cpnflow workflow without the app")
-    run.add_argument("workflow", help="the .cpnflow file")
+    run = subparsers.add_parser("run", help="run a .analysis workflow without the app")
+    run.add_argument("workflow", help="the .analysis file")
     run.add_argument("--check", action="store_true",
-                     help="re-run and fail if any result differs from the recorded one")
-    run.add_argument("--save", action="store_true", help="record the results in the file")
+                     help="re-run and fail if any result differs from the recorded one (the latest version)")
+    run.add_argument("--against", type=int, metavar="N", help="check against version N instead of the latest")
+    run.add_argument("--save", action="store_true", help="keep the results in the file as the next version")
+    run.add_argument("--note", metavar="TEXT", help="with --save: the version's note (what changed, or why)")
     run.add_argument("--sweep", action="append", metavar="SETTING=VALUES",
                      help="vary a setting, e.g. noise=0..0.5 step 0.1 or n3.seed=1,2,3")
     run.add_argument("--lock", action="store_true",

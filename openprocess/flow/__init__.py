@@ -24,7 +24,7 @@ Python::
     wf.connect(log, model); wf.connect(model, fit, "model"); wf.connect(log, fit, "log")
     run = Runner().run(wf)
     print(run.value(fit).metrics)
-    save(wf, "demo.cpnflow", run)      # with the record that makes it reproducible
+    save(wf, "demo.analysis", run)      # with the record that makes it reproducible
 
 Work over many independent items (variants, cases, resamples) runs on all
 cores with :func:`parallel_map`, with exactly the result of a loop.
