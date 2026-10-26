@@ -8,8 +8,8 @@ see the [README](../README.md).
 The map of the whole code base, drawn from its imports and checked by the
 test suite, is [architecture.md](architecture.md): the four layers (engines,
 framework, teaching, app), which package imports which, how a workflow runs
-and every module. Everything below the app has **zero runtime
-dependencies** (only the app needs PySide6), so the engines import fine in a
+and every module. Everything below the app needs **nothing but
+numpy** (only the app needs PySide6), so the engines import fine in a
 notebook, a script or CI. PM4Py is an *optional* extra; nothing requires it.
 
 ## The CPN ML subset

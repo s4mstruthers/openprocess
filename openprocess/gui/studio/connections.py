@@ -41,7 +41,7 @@ OUTPUTS = [
     ("Python", "every box is a function: call it from a script or a notebook", ()),
 ]
 #: What pip installs for each tool (the package itself, pinned as the app's extras pin it).
-PACKAGES = {"pandas": "pandas>=2.0", "numpy": "numpy>=1.24", "scipy": "scipy>=1.10",
+PACKAGES = {"pandas": "pandas>=2.0", "scipy": "scipy>=1.10",
             "matplotlib": "matplotlib>=3.7", "pm4py": "pm4py"}
 
 

@@ -42,12 +42,14 @@ from __future__ import annotations
 
 import bisect
 import math
+import time
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+import numpy as np
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (
-    QColor, QFontMetricsF, QImage, QPainter, QPainterPath, QPen, QPixmap, QPolygonF,
+    QColor, QFontMetricsF, QImage, QPainter, QPainterPath, QPen, QPixmap, QPolygonF, QTransform,
 )
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QHBoxLayout, QListWidget, QListWidgetItem,
@@ -66,12 +68,19 @@ from .widgets import (
 )
 
 SHAPES = ["circle", "square", "triangle", "diamond", "cross", "star"]
-#: Above this many visible dots they are drawn as round points, a batch per
-#: colour, instead of one shape at a time: a million-event log stays a
-#: picture of seconds, not minutes.  Shapes come back as soon as a zoom shows fewer.
+#: Above this many visible dots they are rasterised with numpy, a pixel
+#: per dot and colour, instead of drawn one shape at a time: a million-event
+#: log stays a picture of milliseconds, not seconds.  Shapes, rings and the
+#: lines between a case's events come back as soon as a zoom shows fewer.
 BATCH_FROM = 40_000
 #: Above this many events the dots are worked out on a worker thread.
 BACKGROUND_FROM = 200_000
+#: When drawing the picture took longer than this, a pan or zoom first shows
+#: the old picture moved and stretched into place, and the real picture
+#: follows once the gesture has settled (:data:`SETTLE_MS`), so the chart
+#: keeps up with the wheel and the trackpad on a log of any size.
+PREVIEW_FROM = 0.04
+SETTLE_MS = 120
 
 
 class DotData(Dots):
@@ -83,6 +92,13 @@ class DotData(Dots):
 
     def __init__(self, document: LogDocument, settings: DotSettings) -> None:
         super().__init__(document.log, document.classifier, settings)
+
+    def shown(self, hidden: set[int]) -> np.ndarray:
+        """Per colour value, whether the legend shows it."""
+        shown = np.ones(max(len(self.colour_values), 1), dtype=bool)
+        if hidden:
+            shown[[c for c in hidden if c < len(shown)]] = False
+        return shown
 
     def colour_slot(self, colour_index: int) -> int:
         """Palette slot for a colour value (slots 0-7, then 'Other')."""
@@ -129,11 +145,17 @@ class DottedChart(QWidget):
         self._pan_origin: tuple[QPointF, tuple[float, float, float, float]] | None = None
         self._cache: QPixmap | None = None
         self._cache_key = None
+        #: The window and plot rectangle the cached picture was drawn for,
+        #: so a preview can move it into place while a gesture goes on.
+        self._cache_view: tuple[float, float, float, float, QRectF] | None = None
+        self._render_cost = 0.0                      # seconds the last real picture took
+        self._render_due = False                     # the settle timer fired: draw for real
+        self._settle = QTimer(self)
+        self._settle.setSingleShot(True)
+        self._settle.setInterval(SETTLE_MS)
+        self._settle.timeout.connect(self._settled)
         #: Shown over the chart while its dots are worked out (a large log).
         self.busy_text = ""
-        #: Dots by screen cell for hit-testing (None: build from _grid_dots on first hover).
-        self._grid: dict[tuple[int, int], list[int]] | None = {}
-        self._grid_dots: list[int] = []
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumSize(QSize(240, 200))
@@ -178,13 +200,13 @@ class DottedChart(QWidget):
             self.history.append((self.vx0, self.vx1, self.vy0, self.vy1))
             del self.history[:-50]
         self.vx0, self.vx1, self.vy0, self.vy1 = new
-        self._invalidate()
+        self.update()
         self.view_changed.emit()
 
     def back(self) -> None:
         if self.history:
             self.vx0, self.vx1, self.vy0, self.vy1 = self.history.pop()
-            self._invalidate()
+            self.update()
             self.view_changed.emit()
 
     def zoom_factors(self) -> tuple[float, float]:
@@ -258,8 +280,20 @@ class DottedChart(QWidget):
 
     # -- painting ----------------------------------------------------------------
     def _invalidate(self) -> None:
+        """The picture must be drawn again (new data, colours or selection)."""
         self._cache = None
+        self._cache_view = None
         self.update()
+
+    def _settled(self) -> None:
+        self._render_due = True
+        self.update()
+
+    def _cache_fits(self, key) -> bool:
+        """The cached picture shows the same dots, colours and selection as
+        ``key`` asks for; only the window or the widget size may differ."""
+        return (self._cache is not None and self._cache_key is not None
+                and self._cache_key[6:] == key[6:])
 
     def paintEvent(self, _event) -> None:  # noqa: N802
         key = (self.width(), self.height(), self.vx0, self.vx1, self.vy0, self.vy1,
@@ -271,11 +305,31 @@ class DottedChart(QWidget):
             painter.setPen(QColor(style.tokens().text_muted))
             painter.drawText(self.rect(), Qt.AlignCenter, self.busy_text)
             return
-        if self._cache is None or self._cache_key != key:
+        preview = (self._cache_fits(key) and self._cache_key != key
+                   and self._render_cost >= PREVIEW_FROM and not self._render_due)
+        if not preview and (self._cache is None or self._cache_key != key):
+            # The real picture, before the widget's painter opens: a failure
+            # in drawing it must never leave a painter open on the window.
+            self._render_due = False
+            self._settle.stop()
+            started = time.perf_counter()
             self._cache = self._render()
             self._cache_key = key
+            self._cache_view = (self.vx0, self.vx1, self.vy0, self.vy1, self.plot_rect())
+            self._render_cost = time.perf_counter() - started
         painter = QPainter(self)
-        painter.drawPixmap(0, 0, self._cache)
+        try:
+            if preview:
+                # Mid-gesture on a slow picture: the old one, moved into place.
+                self._settle.start()
+                self._paint_preview(painter)
+            else:
+                painter.drawPixmap(0, 0, self._cache)
+            self._paint_overlays(painter)
+        finally:
+            painter.end()
+
+    def _paint_overlays(self, painter: QPainter) -> None:
         if self.busy_text:                               # new dots on the way: say so over the old ones
             t = style.tokens()
             painter.setPen(QColor(t.text_secondary))
@@ -293,6 +347,26 @@ class DottedChart(QWidget):
             painter.setBrush(fill)
             painter.drawRect(band)
 
+    def _paint_preview(self, painter: QPainter) -> None:
+        """The cached picture's plot area, moved and stretched from the
+        window it was drawn for to the current one, under fresh axes."""
+        t = style.tokens()
+        ovx0, ovx1, ovy0, ovy1, old = self._cache_view
+        rect = self.plot_rect()
+        painter.fillRect(self.rect(), QColor(t.surface))
+        painter.setRenderHint(QPainter.Antialiasing)
+        self._paint_axes(painter, rect, t, self.data.settings.grid_lines)
+        sx = rect.width() / (self.vx1 - self.vx0) / (old.width() / (ovx1 - ovx0))
+        sy = rect.height() / (self.vy1 - self.vy0) / (old.height() / (ovy1 - ovy0))
+        dx = rect.left() + (ovx0 - self.vx0) / (self.vx1 - self.vx0) * rect.width() - old.left() * sx
+        dy = rect.top() + (ovy0 - self.vy0) / (self.vy1 - self.vy0) * rect.height() - old.top() * sy
+        painter.save()
+        painter.setClipRect(rect)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.setTransform(QTransform(sx, 0, 0, sy, dx, dy), True)
+        painter.drawPixmap(0, 0, self._cache)
+        painter.restore()
+
     def _render(self) -> QPixmap:
         t = style.tokens()
         ratio = self.devicePixelRatioF()
@@ -300,16 +374,25 @@ class DottedChart(QWidget):
         pixmap.setDevicePixelRatio(ratio)
         pixmap.fill(QColor(t.surface))
         painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing)
-        self.paint_chart(painter, QRectF(0, 0, self.width(), self.height()))
-        painter.end()
+        try:
+            painter.setRenderHint(QPainter.Antialiasing)
+            self.paint_chart(painter, QRectF(0, 0, self.width(), self.height()))
+        finally:
+            painter.end()
         return pixmap
+
+    def _visible(self, candidates: np.ndarray) -> np.ndarray:
+        """The dots of ``candidates`` (dots in the x window) that are in the
+        row window and whose colour the legend shows."""
+        d = self.data
+        rows = d.rows[candidates]
+        keep = (rows >= self.vy0 - 1) & (rows <= self.vy1) & d.shown(self.hidden_colours)[d.colour[candidates]]
+        return candidates[keep]
 
     def paint_chart(self, painter: QPainter, area: QRectF) -> None:
         """Draw axes and dots.  Also used for image export."""
         t = style.tokens()
         d = self.data
-        self._grid = {}
         if d is None or not len(d):
             painter.setPen(QColor(t.text_muted))
             painter.drawText(area, Qt.AlignCenter, "No events to show with these settings "
@@ -326,84 +409,71 @@ class DottedChart(QWidget):
         painter.save()
         painter.setClipRect(rect.adjusted(-radius - 1, -radius - 1, radius + 1, radius + 1))
 
-        # Visible dots, grouped for drawing order and cheap hit-testing later.
-        visible: list[int] = []
-        x0, x1, y0, y1 = self.vx0, self.vx1, self.vy0 - 1, self.vy1
-        for i in range(len(d.xs)):
-            if d.colour[i] in self.hidden_colours:
-                continue
-            x, row = d.xs[i], d.rows[i]
-            if x0 <= x <= x1 and y0 <= row <= y1:
-                visible.append(i)
-
-        if s.connect:
-            self._paint_connections(painter, rect, visible, t)
-
         colours = [QColor(d.colour_hex(c)) for c in range(len(d.colour_values))]
         faded = QColor(t.border)
+        visible = self._visible(d.between(self.vx0, self.vx1))
+        if len(visible) > BATCH_FROM:
+            self._paint_dense(painter, rect, colours, faded, radius, visible)
+            on_top = visible[d.case[visible] == selected] if selected >= 0 else []
+        else:
+            if s.connect:
+                self._paint_connections(painter, rect, visible, t)
+            # Unselected first, the selected case last so it sits on top.
+            on_top = sorted(visible.tolist(), key=lambda i: d.case[i] == selected) if selected >= 0 else visible
         ring_pen = QPen(QColor(t.surface), ring) if ring else Qt.NoPen
-        cell = 8
-        # Unselected first, the selected case last so it sits on top.
-        ordered = sorted(visible, key=lambda i: d.case[i] == selected) if selected >= 0 else visible
-        if len(ordered) > BATCH_FROM:
-            self._paint_batched(painter, rect, ordered, colours, faded, radius, selected)
-            painter.restore()
-            self._visible_count = len(visible)
-            return
-        for i in ordered:
+        for i in on_top:
             point = self.to_screen(d.xs[i], d.rows[i], rect)
             is_dim = selected >= 0 and d.case[i] != selected
             painter.setPen(ring_pen)
             painter.setBrush(faded if is_dim else colours[d.colour[i]])
             _draw_shape(painter, SHAPES[d.shape[i]] if d.shape[i] < len(SHAPES) else "ring",
                         point, radius)
-            self._grid.setdefault((int(point.x()) // cell, int(point.y()) // cell), []).append(i)
         painter.restore()
-        self._visible_count = len(visible)
 
-    def _paint_batched(self, painter: QPainter, rect: QRectF, ordered: list[int], colours: list[QColor],
-                       faded: QColor, radius: float, selected: int) -> None:
-        """Many dots: one polyline of points per colour, with the mapping to
-        the screen done inline.  The hover index is built on the first hover."""
+    def _paint_dense(self, painter: QPainter, rect: QRectF, colours: list[QColor], faded: QColor,
+                     radius: float, visible: np.ndarray) -> None:
+        """Many dots: every dot becomes a pixel of a picture the size of the
+        plot, a colour at a time (the grey "Other" values first, then the
+        named colours, the most frequent first so the rarer stay visible),
+        and each colour's pixels are widened to the dot radius; however many
+        dots share a pixel, it is set once.  All of it is numpy on arrays, so
+        a million dots cost a few milliseconds.  With a case selected every
+        dot is drawn faded; the case's own dots go on top, drawn one by one
+        by the caller."""
         d = self.data
-        left, top, width, height = rect.left(), rect.top(), rect.width(), rect.height()
-        sx = width / (self.vx1 - self.vx0)
-        sy = height / (self.vy1 - self.vy0)
-        x0, y0 = self.vx0, self.vy0 - 0.5
-        xs, rows, colour, case = d.xs, d.rows, d.colour, d.case
-        # -1: the dimmed dots of the other cases when one is selected; drawn first.
-        # A dot is drawn once per screen pixel and colour: at this many dots most
-        # land on a pixel a dot of their colour already covers, so the picture is
-        # the same and the work a fraction of it.
-        batches: dict[int, set[tuple[int, int]]] = {}
-        for i in ordered:
-            key = -1 if selected >= 0 and case[i] != selected else colour[i]
-            pixels = batches.get(key)
-            if pixels is None:
-                pixels = batches[key] = set()
-            pixels.add((int(left + (xs[i] - x0) * sx), int(top + (rows[i] - y0) * sy)))
-        painter.setRenderHint(QPainter.Antialiasing, radius > 1.5)
-        # Underneath: the dimmed dots, then the grey "Other" values; on top, the named
-        # colours, the most frequent first so the rarer ones stay visible.
-        for key in sorted(batches, key=lambda k: (k >= 0, k < 8, k)):
-            pen = QPen(faded if key < 0 else colours[key], 2 * radius)
-            pen.setCapStyle(Qt.RoundCap)
-            painter.setPen(pen)
-            painter.drawPoints(QPolygonF([QPointF(x + 0.5, y + 0.5) for x, y in batches[key]]))
-        self._grid = None
-        self._grid_dots = ordered
-
-    def _hover_grid(self) -> dict[tuple[int, int], list[int]]:
-        """The dots by screen cell, for hit-testing; built here, lazily, when
-        the picture was drawn in batches."""
-        if self._grid is None:
-            grid: dict[tuple[int, int], list[int]] = {}
-            rect, d, cell = self.plot_rect(), self.data, 8
-            for i in self._grid_dots:
-                point = self.to_screen(d.xs[i], d.rows[i], rect)
-                grid.setdefault((int(point.x()) // cell, int(point.y()) // cell), []).append(i)
-            self._grid = grid
-        return self._grid
+        width, height = max(int(rect.width()), 1), max(int(rect.height()), 1)
+        sx, sy = width / (self.vx1 - self.vx0), height / (self.vy1 - self.vy0)
+        px = ((d.xs[visible] - self.vx0) * sx).astype(np.int64)
+        py = ((d.rows[visible] - self.vy0 + 0.5) * sy).astype(np.int64)
+        inside = (px >= 0) & (px < width) & (py >= 0) & (py < height)
+        px, py, colour = px[inside], py[inside], d.colour[visible][inside]
+        picture = np.zeros((height, width), dtype=np.uint32)
+        if self.selected_case >= 0:
+            groups = [(faded, np.ones(len(colour), dtype=bool))]
+        else:
+            # The layer of each distinct dot colour (a legend colour may repeat), in draw order.
+            layer_of: dict[int, int] = {}
+            layer_colours: list[QColor] = []
+            layer_index = np.full(len(colours), -1)              # per colour value; -1: not shown
+            for c in sorted(set(colour.tolist()), key=lambda c: (c < 8, c)):
+                key = colours[c].rgba()
+                if key not in layer_of:
+                    layer_of[key] = len(layer_colours)
+                    layer_colours.append(colours[c])
+                layer_index[c] = layer_of[key]
+            layer_index = layer_index[colour]
+            groups = [(colour_, layer_index == k) for k, colour_ in enumerate(layer_colours)]
+        for colour_, mine in groups:
+            layer = np.zeros((height, width), dtype=bool)
+            layer[py[mine], px[mine]] = True
+            picture[_widen(layer, radius)] = colour_.rgba()
+        buffer = picture.tobytes()
+        image = QImage(buffer, width, height, width * 4, QImage.Format_ARGB32_Premultiplied)
+        painter.save()
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.drawImage(QRectF(rect.left(), rect.top(), width, height), image)
+        painter.restore()
+        del image, buffer
 
     def _paint_connections(self, painter: QPainter, rect: QRectF, visible: list[int], t) -> None:
         d = self.data
@@ -536,20 +606,26 @@ class DottedChart(QWidget):
 
     # -- hit testing ------------------------------------------------------------------
     def dot_at(self, point: QPointF, tolerance: float = 7.0) -> int | None:
-        if self.data is None:
-            return None
+        """The shown dot nearest to a screen point, within ``tolerance``
+        pixels: the dots whose x is within reach (found by bisection), then
+        the nearest of those in the row window."""
+        d = self.data
+        if d is None or self._cache_view is None or self._render_due or self._settle.isActive():
+            return None                             # nothing is in place yet
         rect = self.plot_rect()
-        cell = 8
-        cx, cy = int(point.x()) // cell, int(point.y()) // cell
-        best, best_distance = None, tolerance
-        for gx in (cx - 1, cx, cx + 1):
-            for gy in (cy - 1, cy, cy + 1):
-                for i in self._hover_grid().get((gx, gy), []):
-                    screen = self.to_screen(self.data.xs[i], self.data.rows[i], rect)
-                    distance = math.hypot(screen.x() - point.x(), screen.y() - point.y())
-                    if distance <= best_distance:
-                        best, best_distance = i, distance
-        return best
+        x_reach = tolerance / rect.width() * (self.vx1 - self.vx0)
+        row_reach = tolerance / rect.height() * (self.vy1 - self.vy0)
+        x, row = self.to_data(point)
+        row -= 0.5
+        near = d.between(x - x_reach, x + x_reach)
+        near = near[(np.abs(d.rows[near] - row) <= row_reach) & d.shown(self.hidden_colours)[d.colour[near]]]
+        if not len(near):
+            return None
+        sx = rect.width() / (self.vx1 - self.vx0)
+        sy = rect.height() / (self.vy1 - self.vy0)
+        distance = np.hypot((d.xs[near] - x) * sx, (d.rows[near] - row) * sy)
+        nearest = int(distance.argmin())
+        return int(near[nearest]) if distance[nearest] <= tolerance else None
 
     def describe_dot(self, i: int) -> str:
         d = self.data
@@ -663,7 +739,7 @@ class DottedChart(QWidget):
         self.case_selected.emit(case)
 
     def resizeEvent(self, event) -> None:  # noqa: N802
-        self._invalidate()
+        self.update()                                # the cache no longer fits; a preview bridges the gap
         super().resizeEvent(event)
 
     # -- export ----------------------------------------------------------------------------
@@ -687,6 +763,42 @@ class DottedChart(QWidget):
             self.paint_chart(painter, QRectF(self.rect()))
             painter.end()
             image.save(path)
+
+
+def _widen(layer: np.ndarray, radius: float) -> np.ndarray:
+    """The set pixels of ``layer`` grown into dots of about ``radius``: a
+    square of 3 or 5 pixels for a small radius (as the round dot it stands
+    for looks, drawn at one pixel per dot), an octagon for a larger one
+    (a box grown along both diagonals), each a union of shifted copies."""
+    def grow(source: np.ndarray, reach: int, shifts) -> np.ndarray:
+        out = source.copy()
+        for step in range(1, reach + 1):
+            for shift in shifts(step):
+                out |= shift
+        return out
+
+    def across(step):
+        return (np.pad(layer_[:, :-step], ((0, 0), (step, 0))), np.pad(layer_[:, step:], ((0, 0), (0, step))))
+
+    def down(step):
+        return (np.pad(layer_[:-step, :], ((step, 0), (0, 0))), np.pad(layer_[step:, :], ((0, step), (0, 0))))
+
+    def diagonals(step):
+        return (np.pad(layer_[:-step, :-step], ((step, 0), (step, 0))),
+                np.pad(layer_[step:, step:], ((0, step), (0, step))),
+                np.pad(layer_[:-step, step:], ((step, 0), (0, step))),
+                np.pad(layer_[step:, :-step], ((0, step), (step, 0))))
+
+    if radius < 3:
+        reach = int(radius)                          # 1.6 -> 3 px wide, 2.5 -> 5
+        layer_ = layer
+        layer_ = grow(layer_, reach, across)
+        return grow(layer_, reach, down)
+    box, corner = int(round(radius * 0.7)), int(round(radius * 0.3))
+    layer_ = layer
+    layer_ = grow(layer_, box, across)
+    layer_ = grow(layer_, box, down)
+    return grow(layer_, corner, diagonals)
 
 
 def _draw_shape(painter: QPainter, shape: str, centre: QPointF, r: float) -> None:
@@ -1014,6 +1126,7 @@ class DottedChartPanel(QWidget):
 
     def _settings_changed(self, keep_view: bool = False) -> None:
         s = self.settings
+        before = replace(s)                       # to tell a new picture from new dots
         s.x_mode = self.x_box.currentIndex()
         s.rows = self.rows_box.currentText()
         s.sort = self.sort_box.currentIndex()
@@ -1040,7 +1153,18 @@ class DottedChartPanel(QWidget):
             # This log forces a logical axis; that is not a choice to pass on.
             shared.x_mode = DottedChartPanel.shared.x_mode
         DottedChartPanel.shared = shared
+        if (self.chart.data is not None and not self.chart.busy_text
+                and all(getattr(before, f) == getattr(s, f) for f in self.DOT_FIELDS)):
+            # Only how the dots are drawn changed (their size, the grid, the
+            # unit, the lines): the same dots, painted again.
+            self.chart._invalidate()
+            self._sync_navigation()
+            return
         self.rebuild(keep_view)
+
+    #: The settings that decide which dots there are and where; the others
+    #: only change how they are painted.
+    DOT_FIELDS = ("x_mode", "rows", "sort", "descending", "colour_by", "shape_by", "all_events")
 
     def _for_this_log(self, s: DotSettings) -> DotSettings:
         """``s`` as this log can show it: without times, a time axis becomes
