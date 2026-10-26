@@ -44,8 +44,27 @@ def socket_path() -> str:
     ``QLocalServer`` names it)."""
     if sys.platform == "win32":
         return rf"\\.\pipe\{NAME}"
-    base = os.environ.get("XDG_RUNTIME_DIR") or os.environ.get("TMPDIR") or "/tmp"
+    base = os.environ.get("XDG_RUNTIME_DIR") or os.environ.get("TMPDIR") or _user_temp_folder() or "/tmp"
     return str(Path(base) / f"{NAME}-{os.getuid()}")
+
+
+_temp_folder: list[str] = []
+
+
+def _user_temp_folder() -> str:
+    """The Mac's own per-user temp folder (``/var/folders/…/T/``), for a process
+    started without ``$TMPDIR``: Claude Desktop starts the MCP server that way,
+    while the app, opened from the Finder, listens there."""
+    if sys.platform != "darwin":
+        return ""
+    if not _temp_folder:
+        try:
+            found = subprocess.run(["/usr/bin/getconf", "DARWIN_USER_TEMP_DIR"], capture_output=True,
+                                   text=True, timeout=5).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            found = ""
+        _temp_folder.append(found)
+    return _temp_folder[0]
 
 
 def send(message: dict, timeout: float = 5.0) -> dict:

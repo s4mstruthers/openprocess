@@ -790,3 +790,21 @@ def test_an_exported_experiment_imports_into_a_fresh_folder(tmp_path):
     assert record.results[counted.id] == __import__("openprocess.flow.record", fromlist=["fingerprint"]).fingerprint(
         again.value(counted.id))                                     # reproducible, as the badge would say
     assert import_experiment(archive, elsewhere).parent.name == "Round trip 2"
+
+
+def test_the_studio_socket_is_found_without_tmpdir(monkeypatch):
+    """Claude Desktop starts the MCP server without $TMPDIR; on a Mac it must still
+    look in the per-user temp folder the app listens in, not /tmp."""
+    import sys
+    from openprocess.flow import studio
+    monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
+    monkeypatch.setenv("TMPDIR", "/somewhere/T/")
+    with_tmpdir = studio.socket_path()
+    assert with_tmpdir.startswith("/somewhere/T/") or sys.platform == "win32"
+    monkeypatch.delenv("TMPDIR")
+    monkeypatch.setattr(studio, "_temp_folder", ["/var/folders/xy/T/"] if sys.platform == "darwin" else [""])
+    without = studio.socket_path()
+    if sys.platform == "darwin":
+        assert without == f"/var/folders/xy/T/{studio.NAME}-{__import__('os').getuid()}"
+    elif sys.platform != "win32":
+        assert without.startswith("/tmp/")
