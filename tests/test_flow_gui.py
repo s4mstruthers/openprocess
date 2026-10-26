@@ -140,6 +140,8 @@ def test_dragging_a_wire_connects_and_refuses(app):
     page.resize(1300, 700)
     page.show()
     _pump(app, 0.2)
+    page.show_view(1)                                               # the canvas, for the mouse
+    _pump(app, 0.1)
     page.view.resetTransform()
     page.view.auto_fit = False
     page.view.centerOn(300, 50)
@@ -307,9 +309,10 @@ def test_groups_show_as_one_box_and_open_their_own_canvas(app, tmp_path):
 
 
 def test_the_page_opens_calm_and_the_panel_comes_with_a_click(app):
-    """A workflow opens as its canvas alone: three header buttons, no box
-    list, no side panel.  Click a box and the panel appears on Result; the
-    tab sticks while it stays open; ✕ (or clicking the canvas) hides it."""
+    """A workflow opens on its Report: three header buttons, no box list, no
+    side panel.  Select a box and the canvas comes up with the panel on
+    Result; the tab sticks while it stays open; ✕ (or clicking the canvas)
+    hides it."""
     from PySide6.QtWidgets import QPushButton
 
     from openprocess.gui.flow.templates import TEMPLATES
@@ -323,13 +326,14 @@ def test_the_page_opens_calm_and_the_panel_comes_with_a_click(app):
     _wait_run(app, page)
     header = [b.text() for b in page.header.findChildren(QPushButton)
               if b.isVisible() and b.objectName() != "reproBadge"]
-    assert header == ["Canvas", "Summary", "Runs", "+ Add box", "Run ▶", "⋯"]
+    assert header == ["Report", "Canvas", "Runs", "+ Add box", "Run ▶", "⋯"]
     assert [a.text() for a in page.more_menu.actions() if a.text()] == [
         "Re-run", "Record…", "Export experiment…", "Export as Python script…", "Export report…", "Save"]
     assert not page.panel.isVisible() and not hasattr(page, "box_tree")
+    assert page.body.currentIndex() == 0 and page.view_switch.index() == 0          # the Report
     log, miner = page.workflow.order()[:2]
     page.select(log.id)
-    assert page.panel.isVisible() and page.tab == 0
+    assert page.panel.isVisible() and page.tab == 0 and page.body.currentIndex() == 1  # on the canvas
     page.tabs.set_index(2)                                          # Code
     _pump(app, 0.1)
     page.select(miner.id)
@@ -863,11 +867,13 @@ def _wait_for_documents(app, window, condition, seconds: float = 8.0) -> bool:
     return condition(window.documents)
 
 
-def test_the_summary_writes_itself(app):
-    """Canvas | Summary: a tile per result in run order, the first log's process
-    map with a detail slider, and a tile click opens the box on the canvas."""
+def test_the_report_offers_the_process_map(app):
+    """Report: an analysis with a log and no Directly-follows graph box is
+    offered one; the click adds the box, fed by the log, and once it has run
+    the Report has its section and the offer is gone."""
     from openprocess.gui.flow.templates import TEMPLATES
     from openprocess.gui.studio.app import StudioWindow
+    from openprocess.gui.studio.graph_view import GraphView
 
     window = StudioWindow()
     window.resize(1400, 900)
@@ -875,38 +881,29 @@ def test_the_summary_writes_itself(app):
     window.action_new_workflow(TEMPLATES[0][1])
     page = window.current_page()
     _wait_run(app, page)
-    page.summary_switch.set_index(1)
-    _pump(app, 0.3)
-    assert page.body.currentIndex() == 1
-    titles = [page.workflow.title(t.node_id) for t in page.summary.tiles]
-    assert titles == [page.workflow.title(n.id) for n in page.workflow.order()]   # one per box, in run order
-    assert len(titles) == 3
-    # No Directly-follows graph box yet: no map is computed behind the scenes; one click adds the box.
-    assert not page.summary.map_card.isVisibleTo(page) and page.summary.no_map_card.isVisibleTo(page)
-    page.summary.add_map_button.click()
+    report = page.report
+    report.flush()
+    _pump(app, 0.2)
+    assert page.body.currentIndex() == 0 and len(report.sections) == 3
+    assert report.no_map_card.isVisibleTo(page)
+    report.add_map_button.click()
     _pump(app, 0.3)
     _wait_run(app, page)
+    report.flush()
+    _pump(app, 0.2)
     names = [page.workflow.spec(n).name for n in page.workflow.order()]
     assert "Directly-follows graph" in names and len(page.workflow.edges) == 4   # fed by the log
-    page.summary.refresh()
-    _pump(app, 0.2)
-    assert page.summary.map_card.isVisibleTo(page) and page.summary.map_view.graph.nodes
-    assert "Directly-follows graph" in page.summary.map_card.title_label.text()
-    full = len(page.summary.map_view.graph.nodes)
-    page.summary.detail.setValue(10)
-    assert len(page.summary.map_view.graph.nodes) < full
-    assert len(page.summary.tiles) == 4                                          # the new box has a tile too
-    last = page.summary.tiles[2]
-    last.clicked.emit(last.node_id)
-    _pump(app, 0.1)
-    assert page.body.currentIndex() == 0 and page.summary_switch.index() == 0
-    assert page.selected == last.node_id and page.tab == 0
+    assert page.body.currentIndex() == 0                                         # still on the Report
+    assert not report.no_map_card.isVisibleTo(page)
+    (map_section,) = [s for s in report.sections if page.workflow.spec(s.node_id).name == "Directly-follows graph"]
+    assert map_section.findChildren(GraphView)[0].graph.nodes
+    assert report.rows[map_section.node_id].figure.text() == "5 · 10"             # activities · paths
     page.document.dirty = False
     window.close()
 
 
 def test_motion_settles_the_window_and_can_be_turned_off(app, monkeypatch):
-    """A space switch and Canvas ↔ Summary lift a veil that is gone a moment
+    """A space switch and Report ↔ Canvas lift a veil that is gone a moment
     later; a box pulses once when it finishes; OPENPROCESS_NO_MOTION turns it off."""
     from openprocess.gui.flow.templates import TEMPLATES
     from openprocess.gui.studio import motion
@@ -927,7 +924,7 @@ def test_motion_settles_the_window_and_can_be_turned_off(app, monkeypatch):
     assert not window.modes.findChildren(Veil)                      # lifted and gone
     window.set_space("mine")
     _pump(app, 0.5)
-    page.summary_switch.set_index(1)
+    page.view_switch.set_index(1)
     assert page.body.findChildren(Veil)
     _pump(app, 0.5)
     assert not page.body.findChildren(Veil)
@@ -1090,8 +1087,8 @@ def test_export_report_writes_one_page_with_the_drawings(app, tmp_path, monkeypa
 
 
 def test_runs_keeps_every_run_and_puts_settings_back(app):
-    """Canvas | Summary | Runs: each finished run is a snapshot with what
-    changed; A and B compare box by box; Use A's settings goes back."""
+    """Report | Canvas | Runs: each finished run is a snapshot with what
+    changed; A and B compare box by box; Use A's settings goes back to the Report."""
     from openprocess.gui.flow.templates import TEMPLATES
     from openprocess.gui.studio.app import StudioWindow
 
@@ -1108,7 +1105,7 @@ def test_runs_keeps_every_run_and_puts_settings_back(app):
     page.run_from([miner.id])
     _wait_run(app, page)
     assert [s.label for s in page.history.snapshots] == ["First run", f"Inductive Miner: noise {before} → 0.4"]
-    page.summary_switch.set_index(2)
+    page.view_switch.set_index(2)
     _pump(app, 0.3)
     assert page.body.currentIndex() == 2 and page.runs.table.rowCount() == 2
     assert page.runs.a is page.history.snapshots[0] and page.runs.b is page.history.snapshots[1]
@@ -1125,7 +1122,7 @@ def test_runs_keeps_every_run_and_puts_settings_back(app):
 
 def test_an_object_centric_log_flows_through_the_canvas(app, tmp_path):
     """A .jsonocel dropped on the canvas becomes an Open object-centric log box;
-    the map box draws one colour per object type; the Summary has their tiles;
+    the map box draws one colour per object type; the Report lists both boxes;
     the folder lists the file under LOGS."""
     import shutil
 
@@ -1157,10 +1154,11 @@ def test_an_object_centric_log_flows_through_the_canvas(app, tmp_path):
     view = page.panel_host.findChildren(GraphView)[0]
     assert len(view.graph.nodes) == 5 and len(view.graph.edges) == 4          # 5 activities, 4 typed paths
     assert page.panel_host.findChildren(Legend)
-    page.summary_switch.set_index(1)
+    page.view_switch.set_index(0)
     _pump(app, 0.3)
-    assert [page.workflow.title(t.node_id) for t in page.summary.tiles] == [
+    assert [page.workflow.title(s.node_id) for s in page.report.sections] == [
         "Open object-centric log", "Object-centric map"]
+    assert page.report.rows[graph.id].figure.text() == "5 · 3"                 # activities · object types
     assert page.drawings()[graph.id].startswith("<svg")
     page.document.dirty = False
     window.close()
@@ -1358,6 +1356,7 @@ def test_a_click_that_opens_the_panel_leaves_the_box_where_it_was(app):
     page = WorkflowPage(WorkflowDocument(wf), wf.library)
     page.resize(1300, 700)
     page.show()
+    page.show_view(1)                                 # the canvas, for the mouse
     _pump(app, 0.3)
     view, scene = page.view, page.scene
     assert not page.panel.isVisible() and view.auto_fit
@@ -1451,3 +1450,124 @@ def test_a_figure_keeps_its_proportions_at_any_width(app):
                        '<rect width="900" height="450" fill="white"/></svg>')
     assert figure.hasHeightForWidth()
     assert figure.heightForWidth(380) == 190 and figure.heightForWidth(900) == 450
+
+
+def _energy_example(tmp_path: Path) -> Path:
+    """A copy of examples/energy_contracts with a small log in the exam log's
+    place (the real one is course material, not in the repository)."""
+    import shutil
+    from datetime import datetime, timedelta
+
+    from openprocess.mining.log import Event, EventLog, Trace
+    from openprocess.mining.xes import write_xes
+
+    folder = tmp_path / "energy"
+    folder.mkdir()
+    shutil.copy(Path(__file__).parent.parent / "examples" / "energy_contracts" / "Energy contracts.cpnflow",
+                folder / "Energy contracts.cpnflow")
+    approve = ["Receive application", "Add customer details", "Add meter details", "Start cancellation",
+               "Cancel previous contract", "Approve contract"]
+    reject = ["Receive application", "Add customer details", "Add meter details", "Reject contract"]
+    swapped = ["Receive application", "Add meter details", "Add customer details", "Start cancellation",
+               "Cancel previous contract", "Approve contract"]
+    who = {"Receive application": "Online", "Add customer details": "Ann", "Add meter details": "Bob",
+           "Start cancellation": "Ann", "Cancel previous contract": "Bob", "Approve contract": "Mia",
+           "Reject contract": "Mia"}
+    log = EventLog(attributes={"concept:name": "Energy contracts"})
+    start = datetime(2022, 6, 6, 9)
+    cases = [(approve, 0), (approve, 1), (reject, 2), (swapped, 3), (approve, 5), (reject, 8), (swapped, 9),
+             (approve, 12)]
+    for number, (variant, day) in enumerate(cases, start=1):
+        trace = Trace({"concept:name": f"c{number}"})
+        for step, activity in enumerate(variant):
+            resource = "Carl" if number % 2 and activity.startswith("Add") else who[activity]
+            trace.events.append(Event({"concept:name": activity, "org:resource": resource,
+                                       "time:timestamp": start + timedelta(days=day, hours=3 * step + number % 3)}))
+        log.traces.append(trace)
+    write_xes(log, folder / "Exam Eventlog 2026.xes")
+    return folder
+
+
+def test_the_report_lists_every_box_and_follows_the_run(app, tmp_path):
+    """A workflow opens on its Report: every box in run order, a group's boxes
+    together under its heading, each with its status, summary, settings
+    chips and result (a table as a table); the outline's key figures; Open ›
+    and How open the box in the side panel on the canvas; a step scrolls to
+    its section; a run redraws only the sections whose result changed; and a
+    narrow window folds the outline into the Steps menu."""
+    from PySide6.QtWidgets import QTableWidget
+
+    from openprocess.gui.flow.page import CANVAS, REPORT, WorkflowPage
+    from openprocess.gui.flow.report import report_order
+    from openprocess.gui.studio.app import StudioWindow
+
+    folder = _energy_example(tmp_path)
+    window = StudioWindow()
+    window.resize(1400, 900)
+    window.show()
+    window.open_path(str(folder / "Energy contracts.cpnflow"))
+    page = window.current_page()
+    assert isinstance(page, WorkflowPage) and len(page.workflow.nodes) == 35
+    assert page.body.currentIndex() == REPORT and page.view_switch.index() == REPORT
+    report = page.report
+    ids = [s.node_id for s in report.sections]
+    assert sorted(ids) == sorted(page.workflow.nodes)
+    assert ids == [n.id for _group, nodes in report_order(page.workflow) for n in nodes]
+    assert ids[0] == "n1"                                                         # the log runs first
+    groups = [g for g, _nodes in report_order(page.workflow) if g is not None]
+    assert [h.text() for h in report.headings] == [g.name for g in groups] == [
+        "1 · Dotted charts", "2 · Discovery", "3 · Fitness", "4 · Deviations", "5 · The process"]
+    for group in groups:                                                          # a group's boxes together
+        where = [ids.index(m) for m in group.members]
+        assert max(where) - min(where) == len(group.members) - 1
+    assert report.section("n24").chip.text() == "Waiting"                         # not run yet: says so
+    _wait_run(app, page, seconds=90)
+    assert page.run.ok, [(r.node, r.error) for r in page.run.failed()]
+    report.flush()
+    _pump(app, 0.3)
+    compare = report.section("n24")                                               # Fitness of the models: a table
+    assert compare.chip.text().startswith("Done") and compare.findChildren(QTableWidget)
+    assert compare.summary.text() == page.scene.statuses["n24"][1] == "table 4 × 5"   # as the canvas says
+    assert compare.eyebrow.text() == "COMPARE" and compare.title.text() == "Fitness of the models"
+    assert [c.text() for c in report.section("n13").chip_widgets] == ["noise 0.2"]
+    assert report.rows["n1"].figure.text() == "8 cases"
+    assert report.rows["n18"].figure.text() == "1.00 fitness"
+    assert report.section("n18").findChildren(QLabel, "statValue")               # a score: a key-figure tile
+    # Open › and How: the box in the side panel, on the canvas.
+    compare.open_button.click()
+    _pump(app, 0.1)
+    assert page.body.currentIndex() == CANVAS and page.selected == "n24" and page.tab == 0
+    assert page.panel.isVisible()
+    page.view_switch.set_index(REPORT)
+    _pump(app, 0.1)
+    compare.how_button.click()
+    assert page.body.currentIndex() == CANVAS and page.tab == 1
+    page.view_switch.set_index(REPORT)
+    _pump(app, 0.2)
+    # A step scrolls to its section.
+    assert report.scroll.verticalScrollBar().value() == 0
+    report.rows["n33"].clicked.emit("n33")
+    _pump(app, 0.1)
+    assert report.scroll.verticalScrollBar().value() > 0 and report._current == "n33"
+    # A run redraws the sections whose result changed and leaves the others.
+    miner_body, log_body = report.section("n13").body_widget, report.section("n1").body_widget
+    page.workflow.set("n13", noise=0.5)
+    page.run_from(["n13"])
+    _wait_run(app, page, seconds=90)
+    report.flush()
+    _pump(app, 0.2)
+    assert report.section("n13").body_widget is not miner_body
+    assert report.section("n1").body_widget is log_body
+    assert report.section("n13").result is page.run.result("n13")
+    assert [c.text() for c in report.section("n13").chip_widgets] == ["noise 0.5"]
+    # Narrow: the outline folds into the Steps menu.
+    assert report.outline.isVisible() and not report.steps_button.isVisible()
+    window.resize(1000, 800)
+    _pump(app, 0.3)
+    assert not report.outline.isVisible() and report.steps_button.isVisible()
+    assert [a.data() for a in report.steps_menu().actions() if a.data()] == ids
+    window.resize(1400, 900)
+    _pump(app, 0.3)
+    assert report.outline.isVisible()
+    page.document.dirty = False
+    window.close()
