@@ -6,6 +6,12 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## Unreleased
+
+- **Closing a workflow from the sidebar no longer shows an error.** Clicking
+  a row's ✕ removed the row and then handed the same click to the row that
+  was gone, which raised "'NoneType' object has no attribute 'data'". The
+  click is now ignored once the row is gone.
 ## 0.14.0
 
 - **The dotted chart keeps up on a million events.** On a log the size of

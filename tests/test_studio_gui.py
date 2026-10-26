@@ -140,6 +140,8 @@ def test_studio_end_to_end(app):
     before = len(window.documents)
     window.remove_documents([log.id])
     assert len(window.documents) == before - 1 and log.id not in window.pages
+    # The click that pressed the row's ✕ still arrives, for a row that is gone.
+    window._sidebar_clicked(None)
     window.close()
 
 

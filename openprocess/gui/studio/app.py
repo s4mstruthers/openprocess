@@ -3756,7 +3756,15 @@ class StudioWindow(QMainWindow):
             self._remember_folded(item, not expanded)
 
     def _sidebar_clicked(self, item) -> None:
-        if item is self.material_section or item.data(0, GROUP_ROLE):
+        # The click that pressed a row's close button arrives after the row
+        # is gone: Qt then hands over nothing (or a dead item).
+        if item is None:
+            return
+        try:
+            heading = item is self.material_section or item.data(0, GROUP_ROLE)
+        except RuntimeError:                         # the row was deleted meanwhile
+            return
+        if heading:
             item.setExpanded(not item.isExpanded())     # a heading or a caption folds on a click
             return
         self._open_placeholder(item)
