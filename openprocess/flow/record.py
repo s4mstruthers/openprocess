@@ -242,8 +242,11 @@ def canonical(value: Any, _active: set[int] | None = None) -> Any:
         if isinstance(value, (list, tuple)):
             return [canonical(v, _active) for v in value]
         if dataclasses.is_dataclass(value) and not isinstance(value, type):
+            # A field named with a leading underscore is a cache or a working
+            # value (a DFG's per-arc means and medians, say), not content.
             fields = {f.name: canonical(getattr(value, f.name, None), _active)
-                      for f in dataclasses.fields(value) if f.name not in _NOT_CONTENT}
+                      for f in dataclasses.fields(value)
+                      if not f.name.startswith("_") and f.name not in _NOT_CONTENT}
             return {"type": type(value).__name__, **fields}
         attributes = getattr(value, "__dict__", None)
         if isinstance(attributes, dict):

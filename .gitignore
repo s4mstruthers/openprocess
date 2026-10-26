@@ -15,6 +15,8 @@ dist/
 
 # Not part of the project
 Claude outputs/
+# What OpenProcess Studio writes in a folder it has open (which files were open; safe to delete)
+.openprocess
 
 # The BPI Challenge 2019 log (728 MB): download it, do not commit it
 examples/bpi2019/*.xes

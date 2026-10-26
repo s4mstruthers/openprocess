@@ -12,6 +12,13 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
   a row's ✕ removed the row and then handed the same click to the row that
   was gone, which raised "'NoneType' object has no attribute 'data'". The
   click is now ignored once the row is gone.
+- **Records made before 0.14.0 check again.** Two results changed in text
+  but not in content in 0.14.0, so `openprocess run --check` reported them
+  as differing: the dotted chart figure (its dots were written in another
+  order) and the process map (it carried its cached means and medians). The
+  figure is written as before, and a result's private working values are
+  no longer part of its fingerprint.
+
 ## 0.14.0
 
 - **The dotted chart keeps up on a million events.** On a log the size of

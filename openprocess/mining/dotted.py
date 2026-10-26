@@ -472,8 +472,11 @@ def svg(dots: Dots, title: str = "", unit: str = "Auto", width: int = 900) -> st
     half_px = np.round(2 * (left + (dots.xs - x0) / (x1 - x0) * plot_w)).astype(np.int64)
     half_py = np.round(2 * (top + (dots.rows + 0.5) / n_rows * plot_h)).astype(np.int64)
     slot = np.minimum(dots.colour, 8).astype(np.int64)
-    keys = np.unique((half_px * (1 << 24) + half_py) * 9 + slot)
-    for s_ in sorted(set(int(k) for k in keys % 9), reverse=True):
+    # Each (pixel, colour) once, in the order it is first met: the same text
+    # as drawing dot by dot gives, so a figure's fingerprint stays what it was.
+    keys, first = np.unique((half_px * (1 << 24) + half_py) * 9 + slot, return_index=True)
+    keys = keys[np.argsort(first, kind="stable")]
+    for s_ in sorted(set((keys % 9).tolist()), reverse=True):
         mine = keys[keys % 9 == s_] // 9
         fill = CATEGORICAL_LIGHT[s_] if s_ < 8 else OTHER_LIGHT
         out.append(f'<g fill="{fill}" fill-opacity="0.85">')
