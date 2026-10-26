@@ -31,11 +31,13 @@ classifiers = [
     "Topic :: Education",
 ]
 
-# The engine deliberately has ZERO runtime dependencies: colour sets, the CPN ML
-# interpreter, the simulator and the state space tool are all pure standard
-# library.  That keeps the core importable from a notebook, a script, or a test
-# runner without dragging in a GUI toolkit.
-dependencies = []
+# The engine's one runtime dependency is numpy: the arrays behind a large
+# log (a million events in the dotted chart, the summaries, the filters) are
+# worked out with it, and a box of your own can count on it.  Everything else
+# (colour sets, the CPN ML interpreter, the simulator, the state space tool)
+# is pure standard library, so the core imports from a notebook, a script or a
+# test runner without dragging in a GUI toolkit.
+dependencies = ["numpy>=1.24"]
 
 [project.optional-dependencies]
 # The desktop application: `pip install openprocess[app]`.  Installed separately
@@ -49,7 +51,7 @@ dev = ["pytest>=8.0", "mcp>=2.3"]
 # The Science boxes (Describe log, Bootstrap fitness, Compare samples, Correlate,
 # Plot) and the converters to pandas and matplotlib.  Each box says which of
 # these it needs; without them it is listed greyed out.
-science = ["numpy>=1.24", "pandas>=2.0", "scipy>=1.10", "matplotlib>=3.7"]
+science = ["pandas>=2.0", "scipy>=1.10", "matplotlib>=3.7"]
 # The scikit-learn example model in examples/boxes/.
 predict = ["scikit-learn>=1.3"]
 # Optional: the ILP Miner, PM4Py's heuristics net, and a cross-check of the

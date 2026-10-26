@@ -16,6 +16,8 @@ from __future__ import annotations
 from array import array
 from dataclasses import dataclass, field
 
+import numpy as np
+
 X_MODES = ["Actual time", "Time since case start", "Relative to case duration (%)",
            "Logical: order in log", "Logical: position in case"]
 #: Axis titles for each x mode.
@@ -54,98 +56,144 @@ class DotSettings:
     colours: dict = field(default_factory=dict)
 
 
+def _array(values, dtype) -> np.ndarray:
+    """A numpy view of an ``array.array`` (or a copy of a list), typed."""
+    if isinstance(values, array):
+        return np.frombuffer(values, dtype=dtype) if len(values) else np.zeros(0, dtype=dtype)
+    return np.asarray(values, dtype=dtype)
+
+
+def _codes(values) -> tuple[np.ndarray, list[str]]:
+    """Text values as small integers plus the table to read them back
+    (``None`` reads as an en dash)."""
+    table: list[str] = []
+    index: dict[str, int] = {}
+    codes = np.empty(len(values), dtype=np.int32)
+    for k, value in enumerate(values):
+        text = "–" if value is None else value
+        code = index.get(text)
+        if code is None:
+            code = index[text] = len(table)
+            table.append(text)
+        codes[k] = code
+    return codes, table
+
+
+def _ranks(keys: list[str], primary: np.ndarray | None, descending: bool) -> np.ndarray:
+    """The order of ``keys`` (indices into them) by ``primary`` (a number
+    per key; None: by the keys alone), ties by natural order; reversed
+    when descending, like ``sorted(..., reverse=True)``."""
+    tie = np.empty(len(keys), dtype=np.int64)
+    tie[sorted(range(len(keys)), key=lambda i: natural(keys[i]))] = np.arange(len(keys))
+    order = tie.argsort(kind="stable") if primary is None else np.lexsort((tie, primary))
+    return order[::-1] if descending else order
+
+
 class _Events:
-    """The events a dotted chart shows, in log order, with what it needs of
-    each: its case, its index in the case, its time, and any attribute as
-    text.  An object log is read through its events; a columnar log (a large
-    file) straight from its arrays, so a million-event log is drawn without
-    building a million event objects."""
+    """The events a dotted chart shows, in log order, as arrays: the case
+    of each, its index in the case, its time in microseconds, and any
+    attribute as codes into a table of text.  A columnar log (a large file)
+    is read straight from its arrays, so a million-event log is drawn
+    without building a million event objects."""
 
     def __init__(self, log, classifier, all_events: bool) -> None:
         from .columns import NO_TIME
         self.log, self.classifier = log, classifier
-        self.case = array("i")                  # trace index
-        self.position = array("i")              # index in trace.events
-        self.micros = array("q")                # microseconds since the epoch; NO_TIME when absent
         self.missing = NO_TIME
+        wanted = None if all_events or classifier.lifecycles is None else \
+            {v.lower() for v in classifier.lifecycles}
         if log.columnar:
             store = self.store = log.traces.store
-            wanted = None if all_events or classifier.lifecycles is None else \
-                {v.lower() for v in classifier.lifecycles}
-            lifecycle = store.lifecycle
-            self.index = array("q")             # the event's index in the store
-            for case in range(store.case_count):
-                start, stop = store.offsets[case], store.offsets[case + 1]
-                for i in range(start, stop):
-                    if wanted is not None:
-                        code = lifecycle.codes[i]
-                        if code >= 0 and lifecycle.values[code].lower() not in wanted:
-                            continue
-                    self.case.append(case)
-                    self.position.append(i - start)
-                    self.index.append(i)
-                    self.micros.append(store.micros[i])
+            offsets = _array(store.offsets, np.int64)
+            count = store.event_count
+            case = np.repeat(np.arange(store.case_count, dtype=np.int32), np.diff(offsets))
+            keep = np.ones(count, dtype=bool)
+            if wanted is not None:
+                # accepted[code + 1]: a missing lifecycle (code -1) is accepted
+                accepted = np.array([True] + [v.lower() in wanted for v in store.lifecycle.values])
+                keep = accepted[_array(store.lifecycle.codes, np.int32) + 1]
+            self.index = np.flatnonzero(keep)              # the event's index in the store
+            self.case = case[keep]
+            self.position = (self.index - offsets[self.case]).astype(np.int32)
+            self.micros = _array(store.micros, np.int64)[keep]
             self.events = None
         else:
             self.store = None
             self.events = []
             from .columns import _micros
+            case, position, micros = [], [], []
             for ti, trace in enumerate(log.traces):
-                for position, event in enumerate(trace.events):
+                for k, event in enumerate(trace.events):
                     if not (all_events or classifier.accepts(event)):
                         continue
-                    self.case.append(ti)
-                    self.position.append(position)
+                    case.append(ti)
+                    position.append(k)
                     self.events.append(event)
                     stamp = event.timestamp
-                    self.micros.append(_micros(stamp) if stamp is not None else NO_TIME)
+                    micros.append(_micros(stamp) if stamp is not None else NO_TIME)
+            self.case = np.asarray(case, dtype=np.int32)
+            self.position = np.asarray(position, dtype=np.int32)
+            self.micros = np.asarray(micros, dtype=np.int64)
 
     def __len__(self) -> int:
         return len(self.case)
 
-    def ranks(self) -> array:
+    def ranks(self) -> np.ndarray:
         """Each shown event's place among *all* the log's events, ordered by
         time (then case, then position): the x of "Logical: order in log"."""
         from .columns import _micros
         floor = -(1 << 63)
-        everything: list[tuple[int, int, int]] = []
         if self.store is not None:
             store = self.store
-            for case in range(store.case_count):
-                start = store.offsets[case]
-                for i in range(start, store.offsets[case + 1]):
-                    m = store.micros[i]
-                    everything.append((m if m != self.missing else floor, case, i - start))
+            offsets = _array(store.offsets, np.int64)
+            case = np.repeat(np.arange(store.case_count, dtype=np.int64), np.diff(offsets))
+            position = np.arange(store.event_count) - offsets[case]
+            micros = _array(store.micros, np.int64)
+            shown = self.index
         else:
+            case, position, micros = [], [], []
             for ti, trace in enumerate(self.log.traces):
-                for position, event in enumerate(trace.events):
+                for k, event in enumerate(trace.events):
                     stamp = event.timestamp
-                    everything.append((_micros(stamp) if stamp is not None else floor, ti, position))
-        everything.sort()
-        place = {(case, position): rank for rank, (_m, case, position) in enumerate(everything)}
-        return array("q", (place[(c, p)] for c, p in zip(self.case, self.position)))
+                    case.append(ti)
+                    position.append(k)
+                    micros.append(_micros(stamp) if stamp is not None else floor)
+            case, position = np.asarray(case, dtype=np.int64), np.asarray(position, dtype=np.int64)
+            micros = np.asarray(micros, dtype=np.int64)
+            # the shown events among all: by (case, position), both ascending in log order
+            starts = np.r_[0, np.cumsum(np.bincount(case, minlength=len(self.log.traces)))[:-1]]
+            shown = starts[self.case] + self.position
+        micros = np.where(micros == self.missing, floor, micros)
+        rank = np.empty(len(micros), dtype=np.int64)
+        rank[np.lexsort((position, case, micros))] = np.arange(len(micros))
+        return rank[shown]
 
     def timestamp(self, k: int):
         """The shown event ``k``'s timestamp, with the offset it was written with."""
         if self.store is not None:
-            return self.store.timestamp(self.index[k])
+            return self.store.timestamp(int(self.index[k]))
         return self.events[k].timestamp
 
-    def values(self, component: str) -> list[str]:
+    def values(self, component: str) -> tuple[np.ndarray, list[str]]:
         """``component`` (Case, Activity, Resource, Lifecycle, None or an
-        attribute) as text for every shown event."""
+        attribute) for every shown event, as codes into a table of text."""
         if component == "None":
-            return [""] * len(self)
+            return np.zeros(len(self), dtype=np.int32), [""]
         if self.store is not None:
             store, index = self.store, self.index
             if component == "Case":
-                return [store.case_ids[c] for c in self.case]
+                return self.case.astype(np.int32), list(store.case_ids)
             if component == "Activity":
-                labels = self._labels()
-                return [labels[i] for i in index]
+                if tuple(self.classifier.keys) == ("concept:name",):       # the usual classifier
+                    codes = _array(store.activity.codes, np.int32)[index]
+                    return np.where(codes < 0, len(store.activity.values), codes), \
+                        list(store.activity.values) + [""]
+                codes, table = _codes(self._labels())
+                return codes[index], table
             key = {"Resource": "org:resource", "Lifecycle": "lifecycle:transition"}.get(component, component)
             column = store.column_text(key)
-            return [column[i] or "–" for i in index]
+            codes, table = _codes(column)
+            return codes[index], table
         classifier, traces = self.classifier, self.log.traces
         out = []
         for k, event in enumerate(self.events):
@@ -160,15 +208,13 @@ class _Events:
             else:
                 raw = event.get(component)
                 out.append("–" if raw is None else str(raw))
-        return out
+        return _codes(out)
 
     def _labels(self) -> list[str]:
         """Every stored event's activity label under the classifier (the
         plain activity for an event the classifier leaves out)."""
         store, classifier = self.store, self.classifier
         names = store.column_text("concept:name")
-        if tuple(classifier.keys) == ("concept:name",):
-            return [name or "" for name in names]        # the usual classifier: the names themselves
         columns = [store.column_text(key) for key in classifier.keys]
         lifecycle = store.lifecycle
         wanted = None if classifier.lifecycles is None else {v.lower() for v in classifier.lifecycles}
@@ -185,9 +231,13 @@ class _Events:
 class Dots:
     """All dots of a log under given settings, ready for drawing.
 
-    Parallel arrays keep the per-dot data compact: ``xs[i]``, ``rows[i]``,
-    ``colour[i]`` (index into ``colour_values``), ``shape[i]``, ``case[i]``
-    (trace index) and ``position[i]`` (the event's index in its trace).
+    Parallel numpy arrays keep the per-dot data compact: ``xs[i]``,
+    ``rows[i]`` (index into ``row_values``), ``colour[i]`` (index into
+    ``colour_values``), ``shape[i]``, ``case[i]`` (trace index) and
+    ``position[i]`` (the event's index in its trace).  ``order`` lists the
+    dots by x and ``xs_sorted`` their x, so a window finds its dots by
+    bisection (:meth:`between`); the dots of a case are consecutive
+    (:meth:`case_dots`), as events are read case by case.
     """
 
     def __init__(self, log, classifier, settings: DotSettings) -> None:
@@ -197,111 +247,105 @@ class Dots:
         micros, case, missing = events.micros, events.case, events.missing
 
         # 1. Select events and compute raw x values -------------------------
-        earliest = None                          # the shown event with the earliest timestamp
-        for k, m in enumerate(micros):
-            if m != missing and (earliest is None or m < micros[earliest]):
-                earliest = k
-        self.has_time = earliest is not None
-        origin = micros[earliest] if earliest is not None else None
-        # The axis shows clock times in the offset the log was written with.
-        self.origin = events.timestamp(earliest) if earliest is not None else None
+        timed = micros != missing
+        self.has_time = bool(timed.any())
         mode = s.x_mode if self.has_time or s.x_mode >= 3 else 4
-
-        # Each case's first and last shown timestamp (for modes 1 and 2).
-        first: dict[int, int] = {}
-        last: dict[int, int] = {}
-        if mode in (1, 2):
-            for k, m in enumerate(micros):
-                if m == missing:
-                    continue
-                c = case[k]
-                if c not in first or m < first[c]:
-                    first[c] = m
-                if c not in last or m > last[c]:
-                    last[c] = m
-        rank = events.ranks() if mode == 3 else None   # the event's place in the whole log, by time
-
-        kept: list[int] = []                    # shown events that have an x
-        xs = array("d")
-        position_in_shown: dict[int, int] = {}
-        for k in range(len(events)):
-            m = micros[k]
-            if mode == 4:
-                c = case[k]
-                x = float(position_in_shown.get(c, 0))
-                position_in_shown[c] = x + 1
-            elif mode == 3:
-                x = float(rank[k])
-            elif m == missing:
-                continue
-            elif mode == 0:
-                x = (m - origin) / 1e6
-            elif mode == 1:
-                x = (m - first[case[k]]) / 1e6
+        if self.has_time:
+            earliest = int(np.flatnonzero(timed)[micros[timed].argmin()])
+            origin = micros[earliest]
+            # The axis shows clock times in the offset the log was written with.
+            self.origin = events.timestamp(earliest)
+        else:
+            origin, self.origin = None, None
+        if mode == 4:                                 # position among the shown events of the case
+            new_case = np.r_[True, case[1:] != case[:-1]] if len(case) else np.zeros(0, dtype=bool)
+            group = np.cumsum(new_case) - 1
+            xs = (np.arange(len(case)) - np.flatnonzero(new_case)[group]).astype(np.float64)
+            kept = slice(None)
+        elif mode == 3:
+            xs = events.ranks().astype(np.float64)
+            kept = slice(None)
+        else:
+            kept = timed
+            seconds = (micros[kept] - origin) / 1e6 if origin is not None else np.zeros(0)
+            if mode == 0:
+                xs = seconds
             else:
-                span = (last[case[k]] - first[case[k]]) / 1e6       # seconds, as timedelta.total_seconds()
-                x = 100.0 * ((m - first[case[k]]) / 1e6) / span if span else 0.0
-            kept.append(k)
-            xs.append(x)
+                # Each case's first and last shown timestamp, in seconds.
+                count = int(case.max()) + 1 if len(case) else 0
+                first = np.full(count, np.inf)
+                last = np.full(count, -np.inf)
+                np.minimum.at(first, case[kept], seconds)
+                np.maximum.at(last, case[kept], seconds)
+                since_start = seconds - first[case[kept]]
+                if mode == 1:
+                    xs = since_start
+                else:
+                    span = (last - first)[case[kept]]
+                    xs = np.where(span > 0, 100.0 * since_start / np.where(span > 0, span, 1.0), 0.0)
         self.mode = mode
+        self.xs = np.ascontiguousarray(xs, dtype=np.float64)
+        self.case = case[kept]
+        self.position = events.position[kept]
 
-        def component(name: str) -> list[str]:
-            values = events.values(name)
-            return [values[k] for k in kept]
-        row_of, colour_of, shape_of = component(s.rows), component(s.colour_by), component(s.shape_by)
+        def component(name: str) -> tuple[np.ndarray, list[str]]:
+            codes, table = events.values(name)
+            return codes[kept], table
 
         # 2. Rows: one per distinct component value, sorted ------------------
-        stats: dict[str, list[float]] = {}          # value -> [first, last, count]
-        for x, row_value in zip(xs, row_of):
-            entry = stats.get(row_value)
-            if entry is None:
-                stats[row_value] = [x, x, 1]
-            else:
-                if x < entry[0]:
-                    entry[0] = x
-                if x > entry[1]:
-                    entry[1] = x
-                entry[2] += 1
-        keys = {
-            0: lambda v: (stats[v][0], natural(v)),
-            1: lambda v: (stats[v][1], natural(v)),
-            2: lambda v: (stats[v][1] - stats[v][0], natural(v)),
-            3: lambda v: (stats[v][2], natural(v)),
-            4: lambda v: natural(v),
-        }
-        self.row_values = sorted(stats, key=keys[s.sort], reverse=s.descending)
-        row_index = {v: i for i, v in enumerate(self.row_values)}
-        self.row_stats = stats
+        row_code, row_table = component(s.rows)
+        present, rows = np.unique(row_code, return_inverse=True)
+        values = [row_table[p] for p in present]
+        counts = np.bincount(rows, minlength=len(present)).astype(np.float64)
+        first = np.full(len(present), np.inf)
+        last = np.full(len(present), -np.inf)
+        np.minimum.at(first, rows, self.xs)
+        np.maximum.at(last, rows, self.xs)
+        primary = {0: first, 1: last, 2: last - first, 3: counts, 4: None}[s.sort]
+        order = _ranks(values, primary, s.descending)
+        self.row_values = [values[i] for i in order]
+        self.row_stats = {values[i]: [float(first[i]), float(last[i]), int(counts[i])]
+                          for i in range(len(values))}
+        row_index = np.empty(len(order), dtype=np.int32)
+        row_index[order] = np.arange(len(order))
+        self.rows = row_index[rows]
 
         # 3. Colour and shape assignments, by frequency ----------------------
-        def ranked(values: list[str]) -> list[str]:
-            counts: dict[str, int] = {}
-            for value in values:
-                counts[value] = counts.get(value, 0) + 1
-            return sorted(counts, key=lambda v: (-counts[v], natural(v)))
-        self.colour_values = ranked(colour_of)
-        self.shape_values = ranked(shape_of)
-        colour_index = {v: i for i, v in enumerate(self.colour_values)}
-        shape_index = {v: i for i, v in enumerate(self.shape_values)}
+        def ranked(name: str) -> tuple[np.ndarray, list[str], np.ndarray]:
+            code, table = component(name)
+            present, inverse = np.unique(code, return_inverse=True)
+            values = [table[p] for p in present]
+            counts = np.bincount(inverse, minlength=len(present))
+            order = _ranks(values, -counts.astype(np.float64), False)
+            index = np.empty(len(order), dtype=np.int32)
+            index[order] = np.arange(len(order))
+            return index[inverse], [values[i] for i in order], counts[order]
+        self.colour, self.colour_values, colour_counts = ranked(s.colour_by)
+        self.shape, self.shape_values, _ = ranked(s.shape_by)
+        self.colour_counts = {v: int(n) for v, n in zip(self.colour_values, colour_counts)}
 
-        self.xs = xs
-        self.rows = array("i", (row_index[v] for v in row_of))
-        self.colour = array("i", (colour_index[v] for v in colour_of))
-        self.shape = array("i", (shape_index[v] for v in shape_of))
-        self.case = array("i", (case[k] for k in kept))
-        self.position = array("i", (events.position[k] for k in kept))
-        self.colour_counts = {v: 0 for v in self.colour_values}
-        for v in colour_of:
-            self.colour_counts[v] += 1
-        self.x_min = min(self.xs, default=0.0)
-        self.x_max = max(self.xs, default=1.0)
+        self.x_min = float(self.xs.min()) if len(self.xs) else 0.0
+        self.x_max = float(self.xs.max()) if len(self.xs) else 1.0
         if self.x_max <= self.x_min:
             self.x_max = self.x_min + 1.0
+        # 4. The dots by x, for the windows of a chart.
+        self.order = np.argsort(self.xs, kind="stable").astype(np.int64)
+        self.xs_sorted = self.xs[self.order]
         self.traces = log.traces
         self.classifier = classifier
 
     def __len__(self) -> int:
         return len(self.xs)
+
+    def between(self, x0: float, x1: float) -> np.ndarray:
+        """The dots with ``x0 <= x <= x1``, by increasing x."""
+        return self.order[np.searchsorted(self.xs_sorted, x0, "left"):
+                          np.searchsorted(self.xs_sorted, x1, "right")]
+
+    def case_dots(self, case: int) -> range:
+        """The dot indices of a case (consecutive: events come case by case)."""
+        return range(int(np.searchsorted(self.case, case, "left")),
+                     int(np.searchsorted(self.case, case, "right")))
 
     def case_duration(self, case: int) -> float | None:
         """Seconds from a case's first to its last timestamp (None: fewer
@@ -317,7 +361,7 @@ class Dots:
 
     def event(self, i: int):
         """The event behind dot ``i`` (builds only its trace, for a large log)."""
-        return self.traces[self.case[i]].events[self.position[i]]
+        return self.traces[int(self.case[i])].events[int(self.position[i])]
 
 
 def natural(text: str):
@@ -425,18 +469,16 @@ def svg(dots: Dots, title: str = "", unit: str = "Auto", width: int = 900) -> st
 
     # Dots: once per pixel and colour, "Other" first so the named colours are on top.
     radius = 3.0 if labelled else 1.6
-    seen: set[tuple[int, int, int]] = set()
-    by_colour: dict[int, list[tuple[int, int]]] = {}
-    for x, row, colour in zip(dots.xs, dots.rows, dots.colour):
-        slot = colour if colour < 8 else 8
-        key = (round(px(x) * 2), round(py(row) * 2), slot)
-        if key not in seen:
-            seen.add(key)
-            by_colour.setdefault(slot, []).append(key[:2])
-    for slot in sorted(by_colour, key=lambda k: -k):
-        fill = CATEGORICAL_LIGHT[slot] if slot < 8 else OTHER_LIGHT
+    half_px = np.round(2 * (left + (dots.xs - x0) / (x1 - x0) * plot_w)).astype(np.int64)
+    half_py = np.round(2 * (top + (dots.rows + 0.5) / n_rows * plot_h)).astype(np.int64)
+    slot = np.minimum(dots.colour, 8).astype(np.int64)
+    keys = np.unique((half_px * (1 << 24) + half_py) * 9 + slot)
+    for s_ in sorted(set(int(k) for k in keys % 9), reverse=True):
+        mine = keys[keys % 9 == s_] // 9
+        fill = CATEGORICAL_LIGHT[s_] if s_ < 8 else OTHER_LIGHT
         out.append(f'<g fill="{fill}" fill-opacity="0.85">')
-        out.extend(f'<circle cx="{a / 2:g}" cy="{b / 2:g}" r="{radius}"/>' for a, b in by_colour[slot])
+        out.extend(f'<circle cx="{a / 2:g}" cy="{b / 2:g}" r="{radius}"/>'
+                   for a, b in zip((mine >> 24).tolist(), (mine & ((1 << 24) - 1)).tolist()))
         out.append("</g>")
 
     # Legend: what each colour means, with how many events.

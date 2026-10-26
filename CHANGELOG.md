@@ -8,6 +8,22 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
 ## Unreleased
 
+- **The dotted chart keeps up on a million events.** On a log the size of
+  the BPI Challenge 2019 (1.6 million events, 250,000 cases) every wheel
+  tick, pinch, pan and resize used to redraw the whole log before showing
+  anything, and the first move of the pointer afterwards stalled for most
+  of a second. Now a gesture moves the picture at once and the exact
+  picture follows as soon as it settles; a window of the chart only looks
+  at the dots in it; the dots are worked out five times faster; and the dot
+  size, grid and time unit repaint the chart instead of working the dots
+  out again (on the Compare page too). The lines between a case's events
+  (*Connect events of a case*) are drawn when the window shows fewer than
+  40,000 dots, where they can be read.
+- **numpy comes with OpenProcess.** The engines need numpy (and nothing
+  else) from this version: `pip install openprocess` brings it, the
+  downloaded app carries it, and a box of your own can count on it. The
+  Science boxes still need pandas, SciPy or matplotlib, installed from
+  Connections as before.
 - **A large log's page no longer freezes the window.** Measured on the BPI
   Challenge 2019 log (1.6 million events, a quarter of a million cases):
   typing in the Cases tab's filter cost 1.3 s a keystroke and now filters

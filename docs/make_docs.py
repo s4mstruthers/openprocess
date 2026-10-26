@@ -28,7 +28,7 @@ PACKAGE = ROOT / "openprocess"
 #: The layers of the code, innermost first, and the packages in each.
 #: ``layer_violations`` checks that a layer only imports its own and inner ones.
 LAYERS = [
-    ("Engines", "pure Python, no dependencies",
+    ("Engines", "pure Python; numpy only",
      ["mining", "mining.discovery", "mining.conformance", "ml", "model", "sim", "analysis", "io", "core"]),
     ("Framework", "workflows of boxes; no Qt", ["flow", "flow.boxes"]),
     ("Teaching", "exercise packs and checks; no Qt", ["learn", "teaching"]),
