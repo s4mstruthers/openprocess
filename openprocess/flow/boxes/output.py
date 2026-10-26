@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ... import flow
+from ...mining.bpmn import BPMN
 from ...mining.log import EventLog
 from ...mining.petrinet import PetriNet
 from ..box import box
@@ -22,6 +23,15 @@ def save_pnml(model: PetriNet, file: str = "model.pnml") -> None:
     """Writes the model as PNML (ProM, WoPeD and PM4Py read it)."""
     from ...mining.pnml import write_pnml
     write_pnml(model, _target(file))
+    flow.note(f"Wrote {file}")
+
+
+@box(name="Save as BPMN", group="Output")
+def save_bpmn(model: BPMN, file: str = "model.bpmn") -> None:
+    """Writes the model as BPMN 2.0 XML with a diagram (Camunda Modeler,
+    bpmn.io and Signavio open it)."""
+    from ...mining.bpmn import write_bpmn
+    write_bpmn(model, _target(file))
     flow.note(f"Wrote {file}")
 
 

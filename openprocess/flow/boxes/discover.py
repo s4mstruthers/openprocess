@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 from ... import flow
+from ...mining.bpmn import BPMN, bpmn_to_petri_net, petri_net_to_bpmn, tree_to_bpmn as _tree_to_bpmn
 from ...mining.dfg import DFG, discover_dfg
 from ...mining.discovery import alpha as alpha_module
 from ...mining.discovery.heuristics import heuristics_net
@@ -60,6 +61,41 @@ def inductive_tree(log: EventLog, noise: float = 0.0) -> ProcessTree:
 def tree_to_net(tree: ProcessTree) -> PetriNet:
     """Translates a process tree into a sound WF-net (block by block)."""
     return to_petri_net(tree)
+
+
+@box(name="Tree to BPMN", group="Discover")
+def tree_to_bpmn(tree: ProcessTree) -> BPMN:
+    """Translates a process tree into a BPMN model, block by block: a
+    sequence is a chain, a choice exclusive gateways, a parallel block
+    parallel gateways, a loop exclusive gateways with a flow back, and τ an
+    empty flow."""
+    model = _tree_to_bpmn(tree)
+    flow.note(model.summary())
+    return model
+
+
+@box(name="BPMN to net", group="Discover")
+def bpmn_to_net(model: BPMN) -> PetriNet:
+    """The Petri net semantics of a BPMN model (Dijkman, Dumas & Ouyang,
+    2008): tasks become transitions, sequence flows places, parallel
+    gateways silent transitions, exclusive gateways places, the start event
+    the source place and the end event the sink place."""
+    net = bpmn_to_petri_net(model)
+    flow.note(net.summary())
+    for warning in model.warnings:
+        flow.note(f"Warning: {warning}")
+    return net
+
+
+@box(name="Net to BPMN", group="Discover")
+def net_to_bpmn(net: PetriNet) -> BPMN:
+    """A BPMN model of a WF-net: transitions become tasks (with parallel
+    gateways where they split or join), places with several producers or
+    consumers exclusive gateways, and silent steps plain flows. Exact for
+    free-choice nets, the kind the Inductive Miner produces."""
+    model = petri_net_to_bpmn(net)
+    flow.note(model.summary())
+    return model
 
 
 @box(name="Heuristics Miner", group="Discover")

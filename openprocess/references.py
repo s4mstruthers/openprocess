@@ -114,6 +114,11 @@ REFERENCES: tuple[Reference, ...] = (
     Reference("xes", "IEEE Standard for eXtensible Event Stream (XES) for Achieving "
               "Interoperability in Event Logs and Event Streams. IEEE Std 1849-2016 "
               "(revised as IEEE Std 1849-2023).", "https://xes-standard.org"),
+    Reference("bpmn", "OMG. *Business Process Model and Notation (BPMN), Version 2.0*. Object "
+              "Management Group, formal/2011-01-03, 2011.", "https://www.omg.org/spec/BPMN/2.0/"),
+    Reference("dijkman2008", "R.M. Dijkman, M. Dumas and C. Ouyang. *Semantics and analysis of business "
+              "process models in BPMN*. Information and Software Technology 50(12):1281–1294, 2008.",
+              "10.1016/j.infsof.2008.02.006"),
     Reference("pnml", "ISO/IEC 15909-2:2011. *Systems and software engineering — High-level "
               "Petri nets — Part 2: Transfer format*."),
     Reference("cpntools", "CPN Tools and its model file format (`.cpn`)."),
@@ -229,6 +234,9 @@ TOPICS: tuple[tuple[str, tuple[Topic, ...]], ...] = (
         Topic("XES event logs", "Reading and writing `.xes` and `.xes.gz`.", ("xes",),
               "openprocess.mining.xes"),
         Topic("PNML Petri nets", "Reading and writing `.pnml`.", ("pnml",), "openprocess.mining.pnml"),
+        Topic("BPMN models", "Reading and writing `.bpmn` (BPMN 2.0 XML); a process tree as BPMN, and "
+              "the Petri net semantics of a BPMN model and the way back.", ("bpmn", "dijkman2008"),
+              "openprocess.mining.bpmn"),
         Topic("CPN Tools models", "Reading and writing `.cpn`.", ("cpntools", "jensen2009"),
               "openprocess.io"),
         Topic("Dotted chart", "Events as dots over time, per case or per resource.",

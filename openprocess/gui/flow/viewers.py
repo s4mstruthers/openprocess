@@ -37,12 +37,12 @@ from ...flow.box import BoxSpec, Called, Setting, algorithm_calls, clean_path
 from ...flow.explain import Explanation
 from ...flow.runner import Result
 from ...flow.sweep import Sweep, is_sweep
-from ...flow.types import (OCDFG, OCEL, AlignmentResult, CPNet, DFG, Dataset, EventLog, Figure, Footprint, PetriNet,
+from ...flow.types import (BPMN, OCDFG, OCEL, AlignmentResult, CPNet, DFG, Dataset, EventLog, Figure, Footprint, PetriNet,
                            Predictions, Predictor, ProcessTree, Regions, ReplayResult, Scores, SimpleLog,
                            Table, Text, TransitionSystem)
 from .. import theme
 from ..studio import style
-from ..studio.graph_builders import dfg_specs, petri_net_specs
+from ..studio.graph_builders import bpmn_specs, dfg_specs, petri_net_specs
 from ..studio.graph_view import GraphView
 from ..studio.widgets import Card, StatTile, button, flow, footprint_table, hbox, label, scroll, vbox
 
@@ -303,6 +303,25 @@ def result_widget(value, page=None, node=None) -> QWidget:
         formula = label(tree_formula(value), wrap=True)
         formula.setTextFormat(Qt.RichText)
         add(formula)
+    elif isinstance(value, BPMN):
+        nodes, edges, positions = bpmn_specs(value)
+        ids = {n.id for n in nodes}
+        if node is not None and node.layout and ids <= set(node.layout):
+            positions = {k: v for k, v in node.layout.items() if k in ids}     # as the user tidied it
+        view = _graph(nodes, edges, positions, layer_gap=56, movable=page is not None and node is not None)
+        add(view)
+        if page is not None and node is not None:
+            def bpmn_tidied(_id: str, _x: float, _y: float, graph=view.graph, n=node) -> None:
+                n.layout = graph.positions()
+                page.layout_tidied()
+            view.graph.node_moved.connect(bpmn_tidied)
+        add(label(value.summary() + (f" · {value.info['algorithm']}" if value.info.get("algorithm") else ""),
+                  "muted", wrap=True))
+        for warning in value.warnings[:6]:
+            add(label(warning, "muted", wrap=True))
+        add(label("× is an exclusive gateway (one path), + a parallel gateway (every path). "
+                  "BPMN to net gives the Petri net semantics; Save as BPMN writes a file other tools open.",
+                  "muted", wrap=True))
     elif isinstance(value, OCEL):
         counts = value.counts_by_type()
         tiles = hbox(StatTile("Events", f"{len(value):,}"), StatTile("Activities", f"{len(value.activities):,}"),
@@ -969,7 +988,7 @@ class SettingsWidget(QWidget):
         kinds = []
         for port in self.spec.outputs:
             for cls, kind in ((EventLog, "log"), (OCEL, "ocel"), (PetriNet, "petri"), (CPNet, "cpn"),
-                              (TransitionSystem, "ts")):
+                              (TransitionSystem, "ts"), (BPMN, "bpmn")):
                 if port.type is cls:
                     kinds.append(kind)
         return tuple(kinds)
@@ -997,7 +1016,7 @@ class SettingsWidget(QWidget):
         by_kind = {"log": "Event logs (*.xes *.xes.gz *.gz *.csv *.txt)",
                    "ocel": "Object-centric logs (*.jsonocel *.json)",
                    "petri": "Petri nets (*.pnml)", "cpn": "Coloured Petri nets (*.cpn)",
-                   "ts": "Transition systems (*.txt)"}
+                   "bpmn": "BPMN models (*.bpmn)", "ts": "Transition systems (*.txt)"}
         kinds = self._kinds() or tuple(by_kind)
         return ";;".join([by_kind[k] for k in kinds] + ["All files (*)"])
 

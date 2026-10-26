@@ -38,6 +38,7 @@ KINDS = {
     ".xes.gz": "log",
     ".csv": "log",
     ".pnml": "petri",
+    ".bpmn": "bpmn",
     ".cpn": "cpn",
     ".cpnflow": "workflow",
     ".jsonocel": "ocel",
@@ -83,7 +84,7 @@ FORBIDDEN_CHARACTERS = set('/\\:*?"<>|')
 
 
 def file_kind(path: Path) -> str | None:
-    """``"log"``, ``"petri"``, ``"cpn"``, ``"ts"`` or ``None`` for a file the app cannot open."""
+    """``"log"``, ``"petri"``, ``"bpmn"``, ``"cpn"``, ``"ts"`` or ``None`` for a file the app cannot open."""
     name = path.name.lower()
     if name.endswith(".xes.gz"):
         return KINDS[".xes.gz"]

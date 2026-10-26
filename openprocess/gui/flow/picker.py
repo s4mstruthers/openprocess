@@ -33,7 +33,7 @@ MAX_LIST_HEIGHT = 460
 FILE_LIMIT = 6
 #: The input box for each kind of file in the folder (see workspace.file_kind).
 INPUT_BOXES = {"log": "open_log", "ocel": "open_ocel", "petri": "open_net", "cpn": "open_cpn",
-               "ts": "open_transition_system", "typed": "typed_log"}
+               "bpmn": "open_bpmn", "ts": "open_transition_system", "typed": "typed_log"}
 
 
 def input_box_for(library: Library, kind: str | None) -> str | None:

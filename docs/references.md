@@ -13,7 +13,7 @@ Where OpenProcess's notation and algorithms come from. Each topic names the work
 - **Process trees** — The operators $\rightarrow$ (sequence), $\times$ (exclusive choice), $\wedge$ (parallel) and $\circlearrowleft$ (loop), and $\tau$ for a silent step. [4], [1] *(`openprocess.mining.processtree`)*
 - **Transition systems and regions** — $TS = (S, E, T, s_{in})$; a region entered, exited or not crossed by each event; generalised excitation regions $GER(e)$ and pre-/post-regions. [21], [9], [1] *(`openprocess.mining.transition_system, openprocess.mining.regions`)*
 - **Alignments** — Moves $(a, a)$, $(a, \gg)$ and $(\gg, a)$, with the standard cost function. [12], [14] *(`openprocess.mining.conformance.alignments`)*
-- **Coloured Petri nets and CPN ML** — Colour sets, variables, arc inscriptions, guards and timed tokens as in CPN Tools. [23], [26] *(`openprocess.ml, openprocess.model, openprocess.sim`)*
+- **Coloured Petri nets and CPN ML** — Colour sets, variables, arc inscriptions, guards and timed tokens as in CPN Tools. [23], [28] *(`openprocess.ml, openprocess.model, openprocess.sim`)*
 
 ## Discovery
 
@@ -42,10 +42,11 @@ Where OpenProcess's notation and algorithms come from. Each topic names the work
 ## Files and pictures
 
 - **XES event logs** — Reading and writing `.xes` and `.xes.gz`. [24] *(`openprocess.mining.xes`)*
-- **PNML Petri nets** — Reading and writing `.pnml`. [25] *(`openprocess.mining.pnml`)*
-- **CPN Tools models** — Reading and writing `.cpn`. [26], [23] *(`openprocess.io`)*
+- **PNML Petri nets** — Reading and writing `.pnml`. [27] *(`openprocess.mining.pnml`)*
+- **BPMN models** — Reading and writing `.bpmn` (BPMN 2.0 XML); a process tree as BPMN, and the Petri net semantics of a BPMN model and the way back. [25], [26] *(`openprocess.mining.bpmn`)*
+- **CPN Tools models** — Reading and writing `.cpn`. [28], [23] *(`openprocess.io`)*
 - **Dotted chart** — Events as dots over time, per case or per resource. [11] *(`openprocess.gui.studio.dotted_chart`)*
-- **Layered graph layout** — How discovered models and graphs are drawn. [27] *(`openprocess.mining.layout`)*
+- **Layered graph layout** — How discovered models and graphs are drawn. [29] *(`openprocess.mining.layout`)*
 
 ## Works cited
 
@@ -73,6 +74,8 @@ Where OpenProcess's notation and algorithms come from. Each topic names the work
 22. A. Ehrenfeucht and G. Rozenberg. *Partial (Set) 2-Structures. Part I: Basic Notions and the Representation Problem*, Acta Informatica 27(4):315–342, 1990; *Part II: State Spaces of Concurrent Systems*, Acta Informatica 27(4):343–368, 1990.
 23. K. Jensen and L.M. Kristensen. *Coloured Petri Nets: Modelling and Validation of Concurrent Systems*. Springer, 2009. <https://doi.org/10.1007/b95112>
 24. IEEE Standard for eXtensible Event Stream (XES) for Achieving Interoperability in Event Logs and Event Streams. IEEE Std 1849-2016 (revised as IEEE Std 1849-2023). <https://xes-standard.org>
-25. ISO/IEC 15909-2:2011. *Systems and software engineering — High-level Petri nets — Part 2: Transfer format*.
-26. CPN Tools and its model file format (`.cpn`).
-27. K. Sugiyama, S. Tagawa and M. Toda. *Methods for Visual Understanding of Hierarchical System Structures*. IEEE Transactions on Systems, Man, and Cybernetics 11(2):109–125, 1981. <https://doi.org/10.1109/TSMC.1981.4308636>
+25. OMG. *Business Process Model and Notation (BPMN), Version 2.0*. Object Management Group, formal/2011-01-03, 2011. <https://www.omg.org/spec/BPMN/2.0/>
+26. R.M. Dijkman, M. Dumas and C. Ouyang. *Semantics and analysis of business process models in BPMN*. Information and Software Technology 50(12):1281–1294, 2008. <https://doi.org/10.1016/j.infsof.2008.02.006>
+27. ISO/IEC 15909-2:2011. *Systems and software engineering — High-level Petri nets — Part 2: Transfer format*.
+28. CPN Tools and its model file format (`.cpn`).
+29. K. Sugiyama, S. Tagawa and M. Toda. *Methods for Visual Understanding of Hierarchical System Structures*. IEEE Transactions on Systems, Man, and Cybernetics 11(2):109–125, 1981. <https://doi.org/10.1109/TSMC.1981.4308636>
