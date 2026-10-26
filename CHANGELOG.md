@@ -20,9 +20,11 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
   window for 13 s, and now writes it in the background, straight from the
   log's columns, in 3 s, counting the cases in the status bar (the log is
   that file at once); dragging the process map's sliders redraws when you
-  let go, as the Discover tab does; and switching the classifier back to
-  one you looked at before costs nothing (the Cases tab is kept, with the
-  variant numbers updated).
+  let go, as the Discover tab does, and the map itself is worked out in a
+  fifth of the time; the overview's figures and the time filter are worked
+  out from the log's columns at once (with numpy); and switching the
+  classifier back to one you looked at before costs nothing (the Cases tab
+  is kept, with the variant numbers updated).
 - **Edits to a large log were not seen by the views.** Renaming an activity
   or changing a cell in *Edit…* on a log read into columns changed the
   saved file but not the overview, the variants or the process map, which

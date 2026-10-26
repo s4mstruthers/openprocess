@@ -22,6 +22,8 @@ from collections.abc import MutableSequence
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterator
 
+import numpy as np
+
 #: Standard keys kept in typed arrays; everything else goes to ``extra``.
 KEY_NAME = "concept:name"
 KEY_TIME = "time:timestamp"
@@ -210,20 +212,53 @@ class ColumnStore:
         return Trace(self.case_attributes(case),
                      [Event(self.event_attributes(i)) for i in range(start, end)])
 
+    # -- as numpy arrays (views of the same memory; nothing is copied) --------------
+    @property
+    def micros_array(self) -> np.ndarray:
+        return as_array(self.micros, np.int64)
+
+    @property
+    def offsets_array(self) -> np.ndarray:
+        return as_array(self.offsets, np.int64)
+
+    def case_of_event(self) -> np.ndarray:
+        """Each event's case index."""
+        offsets = self.offsets_array
+        return np.repeat(np.arange(self.case_count), np.diff(offsets))
+
+    def case_spans(self) -> tuple[np.ndarray, np.ndarray]:
+        """Per case, the event indices of its earliest and latest timestamp
+        (-1 where it has none): one pass over the arrays, kept."""
+        spans = getattr(self, "_spans", None)
+        if spans is None or len(spans[0]) != self.case_count:
+            micros, offsets = self.micros_array, self.offsets_array
+            count, n = self.case_count, len(micros)
+            low = np.full(count, -1, dtype=np.int64)
+            high = np.full(count, -1, dtype=np.int64)
+            if n and count:
+                has_time = micros != NO_TIME
+                starts = offsets[:-1]
+                nonempty = np.diff(offsets) > 0
+                # The earliest: the smallest stamp per case (NO_TIME masked out), then
+                # the first event carrying it; the latest likewise.
+                big = np.iinfo(np.int64).max
+                for target, values, pick in ((low, np.where(has_time, micros, big), np.minimum),
+                                             (high, micros, np.maximum)):
+                    best = np.full(count, big if pick is np.minimum else NO_TIME, dtype=np.int64)
+                    best[nonempty] = pick.reduceat(values, starts[nonempty])
+                    hit = (values == np.repeat(best, np.diff(offsets))) & has_time
+                    where = np.where(hit, np.arange(n), n)
+                    first = np.full(count, n, dtype=np.int64)
+                    first[nonempty] = np.minimum.reduceat(where, starts[nonempty])
+                    target[first < n] = first[first < n]
+            spans = self._spans = (low, high)
+        return spans
+
     def span(self, case: int) -> tuple[int, int] | None:
         """The event indices of a case's earliest and latest timestamp (None:
         it has none), read from the array without building an event."""
-        micros, start, end = self.micros, self.offsets[case], self.offsets[case + 1]
-        low = high = None
-        for i in range(start, end):
-            value = micros[i]
-            if value == NO_TIME:
-                continue
-            if low is None or value < micros[low]:
-                low = i
-            if high is None or value > micros[high]:
-                high = i
-        return None if low is None else (low, high)
+        low, high = self.case_spans()
+        return None if low[case] < 0 else (int(low[case]), int(high[case]))
 
     def column_text(self, key: str) -> list[str | None]:
         """Every event's value of one attribute as text (None where absent),
@@ -324,8 +359,46 @@ class ColumnStore:
             new.extra = {key: [] for key in self.extra}
         return new
 
+    def accepted_mask(self, lifecycles: frozenset[str] | None) -> np.ndarray | None:
+        """Per event, whether a classifier keeping ``lifecycles`` keeps it (None: all)."""
+        if lifecycles is None:
+            return None
+        wanted = {v.lower() for v in lifecycles}
+        by_code = np.array([v.lower() in wanted for v in self.lifecycle.values] + [True], dtype=bool)
+        codes = as_array(self.lifecycle.codes, np.int32)
+        return by_code[np.where(codes < 0, len(by_code) - 1, codes)]
+
+    def label_codes(self, keys: tuple[str, ...]) -> tuple[np.ndarray, list[str]]:
+        """Every event's label under ``keys`` as a code into the returned table
+        (lifecycles not applied): the labels as small integers."""
+        codes = {KEY_NAME: self.activity, KEY_LIFECYCLE: self.lifecycle,
+                 KEY_RESOURCE: self.resource}.get(keys[0]) if len(keys) == 1 else None
+        if codes is not None:
+            table = list(codes.values) + [""]
+            raw = as_array(codes.codes, np.int32)
+            return np.where(raw < 0, len(table) - 1, raw).astype(np.int64), table
+        labels = self.event_labels(keys)
+        index: dict[str, int] = {}
+        out = np.fromiter((index.setdefault(label, len(index)) for label in labels),
+                          dtype=np.int64, count=len(labels))
+        return out, list(index)
+
     def sequences(self, keys: tuple[str, ...], lifecycles: frozenset[str] | None) -> list[tuple[str, ...]]:
         """Activity sequences under a classifier, straight from the arrays."""
+        if len(keys) == 1 and keys[0] in (KEY_NAME, KEY_LIFECYCLE, KEY_RESOURCE):
+            codes, table = self.label_codes(keys)
+            offsets = self.offsets_array
+            mask = self.accepted_mask(lifecycles)
+            if mask is not None:
+                codes = codes[mask]
+                kept = np.zeros(self.case_count, dtype=np.int64)
+                nonempty = np.diff(offsets) > 0
+                if len(mask):
+                    kept[nonempty] = np.add.reduceat(mask.astype(np.int64), offsets[:-1][nonempty])
+                offsets = np.concatenate(([0], np.cumsum(kept)))
+            labels = np.asarray(table, dtype=object)[codes].tolist()
+            bounds = offsets.tolist()
+            return [tuple(labels[a:b]) for a, b in zip(bounds, bounds[1:])]
         activity, lifecycle, resource = self.activity, self.lifecycle, self.resource
         columns = []
         for key in keys:
@@ -363,6 +436,24 @@ class ColumnStore:
 
 _STANDARD = frozenset((KEY_NAME, KEY_TIME, KEY_LIFECYCLE, KEY_RESOURCE))
 NO_TIME = -(1 << 62)
+
+
+def as_array(values: array, dtype) -> np.ndarray:
+    """A numpy view of an ``array.array`` (no copy; empty arrays have no buffer
+    to view, so those become an empty numpy array)."""
+    if len(values) == 0:
+        return np.zeros(0, dtype=dtype)
+    return np.frombuffer(values, dtype=dtype)
+
+
+def to_array(values: np.ndarray, typecode: str) -> array:
+    """An ``array.array`` holding a numpy array's values (one copy, in C)."""
+    out = array(typecode)
+    out.frombytes(np.ascontiguousarray(values, dtype=_DTYPES[typecode]).tobytes())
+    return out
+
+
+_DTYPES = {"i": np.int32, "q": np.int64}
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 _EPOCH_ORDINAL = _EPOCH.toordinal()
 _DAY = 86_400_000_000

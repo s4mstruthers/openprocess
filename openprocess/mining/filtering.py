@@ -34,6 +34,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 
+import numpy as np
+
 from .log import KEY_NAME, Classifier, EventLog, Trace
 
 TIME_MODES = ("contained", "started", "intersecting")
@@ -121,6 +123,22 @@ def filter_time_frame(log: EventLog, start: datetime, end: datetime,
         start = start.replace(tzinfo=timezone.utc)
     if end.tzinfo is None:
         end = end.replace(tzinfo=timezone.utc)
+    if log.columnar:                              # the cases' bounds compared as arrays
+        from .columns import _micros
+        store = log.traces.store
+        low, high = store.case_spans()
+        micros = store.micros_array
+        timed = low >= 0
+        first = micros[np.where(timed, low, 0)]
+        last = micros[np.where(timed, high, 0)]
+        lo, hi = _micros(start), _micros(end)
+        if mode == "contained":
+            keep = (lo <= first) & (last <= hi)
+        elif mode == "started":
+            keep = (lo <= first) & (first <= hi)
+        else:
+            keep = (first <= hi) & (last >= lo)
+        return _keep(log, np.flatnonzero(keep & timed).tolist())
     kept = []
     for index, span in enumerate(_spans(log)):
         if span is None:

@@ -319,3 +319,35 @@ def test_the_editor_opens_a_large_log_without_copying_it_and_marks_its_edits(app
     document.replace_log(dialog.new_log)
     assert "Renamed" in {a.name for a in document.summary.activities}
     assert "Renamed" in xes_string(document.log)
+
+
+# -- the numpy paths give what the object paths give -------------------------------
+@pytest.mark.parametrize("classifier", [BY_NAME, BY_NAME_COMPLETE, BY_NAME_LIFECYCLE,
+                                        __import__("openprocess.mining.log", fromlist=["Classifier"])
+                                        .Classifier("resource + name", ("org:resource", "concept:name"))])
+def test_the_dfg_and_the_spans_from_the_arrays_are_those_from_the_objects(classifier):
+    plain, columns = read_xes(WILMA, columnar=False), columnar()
+    a, b = discover_dfg(plain, classifier), discover_dfg(columns, classifier)
+    assert (a.activities, a.edges, a.start, a.end, a.trace_count, a.empty_traces) == \
+        (b.activities, b.edges, b.start, b.end, b.trace_count, b.empty_traces)
+    assert a.durations == b.durations
+    assert not any(columns.traces._built)
+    x, y = summarise(plain, classifier), summarise(columns, classifier)
+    assert (x.start, x.end, x.case_durations) == (y.start, y.end, y.case_durations)
+    assert columns.sequences(classifier) == plain.sequences(classifier)
+
+
+def test_case_spans_handle_cases_without_timestamps_and_empty_cases():
+    from openprocess.mining.columns import ColumnStore
+    from openprocess.mining.log import KEY_NAME, KEY_TIME
+    from datetime import datetime, timezone
+    store = ColumnStore()
+    stamp = lambda h: datetime(2024, 1, 1, h, tzinfo=timezone.utc)
+    store.add_event({KEY_NAME: "a", KEY_TIME: stamp(9)}); store.add_event({KEY_NAME: "b", KEY_TIME: stamp(8)})
+    store.add_event({KEY_NAME: "c", KEY_TIME: stamp(9)}); store.end_case({KEY_NAME: "c1"})
+    store.end_case({KEY_NAME: "empty"})
+    store.add_event({KEY_NAME: "a"}); store.end_case({KEY_NAME: "no time"})
+    store.add_event({KEY_NAME: "a"}); store.add_event({KEY_NAME: "b", KEY_TIME: stamp(7)}); store.end_case({KEY_NAME: "c4"})
+    assert [store.span(i) for i in range(4)] == [(1, 0), None, None, (5, 5)]   # ties: the first event
+    assert store.sequences((KEY_NAME,), None) == [("a", "b", "c"), (), ("a",), ("a", "b")]
+    assert store.sequences((KEY_NAME,), frozenset({"complete"})) == [("a", "b", "c"), (), ("a",), ("a", "b")]

@@ -287,14 +287,15 @@ def _time_range(log):
     """The earliest and latest timestamp of a log (None, None: it has none);
     from the arrays of a columnar log."""
     if log.columnar:
+        import numpy as np
         from ...mining.columns import NO_TIME
         store = log.traces.store
-        micros = store.micros
-        if not micros or max(micros) == NO_TIME:
+        micros = store.micros_array
+        timed = micros != NO_TIME
+        if not timed.any():
             return None, None
-        low = min(micros)
-        if low == NO_TIME:
-            low = min(value for value in micros if value != NO_TIME)
-        return store.timestamp(micros.index(low)), store.timestamp(micros.index(max(micros)))
+        where = np.flatnonzero(timed)
+        values = micros[where]
+        return store.timestamp(int(where[np.argmin(values)])), store.timestamp(int(where[np.argmax(values)]))
     stamps = [e.timestamp for t in log for e in t if e.timestamp is not None]
     return (min(stamps), max(stamps)) if stamps else (None, None)

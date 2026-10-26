@@ -173,27 +173,47 @@ def discover_dfg(log: EventLog | SimpleLog, classifier: Classifier | None = None
 
 
 def _dfg_from_columns(log: EventLog, classifier: Classifier) -> DFG:
-    """The same counts and durations, from a columnar log's arrays."""
+    """The same counts and durations, from a columnar log's arrays at once:
+    the labels as codes, the pairs of events that follow each other within
+    a case, their counts and the time between them, grouped per edge."""
+    import numpy as np
     from .columns import NO_TIME
     store = log.traces.store
-    dfg = DFG()
-    durations: dict[tuple[str, str], list[float]] = defaultdict(list)
-    sequences = store.sequences(classifier.keys, classifier.lifecycles)
-    wanted = None if classifier.lifecycles is None else {v.lower() for v in classifier.lifecycles}
-    lifecycle, micros, offsets = store.lifecycle, store.micros, store.offsets
-    for case, labels in enumerate(sequences):
-        dfg.trace_count += 1
-        if not labels:
-            dfg.empty_traces += 1
-            continue
-        dfg.activities.update(labels)
-        dfg.start[labels[0]] += 1
-        dfg.end[labels[-1]] += 1
-        kept = [i for i in range(offsets[case], offsets[case + 1])
-                if wanted is None or lifecycle.codes[i] < 0 or lifecycle.values[lifecycle.codes[i]].lower() in wanted]
-        for (a, b), (i, j) in zip(zip(labels, labels[1:]), zip(kept, kept[1:])):
-            dfg.edges[(a, b)] += 1
-            if micros[i] != NO_TIME and micros[j] != NO_TIME:
-                durations[(a, b)].append((micros[j] - micros[i]) / 1_000_000)
-    dfg.durations = dict(durations)
+    dfg = DFG(trace_count=store.case_count)
+    codes, table = store.label_codes(classifier.keys)
+    case = store.case_of_event()
+    micros = store.micros_array
+    mask = store.accepted_mask(classifier.lifecycles)
+    if mask is not None:
+        codes, case, micros = codes[mask], case[mask], micros[mask]
+    if len(codes) == 0:
+        dfg.empty_traces = store.case_count
+        return dfg
+    labels = np.asarray(table, dtype=object)
+    dfg.activities = Counter({str(labels[code]): int(n) for code, n in enumerate(np.bincount(codes)) if n})
+    # The first and last kept event of each case that has one.
+    boundary = np.flatnonzero(np.concatenate(([True], case[1:] != case[:-1])))
+    ends = np.concatenate((boundary[1:] - 1, [len(case) - 1]))
+    dfg.empty_traces = store.case_count - len(boundary)
+    for counter, where in ((dfg.start, boundary), (dfg.end, ends)):
+        for code, n in enumerate(np.bincount(codes[where], minlength=len(table))):
+            if n:
+                counter[str(labels[code])] = int(n)
+    # Directly-follows pairs: consecutive kept events of the same case.
+    same = case[1:] == case[:-1]
+    a, b = codes[:-1][same], codes[1:][same]
+    key = a * len(table) + b
+    unique, counts = np.unique(key, return_counts=True)
+    for k, n in zip(unique.tolist(), counts.tolist()):
+        dfg.edges[(str(labels[k // len(table)]), str(labels[k % len(table)]))] = n
+    before, after = micros[:-1][same], micros[1:][same]
+    timed = (before != NO_TIME) & (after != NO_TIME)
+    if timed.any():
+        seconds = (after[timed] - before[timed]) / 1_000_000
+        keys = key[timed]
+        order = np.argsort(keys, kind="stable")             # per edge, in the log's order
+        sorted_keys = keys[order]
+        starts = np.flatnonzero(np.concatenate(([True], sorted_keys[1:] != sorted_keys[:-1])))
+        for k, values in zip(sorted_keys[starts].tolist(), np.split(seconds[order], starts[1:])):
+            dfg.durations[(str(labels[k // len(table)]), str(labels[k % len(table)]))] = values.tolist()
     return dfg

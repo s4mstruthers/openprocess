@@ -104,12 +104,16 @@ class CasesModel(QAbstractTableModel):
         self.set_summary(summary)
         if log.columnar:
             store = log.traces.store
-            for case in range(store.case_count):
-                span = store.span(case)
-                start = store.timestamp(span[0]) if span else None
-                duration = (store.micros[span[1]] - store.micros[span[0]]) / 1e6 if span else None
-                self.rows.append((store.case_ids[case], store.offsets[case + 1] - store.offsets[case],
-                                  start, duration))
+            low, high = (bounds.tolist() for bounds in store.case_spans())
+            micros = store.micros
+            counts = store.offsets_array
+            counts = (counts[1:] - counts[:-1]).tolist()
+            for case, (case_id, count, first, last) in enumerate(zip(store.case_ids, counts, low, high)):
+                if first < 0:
+                    self.rows.append((case_id, count, None, None))
+                else:
+                    self.rows.append((case_id, count, store.timestamp(first),
+                                      (micros[last] - micros[first]) / 1e6))
         else:
             for trace in log.traces:
                 stamps = [e.timestamp for e in trace.events if e.timestamp]

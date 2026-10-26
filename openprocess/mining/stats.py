@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import statistics
 from collections import Counter
+
+import numpy as np
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -147,10 +149,7 @@ def _summarise_columns(log: EventLog, classifier: Classifier) -> LogSummary:
     starts: Counter = Counter()
     ends: Counter = Counter()
     lengths: Counter = Counter()
-    durations: list[timedelta] = []
-    first = last = None                          # event indices of the earliest and latest timestamp
     kept_events = 0
-    micros = store.micros
     for index, sequence in enumerate(log.sequences(classifier)):
         variant = by_sequence.get(sequence)
         if variant is None:
@@ -161,14 +160,19 @@ def _summarise_columns(log: EventLog, classifier: Classifier) -> LogSummary:
         if sequence:
             starts[sequence[0]] += 1
             ends[sequence[-1]] += 1
-        span = store.span(index)
-        if span is not None:
-            low, high = span
-            durations.append(timedelta(microseconds=micros[high] - micros[low]))
-            if first is None or micros[low] < micros[first]:
-                first = low
-            if last is None or micros[high] > micros[last]:
-                last = high
+    # Timestamps are taken from *all* events (see summarise): each case's
+    # earliest and latest, from the arrays at once.
+    low, high = store.case_spans()
+    timed = low >= 0
+    micros = store.micros_array
+    first = last = None                          # event indices of the earliest and latest timestamp
+    if timed.any():
+        low, high = low[timed], high[timed]
+        durations = [timedelta(microseconds=int(d)) for d in (micros[high] - micros[low]).tolist()]
+        first = int(low[np.argmin(micros[low])])
+        last = int(high[np.argmax(micros[high])])
+    else:
+        durations = []
     for variant in by_sequence.values():          # per variant, not per case: far fewer
         occurrences.update({a: n * variant.count for a, n in Counter(variant.sequence).items()})
         cases_with.update({a: variant.count for a in set(variant.sequence)})
