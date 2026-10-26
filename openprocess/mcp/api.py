@@ -595,7 +595,8 @@ def draw(what: str, *, fmt: str = "svg", output: str | None = None, kind: str = 
     lower = what.lower()
     title = Path(what).name if not is_notation(what) else "typed log"
     if kind == "auto":
-        kind = "net" if lower.endswith((".pnml", ".bpmn")) else "ts" if lower.endswith("ts.txt") else "dfg"
+        kind = "net" if lower.endswith(".pnml") else "bpmn" if lower.endswith(".bpmn") else \
+            "ts" if lower.endswith("ts.txt") else "dfg"
     if kind == "net":
         value = load_net(what) if lower.endswith((".pnml", ".bpmn")) else None
         if value is None:
@@ -639,7 +640,7 @@ def draw(what: str, *, fmt: str = "svg", output: str | None = None, kind: str = 
 def _bpmn_drawing(model):
     from ..mining.drawing import Drawing, Edge, Node
     drawing = Drawing(title=getattr(model, "name", "BPMN"))
-    for node in model.nodes.values() if isinstance(model.nodes, dict) else model.nodes:
+    for node in model.nodes.values():
         kind = {"start": "start", "end": "end", "task": "activity", "exclusive": "operator",
                 "parallel": "operator"}.get(node.kind, "activity")
         text = {"exclusive": "×", "parallel": "+"}.get(node.kind, node.name or "")
@@ -647,6 +648,39 @@ def _bpmn_drawing(model):
     for flow in model.flows:
         drawing.edges.append(Edge(flow.source, flow.target, text=getattr(flow, "name", "") or ""))
     return drawing
+
+
+def convert_model(source: str, output: str, *, overwrite: bool = False, client: str = "") -> dict:
+    """Convert a model between PNML and BPMN 2.0 (by the files' extensions):
+    a sound WF-net to BPMN (exact for free-choice nets), a BPMN model to its
+    Petri net semantics (Dijkman, Dumas & Ouyang 2008).  The BPMN file opens
+    in Camunda Modeler or bpmn.io as well as in OpenProcess."""
+    from ..mining import bpmn as bpmn_module
+    from ..mining.pnml import pnml_string
+    src, dst = Path(source).expanduser(), Path(output).expanduser()
+    target = _target(output, dst, overwrite)
+    if src.suffix.lower() == ".pnml" and dst.suffix.lower() == ".bpmn":
+        try:
+            model = bpmn_module.petri_net_to_bpmn(load_net(str(src)))
+        except ValueError as error:
+            raise ToolError(f"This net has no BPMN form: {error}") from None
+        content, summary = bpmn_module.bpmn_string(model), model.summary()
+        reverse = "petri_net_to_bpmn"
+    elif src.suffix.lower() == ".bpmn" and dst.suffix.lower() == ".pnml":
+        model = bpmn_module.read_bpmn(src)
+        net = bpmn_module.bpmn_to_petri_net(model)
+        content, summary = pnml_string(net), net.summary()
+        reverse = "bpmn_to_petri_net"
+    else:
+        raise ToolError("convert_model goes from .pnml to .bpmn or from .bpmn to .pnml")
+    change = changes.record(target, content, "convert_model", f"{src.name} as {dst.suffix[1:].upper()}",
+                            client=client)
+    out = {"file": str(target), "summary": summary, "warnings": list(getattr(model, "warnings", []) or []),
+           "change": change.id, "cite": citations("openprocess.mining.bpmn"),
+           "reproduce": f"from openprocess.mining.bpmn import {reverse}"}
+    if reverse == "bpmn_to_petri_net":
+        out["soundness"] = _soundness_dict(net)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -1022,6 +1056,24 @@ def cpn_state_space(path: str, max_nodes: int = 10_000) -> dict:
             "reproduce": f"openprocess statespace {_q(path)} --max-nodes {max_nodes}"}
 
 
+def cpn_performance(path: str, runs: int = 10, steps: int = 1000, warm_up: float = 0.0, seed: int = 0) -> dict:
+    """Waiting times, utilisation and throughput of a timed coloured net, over
+    ``runs`` seeded simulation runs (run k uses seed + k), with the warm-up
+    excluded; the definitions are in the result's notes."""
+    from ..sim.performance import analyse_performance
+    net = _cpn(path)
+    if net.errors:
+        raise ToolError("The model does not compile: " + "; ".join(str(e) for e in net.errors))
+    result = analyse_performance(net, runs=runs, steps=steps, warm_up=warm_up, seed=seed)
+    return {"columns": list(result.columns), "rows": result.rows(), "notes": list(result.notes),
+            "runs": [result.summary(run) for run in result.runs],
+            "cite": citations("openprocess.sim"),
+            "reproduce": {"python": "from openprocess import read_cpn\nfrom openprocess.sim.performance import "
+                                    f"analyse_performance\nanalyse_performance(read_cpn({str(path)!r}), runs={runs}, "
+                                    f"steps={steps}, warm_up={warm_up}, seed={seed})",
+                          "box": "Performance (Coloured nets) with the same settings"}}
+
+
 # ---------------------------------------------------------------------------
 # The app, references and the journal
 # ---------------------------------------------------------------------------
@@ -1082,7 +1134,8 @@ def journal(folder: str) -> dict:
 
 
 __all__ = ["ALGORITHMS", "ToolError", "analyse_net", "app_citation", "box_info", "build_workflow", "citations",
-           "compare_models", "compute_answer", "conformance", "cpn_info", "cpn_simulate", "cpn_state_space",
+           "compare_models", "compute_answer", "conformance", "convert_model", "cpn_info", "cpn_performance",
+           "cpn_simulate", "cpn_state_space",
            "definition", "discover", "dotted_chart", "draw", "exercise_guide", "filter_log", "import_exam",
            "is_notation", "journal", "list_boxes", "list_computes", "load_log", "load_net", "log_summary",
            "log_variants", "make_net", "open_in_studio", "references_list", "run_workflow", "studio_status",

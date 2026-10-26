@@ -52,6 +52,7 @@ tools (and, until version 0.7, went by the name CPNpy):
 - [For developers](#for-developers)
 - [Workflows](#workflows)
 - [Workflows from Python](#workflows-from-python)
+- [AI assistants](#ai-assistants)
 - [Limitations and roadmap](#limitations-and-roadmap)
 
 ---
@@ -977,6 +978,36 @@ the clone is older than the latest release. See
 `openprocess/gui/studio/updates.py`.
 
 ---
+
+## AI assistants
+
+OpenProcess comes with an **MCP server**, so Claude (Desktop or Code), Cursor
+or any other assistant that speaks the Model Context Protocol can use it the
+way you do:
+
+```bash
+pip install "openprocess[app,mcp]"
+openprocess mcp install claude-desktop      # or claude-code, cursor; "print" for the JSON
+```
+
+Then ask in your own words, naming your files: *"Summarise
+`Week 2/plane_boarding.xes` and show me its dotted chart"*, *"Discover a model
+with IMf at 0.2, check its fit and open it in OpenProcess"*, *"Why is
+`order_handling.pnml` unsound?"*, *"Write three exercises about token replay
+for Week 7"*. Its 30 tools cover logs, discovery, conformance, net analysis,
+diagrams, BPMN, workflows and boxes, exercise packs and coloured nets.
+
+What the assistant is told, before anything else: **cite** the works every
+algorithm follows (each result carries them), say **how to reproduce** each
+number, keep analyses as **workflows** with their record (`openprocess run
+FILE --check`), write a new algorithm as a **`@box`** in the folder's
+`boxes/`, work in **your folder**, and **open** what it made in OpenProcess.
+Every file it writes is journaled with a backup: the status bar says *AI
+changed N files · Review*, with a diff, *Undo* and *Keep* for each.
+
+The full guide is [openprocess/mcp/connecting.md](openprocess/mcp/connecting.md)
+(also *Help ▸ Connect an AI Assistant*). The same operations are plain Python
+in `openprocess.mcp.api`, without the MCP SDK.
 
 ## Limitations and roadmap
 

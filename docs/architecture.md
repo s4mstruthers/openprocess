@@ -58,6 +58,7 @@ flowchart BT
     gui_flow["<b>gui.flow</b><br/>the workflow canvas"]
     gui_learn["<b>gui.learn</b><br/>Learn mode"]
     cli["<b>cli</b><br/>the openprocess command"]
+    mcp["<b>mcp</b><br/>the MCP server for AI assistants"]
   end
   analysis --> io
   analysis --> ml
@@ -69,6 +70,7 @@ flowchart BT
   cli --> gui_studio
   cli --> io
   cli --> learn
+  cli --> mcp
   cli --> mining
   cli --> mining_discovery
   cli --> model
@@ -112,6 +114,7 @@ flowchart BT
   gui_studio --> gui_learn
   gui_studio --> io
   gui_studio --> learn
+  gui_studio --> mcp
   gui_studio --> mining
   gui_studio --> mining_conformance
   gui_studio --> mining_discovery
@@ -123,6 +126,16 @@ flowchart BT
   learn --> mining
   learn --> mining_conformance
   learn --> mining_discovery
+  mcp --> analysis
+  mcp --> core
+  mcp --> flow
+  mcp --> flow_boxes
+  mcp --> io
+  mcp --> learn
+  mcp --> mining
+  mcp --> mining_conformance
+  mcp --> mining_discovery
+  mcp --> sim
   mining --> core
   mining --> mining_conformance
   mining --> mining_discovery
@@ -206,6 +219,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 |---|---|
 | [`mining/__init__.py`](../openprocess/mining/__init__.py) | Process mining: event logs, discovery, conformance checking. |
 | [`mining/analysis.py`](../openprocess/mining/analysis.py) | Behavioural analysis of P/T nets: state spaces, properties, soundness. |
+| [`mining/bpmn.py`](../openprocess/mining/bpmn.py) | BPMN: the business process notation most practical models come in. |
 | [`mining/cases.py`](../openprocess/mining/cases.py) | Case by case: what the measuring boxes read from a log, fast on large ones. |
 | [`mining/columns.py`](../openprocess/mining/columns.py) | A columnar store for large logs: one array per attribute, no objects. |
 | [`mining/compare_nets.py`](../openprocess/mining/compare_nets.py) | Compare two Petri nets on behaviour, not on how they are drawn. |
@@ -213,6 +227,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`mining/definitions.py`](../openprocess/mining/definitions.py) | Mathematical definitions of every property the analyses report. |
 | [`mining/dfg.py`](../openprocess/mining/dfg.py) | Directly-follows graphs (DFGs) -- the "process map" of tools like Disco. |
 | [`mining/dotted.py`](../openprocess/mining/dotted.py) | The dots of a dotted chart, worked out without drawing them. |
+| [`mining/drawing.py`](../openprocess/mining/drawing.py) | Process diagrams as SVG, without Qt: nets, process maps, trees, state graphs. |
 | [`mining/filtering.py`](../openprocess/mining/filtering.py) | Filtering event logs: keep the part of the log you want to look at. |
 | [`mining/footprint.py`](../openprocess/mining/footprint.py) | Ordering relations and footprint matrices (van der Aalst, ch. 6.2 and 8.4). |
 | [`mining/invariants.py`](../openprocess/mining/invariants.py) | The incidence matrix, place invariants and transition invariants. |
@@ -281,6 +296,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`sim/__init__.py`](../openprocess/sim/__init__.py) |  |
 | [`sim/binding.py`](../openprocess/sim/binding.py) | Binding search: deciding which transitions can fire, and with what values. |
 | [`sim/export.py`](../openprocess/sim/export.py) | A simulation's firing history as an event log. |
+| [`sim/performance.py`](../openprocess/sim/performance.py) | Performance analysis of a timed coloured net: many seeded runs, and what they say about every transition and place. |
 | [`sim/simulator.py`](../openprocess/sim/simulator.py) | The simulation engine: firing transitions and advancing the clock. |
 
 ### `analysis` · CPN state space
@@ -315,8 +331,10 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 |---|---|
 | [`flow/__init__.py`](../openprocess/flow/__init__.py) | Workflows: boxes, their connections, and running them reproducibly. |
 | [`flow/box.py`](../openprocess/flow/box.py) | ``@box``: a Python function as a box on the workflow canvas. |
+| [`flow/changes.py`](../openprocess/flow/changes.py) | A journal of the files an assistant changes, so every change can be reviewed and undone. |
 | [`flow/convert.py`](../openprocess/flow/convert.py) | Converters between OpenProcess's types and other libraries' objects. |
 | [`flow/datasets.py`](../openprocess/flow/datasets.py) | Public event logs by name, with their fingerprints. |
+| [`flow/derivation.py`](../openprocess/flow/derivation.py) | A box's derivation (the *How* tab) as Markdown or LaTeX, for papers and notes. |
 | [`flow/explain.py`](../openprocess/flow/explain.py) | How a box got to its result: notes, intermediate values and steps. |
 | [`flow/figures.py`](../openprocess/flow/figures.py) | The key figure of a result: one number and a line, for a tile or a report. |
 | [`flow/history.py`](../openprocess/flow/history.py) | Undo and redo for a workflow, by snapshots. |
@@ -328,6 +346,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`flow/runner.py`](../openprocess/flow/runner.py) | Running a workflow: in order, only what changed, each box on its own. |
 | [`flow/script.py`](../openprocess/flow/script.py) | A workflow as a runnable Python script. |
 | [`flow/snapshots.py`](../openprocess/flow/snapshots.py) | Snapshots of an analysis: every finished run, kept, so two can be compared. |
+| [`flow/studio.py`](../openprocess/flow/studio.py) | Talking to a running OpenProcess Studio from Python: open a file, publish a box. |
 | [`flow/sweep.py`](../openprocess/flow/sweep.py) | Sweeps: run the boxes after a setting once per value. |
 | [`flow/types.py`](../openprocess/flow/types.py) | The types boxes exchange. |
 | [`flow/workflow.py`](../openprocess/flow/workflow.py) | A workflow: boxes, their settings and the connections between them. |
@@ -423,6 +442,8 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`gui/studio/petri_page.py`](../openprocess/gui/studio/petri_page.py) | The Petri net editor: draw a plain Petri net or WF-net and analyse it. |
 | [`gui/studio/provenance.py`](../openprocess/gui/studio/provenance.py) | Where a figure comes from: a *code* link on every card that computes something. |
 | [`gui/studio/regions_view.py`](../openprocess/gui/studio/regions_view.py) | Transition systems and their regions on screen. |
+| [`gui/studio/remote.py`](../openprocess/gui/studio/remote.py) | The app's command port: a local socket other programs hand things to. |
+| [`gui/studio/review.py`](../openprocess/gui/studio/review.py) | Reviewing what an assistant changed: a list, a diff, Keep or Undo. |
 | [`gui/studio/sidebar.py`](../openprocess/gui/studio/sidebar.py) | The sidebar's tree: open documents, files not open yet, and subfolders. |
 | [`gui/studio/spaces.py`](../openprocess/gui/studio/spaces.py) | The three spaces of the window: Mine, Model and Learn. |
 | [`gui/studio/style.py`](../openprocess/gui/studio/style.py) | Design tokens and the stylesheet for the Studio window. |
@@ -460,5 +481,15 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 |---|---|
 | [`cli.py`](../openprocess/cli.py) | Command-line interface: ``openprocess <command> [options]``. |
 
-170 modules.
+### `mcp` · the MCP server for AI assistants
+
+| Module | What it is |
+|---|---|
+| [`mcp/__init__.py`](../openprocess/mcp/__init__.py) | OpenProcess for AI assistants: an MCP server, and the plain API behind it. |
+| [`mcp/__main__.py`](../openprocess/mcp/__main__.py) | ``python -m openprocess.mcp``: the MCP server on stdio. |
+| [`mcp/api.py`](../openprocess/mcp/api.py) | What the MCP server does, as plain functions: no MCP SDK, no Qt in here. |
+| [`mcp/install.py`](../openprocess/mcp/install.py) | Connecting an assistant in one command: ``openprocess mcp install <client>``. |
+| [`mcp/server.py`](../openprocess/mcp/server.py) | The MCP server: OpenProcess's tools for Claude and other AI assistants. |
+
+183 modules.
 <!-- /generated -->

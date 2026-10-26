@@ -6,6 +6,61 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.13.0
+
+- **Connect Claude (or another AI assistant) to OpenProcess.** OpenProcess
+  now comes with an MCP server: `pip install "openprocess[app,mcp]"`, then
+  `openprocess mcp install claude-desktop` (or `claude-code`, `cursor`). Ask
+  in your own words: summarise a log, draw its dotted chart, discover a
+  model, check how well it fits, find out why a net is unsound, build an
+  analysis you can rerun, write a box of your own, or write exercises for
+  Learn whose answers the app checks. The assistant is told to cite the
+  works every algorithm follows, to say how to get each number again, to
+  save analyses as workflows with their record, and to open what it made in
+  OpenProcess. *Help ▸ Connect an AI Assistant* explains it.
+- **Review what an assistant changed.** Every file an assistant writes is
+  kept with a copy of what it replaced. While there are changes you have
+  not looked at, the status bar says *AI changed 3 files · Review*: a diff
+  for each, with *Undo* and *Keep*. It never gets in the way: the files are
+  there and open as usual.
+- **BPMN.** Open `.bpmn` files (from Camunda Modeler, bpmn.io, Signavio),
+  see them drawn, turn them into Petri nets to check them, and save a
+  discovered model or a process tree as BPMN. New boxes: *Open BPMN*,
+  *Save as BPMN*, *Tree to BPMN*, *BPMN to net*, *Net to BPMN*.
+- **Performance of a timed coloured net.** The *Performance* box runs a
+  timed net several times (seeded, with a warm-up) and reports throughput,
+  utilisation and waiting times per transition and place.
+- **Copy a derivation as Markdown or LaTeX.** The *How* tab has *Copy as
+  Markdown* and *Copy as LaTeX*: the α-algorithm's eight steps, the
+  Inductive Miner's cuts or a replay table, with the papers it follows, ready
+  for notes or a report.
+- **From a notebook to the app.** `workflow.open_in_studio()` opens a
+  workflow built in Python in the running app, and `my_box.publish()` adds a
+  box defined in a notebook to the open folder.
+- **The α-algorithm on wide choices.** A log where one activity is followed
+  by many alternatives (twenty, say) took minutes; it now takes a moment,
+  with the same net.
+- **More reliable results.** A PNML net saved without an initial marking
+  (by some tools) now starts in its source place; alignments used to score
+  it 0. A Heuristics net whose loop returns to the first activity is a
+  proper WF-net again. Alignments say plainly when a net's final marking
+  cannot be reached. The region miner says when its net has no single final
+  marking. Logs with times without a time zone no longer break the dotted
+  chart and the time filter.
+- **Learn.** Answers about the α-algorithm's places (`p({a},{b,e})`) can be
+  typed and checked; a multiple-choice question whose right option the app
+  works out (*Is the net sound? Yes / No*) is marked correctly; computes of
+  the form `box(check_fit).metrics.fitness` work on exercises with a net;
+  more mistakes in a sheet are caught by *openprocess exercises check*, which
+  now prints the answers the app works out beside your solutions.
+- **Terminating has a published source**: J. Desel, *Can a Single
+  Transition Stop an Entire Petri Net?* (ATAED 2019), instead of a course
+  lecture.
+- **Smaller things.** Running a workflow no longer runs the other Python
+  files in its folder (only `boxes/`). Box help shows *emphasis* instead of
+  asterisks. The Cases tab shows its Duration column. `openprocess run -o`
+  writes every result, and a sweep's values are checked like any setting.
+
 ## 0.12.2
 
 - **Figures keep their shape.** A figure in a box's Result was stretched to

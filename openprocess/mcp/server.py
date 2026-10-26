@@ -209,11 +209,19 @@ def build_server() -> MCPServer:
         "initial": {"i": 1}?, "final": {"o": 1}?}. A WF-net without markings gets [i] and [o]."""
         return api.make_net(spec, output, overwrite=overwrite, client=_client_name(ctx))
 
+    @server.tool(title="Convert between PNML and BPMN")
+    @_friendly
+    def convert_model(source: str, output: str, overwrite: bool = False, ctx: Context = None) -> dict:
+        """Convert a model by the files' extensions: a .pnml WF-net to .bpmn (BPMN 2.0 with a diagram, opens in
+        Camunda Modeler and bpmn.io; exact for free-choice nets), or a .bpmn model to its Petri net semantics
+        (.pnml) with a soundness check."""
+        return api.convert_model(source, output, overwrite=overwrite, client=_client_name(ctx))
+
     @server.tool(title="Draw a diagram")
     @_friendly
     def draw(what: str, fmt: str = "png", kind: str = "auto", mode: str = "frequency", output: str | None = None,
              overwrite: bool = False, ctx: Context = None) -> Any:
-        """A diagram: of a .pnml/.bpmn model (kind net), of a log's process map (kind dfg; mode frequency |
+        """A diagram: of a .pnml model (kind net) or a .bpmn model (kind bpmn), of a log's process map (kind dfg; mode frequency |
         performance) or Inductive Miner tree (kind tree), or of a transition system file (kind ts). fmt png
         returns an image you can look at; fmt svg returns the SVG text. output saves the file too."""
         result = api.draw(what, fmt=fmt, output=output, kind=kind, mode=mode, overwrite=overwrite,
@@ -328,6 +336,13 @@ def build_server() -> MCPServer:
     def cpn_state_space(path: str, max_nodes: int = 10000) -> dict:
         """The reachability graph and its report (bounds, dead and home markings, dead and live transitions)."""
         return api.cpn_state_space(path, max_nodes)
+
+    @server.tool(title="Performance of a timed coloured net")
+    @_friendly
+    def cpn_performance(path: str, runs: int = 10, steps: int = 1000, warm_up: float = 0.0, seed: int = 0) -> dict:
+        """Waiting times, utilisation and throughput per transition and place of a timed coloured net, over
+        seeded simulation runs (run k uses seed + k) with a warm-up excluded."""
+        return api.cpn_performance(path, runs, steps, warm_up, seed)
 
     # -- the app, references, the journal -------------------------------------------------
     @server.tool(title="Open in OpenProcess")

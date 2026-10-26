@@ -271,3 +271,15 @@ def test_install_writes_a_client_configuration(tmp_path, monkeypatch):
     assert data["mcpServers"]["openprocess"]["command"] and "Claude" in message
     assert target.with_suffix(".json.before-openprocess").is_file()
     assert '"openprocess"' in install.snippet()
+
+
+def test_bpmn_round_trip_and_cpn_performance(folder):
+    made = api.discover(str(folder / "log.txt"), "inductive")
+    as_bpmn = api.convert_model(made["file"], str(folder / "model.bpmn"))
+    assert Path(as_bpmn["file"]).read_text().count("bpmn:task") >= 5
+    back = api.convert_model(str(folder / "model.bpmn"), str(folder / "back.pnml"))
+    assert back["soundness"]["sound"] is True
+    assert api.compare_models(made["file"], back["file"])["equivalent"] is True
+    assert api.draw(str(folder / "model.bpmn"), fmt="svg")["svg"].startswith("<svg")
+    performance = api.cpn_performance(str(ROOT / "examples" / "timed_conveyor.cpn"), runs=2, steps=20)
+    assert performance["rows"] and "throughput" in performance["columns"]
