@@ -55,6 +55,8 @@ def region_miner(log: SimpleLog, direction: str = "prefix", representation: str 
     Raises ``ValueError`` when no net can be made (several initial states, or
     a transition system too large to search for regions).
     """
+    if not any(n > 0 for n in log.values()):
+        raise ValueError("The log is empty: there is nothing to discover a model from.")
     ts = transition_system_from_log(log, direction, representation, horizon)
     result = region_result(ts)
     if result.net is None:

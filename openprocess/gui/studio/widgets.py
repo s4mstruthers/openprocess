@@ -347,6 +347,11 @@ def status_for(value: bool | None) -> str:
     return "unknown" if value is None else ("good" if value else "critical")
 
 
+def property_status(name: str, value: bool | None) -> str:
+    """Like status_for, but a loop is no fault: not terminating shows as info."""
+    return "info" if name == "Terminating" and value is False else status_for(value)
+
+
 def fitness_status(value: float) -> str:
     """Traffic-light bands for a quality value in [0, 1]."""
     if value >= 0.95:

@@ -286,6 +286,8 @@ _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 def _micros(stamp: datetime) -> int:
+    if stamp.tzinfo is None:                      # a naive stamp counts as UTC, as the XES reader does
+        stamp = stamp.replace(tzinfo=timezone.utc)
     delta = stamp - _EPOCH
     return (delta.days * 86400 + delta.seconds) * 1_000_000 + delta.microseconds
 

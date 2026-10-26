@@ -37,12 +37,12 @@ from ...flow.box import BoxSpec, Called, Setting, algorithm_calls, clean_path
 from ...flow.explain import Explanation
 from ...flow.runner import Result
 from ...flow.sweep import Sweep, is_sweep
-from ...flow.types import (OCDFG, OCEL, AlignmentResult, CPNet, DFG, Dataset, EventLog, Figure, Footprint, PetriNet,
+from ...flow.types import (BPMN, OCDFG, OCEL, AlignmentResult, CPNet, DFG, Dataset, EventLog, Figure, Footprint, PetriNet,
                            Predictions, Predictor, ProcessTree, Regions, ReplayResult, Scores, SimpleLog,
                            Table, Text, TransitionSystem)
 from .. import theme
 from ..studio import style
-from ..studio.graph_builders import dfg_specs, petri_net_specs
+from ..studio.graph_builders import bpmn_specs, dfg_specs, petri_net_specs
 from ..studio.graph_view import GraphView
 from ..studio.widgets import Card, StatTile, button, flow, footprint_table, hbox, label, scroll, vbox
 
@@ -303,6 +303,25 @@ def result_widget(value, page=None, node=None) -> QWidget:
         formula = label(tree_formula(value), wrap=True)
         formula.setTextFormat(Qt.RichText)
         add(formula)
+    elif isinstance(value, BPMN):
+        nodes, edges, positions = bpmn_specs(value)
+        ids = {n.id for n in nodes}
+        if node is not None and node.layout and ids <= set(node.layout):
+            positions = {k: v for k, v in node.layout.items() if k in ids}     # as the user tidied it
+        view = _graph(nodes, edges, positions, layer_gap=56, movable=page is not None and node is not None)
+        add(view)
+        if page is not None and node is not None:
+            def bpmn_tidied(_id: str, _x: float, _y: float, graph=view.graph, n=node) -> None:
+                n.layout = graph.positions()
+                page.layout_tidied()
+            view.graph.node_moved.connect(bpmn_tidied)
+        add(label(value.summary() + (f" · {value.info['algorithm']}" if value.info.get("algorithm") else ""),
+                  "muted", wrap=True))
+        for warning in value.warnings[:6]:
+            add(label(warning, "muted", wrap=True))
+        add(label("× is an exclusive gateway (one path), + a parallel gateway (every path). "
+                  "BPMN to net gives the Petri net semantics; Save as BPMN writes a file other tools open.",
+                  "muted", wrap=True))
     elif isinstance(value, OCEL):
         counts = value.counts_by_type()
         tiles = hbox(StatTile("Events", f"{len(value):,}"), StatTile("Activities", f"{len(value.activities):,}"),
@@ -462,9 +481,11 @@ def result_widget(value, page=None, node=None) -> QWidget:
 # ---------------------------------------------------------------------------
 # How
 # ---------------------------------------------------------------------------
-def how_widget(explanation: Explanation, page=None, value=None) -> QWidget:
+def how_widget(explanation: Explanation, page=None, value=None, spec=None, title: str = "") -> QWidget:
     """The box's report in full, with *Step through* to play it one moment at
-    a time over a drawing of ``value`` (the box's result)."""
+    a time over a drawing of ``value`` (the box's result), and *Copy as
+    Markdown* / *LaTeX* for notes and papers (with the algorithm's sources
+    when ``spec`` is given)."""
     from .stepper import StepThrough, moments_of
     host = QWidget()
     layout = QVBoxLayout(host)
@@ -474,6 +495,21 @@ def how_widget(explanation: Explanation, page=None, value=None) -> QWidget:
         layout.addWidget(label("This box has nothing to add: its result is all there is.", "muted", wrap=True))
         return host
     t = style.tokens()
+    heading = title                      # (the loop over steps below reuses the name "title")
+
+    def copy_as(fmt: str) -> None:
+        from ...flow.derivation import derivation
+        text = derivation(explanation, value, heading, spec, fmt)
+        QApplication.clipboard().setText(text)
+        window = page.window() if page is not None and hasattr(page, "window") else None
+        if window is not None and hasattr(window, "statusBar"):
+            window.statusBar().showMessage(f"The derivation is on the clipboard as {fmt}"
+                                           + (", with the sources it follows" if spec is not None else ""), 6000)
+    copy_row = hbox(button("Copy as Markdown", lambda: copy_as("Markdown"),
+                           tooltip="The steps, notes and values as Markdown tables, with the sources the "
+                                   "algorithm follows: paste into notes, a README or a chat"),
+                    button("Copy as LaTeX", lambda: copy_as("LaTeX"),
+                           tooltip="The same as LaTeX (booktabs tables), with BibTeX for the sources"), None)
     full = QWidget()
     full.setObjectName("plain")
     full_layout = QVBoxLayout(full)
@@ -503,6 +539,7 @@ def how_widget(explanation: Explanation, page=None, value=None) -> QWidget:
         step_button.setObjectName("stepThrough")
         layout.addLayout(hbox(label(f"{len(moments_of(explanation))} moments: notes, steps and values, in the "
                                     "order the box reported them.", "muted", wrap=True), step_button))
+    layout.addLayout(copy_row)
     layout.addWidget(full)
     for entry in explanation.entries:
         if entry[0] == "note":
@@ -969,7 +1006,7 @@ class SettingsWidget(QWidget):
         kinds = []
         for port in self.spec.outputs:
             for cls, kind in ((EventLog, "log"), (OCEL, "ocel"), (PetriNet, "petri"), (CPNet, "cpn"),
-                              (TransitionSystem, "ts")):
+                              (TransitionSystem, "ts"), (BPMN, "bpmn")):
                 if port.type is cls:
                     kinds.append(kind)
         return tuple(kinds)
@@ -997,7 +1034,7 @@ class SettingsWidget(QWidget):
         by_kind = {"log": "Event logs (*.xes *.xes.gz *.gz *.csv *.txt)",
                    "ocel": "Object-centric logs (*.jsonocel *.json)",
                    "petri": "Petri nets (*.pnml)", "cpn": "Coloured Petri nets (*.cpn)",
-                   "ts": "Transition systems (*.txt)"}
+                   "bpmn": "BPMN models (*.bpmn)", "ts": "Transition systems (*.txt)"}
         kinds = self._kinds() or tuple(by_kind)
         return ";;".join([by_kind[k] for k in kinds] + ["All files (*)"])
 

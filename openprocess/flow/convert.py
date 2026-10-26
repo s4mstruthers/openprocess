@@ -18,8 +18,10 @@ import importlib
 import importlib.util
 from typing import Any, Callable
 
+from ..mining.bpmn import BPMN, bpmn_to_petri_net, petri_net_to_bpmn, tree_to_bpmn
 from ..mining.log import KEY_NAME, KEY_RESOURCE, KEY_TIME, EventLog, SimpleLog
 from ..mining.petrinet import PetriNet
+from ..mining.processtree import ProcessTree
 from .types import Figure, Table
 
 _converters: dict[tuple[str, str], Callable] = {}
@@ -255,6 +257,9 @@ register("pandas.core.series.Series", Table, _series_to_table)
 register("numpy.ndarray", Table, _ndarray_to_table)
 register("matplotlib.figure.Figure", Figure, _mpl_figure_to_figure)
 register(PetriNet, "pm4py", _petri_to_pm4py)
+register(BPMN, PetriNet, bpmn_to_petri_net)
+register(PetriNet, BPMN, petri_net_to_bpmn)
+register(ProcessTree, BPMN, tree_to_bpmn)
 register(tuple, "openprocess.mining.petrinet.PetriNet", _pm4py_to_petri)
 
 __all__ = ["can_convert", "convert", "converters", "register"]

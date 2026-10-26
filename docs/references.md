@@ -7,20 +7,20 @@ Where OpenProcess's notation and algorithms come from. Each topic names the work
 ## Notation
 
 - **Event logs as multisets of traces** — A log written as $L = [\langle a,b,c \rangle^3, \langle a,c \rangle]$: a multiset of traces, the exponent the number of cases. *Log from notation…* and `log.txt` files use it. [1] *(`openprocess.mining.log`)*
-- **Events, traces, classifiers and the XES attributes** — `concept:name`, `time:timestamp`, `org:resource` and `lifecycle:transition`, and classifiers that turn events into activity labels. [24], [1] *(`openprocess.mining.log, openprocess.mining.xes`)*
+- **Events, traces, classifiers and the XES attributes** — `concept:name`, `time:timestamp`, `org:resource` and `lifecycle:transition`, and classifiers that turn events into activity labels. [25], [1] *(`openprocess.mining.log, openprocess.mining.xes`)*
 - **Petri nets, markings and WF-nets** — $N = (P, T, F)$, markings as multisets of places, a WF-net's source place $i$ and sink place $o$, and $[i]$ / $[o]$ for its initial and final marking. [17], [18], [1] *(`openprocess.mining.petrinet`)*
 - **Footprint relations** — $a \rightarrow_L b$, $a \leftarrow_L b$, $a \parallel_L b$ and $a \#_L b$, derived from directly-follows $a >_L b$. [2], [1] *(`openprocess.mining.footprint`)*
 - **Process trees** — The operators $\rightarrow$ (sequence), $\times$ (exclusive choice), $\wedge$ (parallel) and $\circlearrowleft$ (loop), and $\tau$ for a silent step. [4], [1] *(`openprocess.mining.processtree`)*
-- **Transition systems and regions** — $TS = (S, E, T, s_{in})$; a region entered, exited or not crossed by each event; generalised excitation regions $GER(e)$ and pre-/post-regions. [21], [9], [1] *(`openprocess.mining.transition_system, openprocess.mining.regions`)*
+- **Transition systems and regions** — $TS = (S, E, T, s_{in})$; a region entered, exited or not crossed by each event; generalised excitation regions $GER(e)$ and pre-/post-regions. [22], [9], [1] *(`openprocess.mining.transition_system, openprocess.mining.regions`)*
 - **Alignments** — Moves $(a, a)$, $(a, \gg)$ and $(\gg, a)$, with the standard cost function. [12], [14] *(`openprocess.mining.conformance.alignments`)*
-- **Coloured Petri nets and CPN ML** — Colour sets, variables, arc inscriptions, guards and timed tokens as in CPN Tools. [23], [26] *(`openprocess.ml, openprocess.model, openprocess.sim`)*
+- **Coloured Petri nets and CPN ML** — Colour sets, variables, arc inscriptions, guards and timed tokens as in CPN Tools. [24], [29] *(`openprocess.ml, openprocess.model, openprocess.sim`)*
 
 ## Discovery
 
 - **α-algorithm** — The eight steps from $T_L$ to $\alpha(L)$, with $X_L$ and $Y_L$. [2], [3], [1] *(`openprocess.mining.discovery.alpha`)*
 - **Inductive Miner (IM) and IM – infrequent (IMf)** — Cuts, base cases and fall-throughs on the directly-follows graph; the strict sequence cut; IMf filters infrequent behaviour. [4], [5], [6] *(`openprocess.mining.discovery.inductive`)*
 - **Heuristics Miner** — Dependency measures $a \Rightarrow b$, length-one and length-two loops, and the thresholds. [7], [8], [1] *(`openprocess.mining.discovery.heuristics`)*
-- **State-based regions (two-phase discovery)** — A transition system from the log (prefix, postfix; sequence, multiset, set; a horizon), its minimal regions, and the synthesised net. [9], [3], [21], [22], [1] *(`openprocess.mining.discovery.state_regions`)*
+- **State-based regions (two-phase discovery)** — A transition system from the log (prefix, postfix; sequence, multiset, set; a horizon), its minimal regions, and the synthesised net. [9], [3], [22], [23], [1] *(`openprocess.mining.discovery.state_regions`)*
 - **Directly-follows graphs (process maps)** — Frequencies and times on the edges, and simplification. [10], [1] *(`openprocess.mining.dfg`)*
 - **ILP Miner and heuristics nets (optional)** — Provided by PM4Py when it is installed. [16] *(`openprocess.mining.pm4py_bridge`)*
 
@@ -35,17 +35,18 @@ Where OpenProcess's notation and algorithms come from. Each topic names the work
 
 - **Soundness of WF-nets** — Option to complete, proper completion, no dead transitions, and the short-circuited net $\overline{N}$. [17] *(`openprocess.mining.analysis`)*
 - **Free-choice, well-structured, S-coverable** — Structural properties and the handles behind a problem. [17], [20] *(`openprocess.mining.structure`)*
-- **Boundedness, liveness, deadlocks, reversibility** — Decided on the reachability graph, or the coverability graph for unbounded nets. [18], [19] *(`openprocess.mining.analysis`)*
+- **Boundedness, liveness, deadlocks, reversibility, termination** — Decided on the reachability graph, or the coverability graph for unbounded nets. A bounded net terminates iff its reachability graph has no cycle, and an unbounded net never does. [18], [19], [21] *(`openprocess.mining.analysis`)*
 - **Incidence matrix and invariants** — P- and T-invariants. [18] *(`openprocess.mining.invariants`)*
-- **CPN simulation and state spaces** — Bindings, enabling and the state space report. [23] *(`openprocess.sim, openprocess.analysis`)*
+- **CPN simulation and state spaces** — Bindings, enabling and the state space report. [24] *(`openprocess.sim, openprocess.analysis`)*
 
 ## Files and pictures
 
-- **XES event logs** — Reading and writing `.xes` and `.xes.gz`. [24] *(`openprocess.mining.xes`)*
-- **PNML Petri nets** — Reading and writing `.pnml`. [25] *(`openprocess.mining.pnml`)*
-- **CPN Tools models** — Reading and writing `.cpn`. [26], [23] *(`openprocess.io`)*
+- **XES event logs** — Reading and writing `.xes` and `.xes.gz`. [25] *(`openprocess.mining.xes`)*
+- **PNML Petri nets** — Reading and writing `.pnml`. [28] *(`openprocess.mining.pnml`)*
+- **BPMN models** — Reading and writing `.bpmn` (BPMN 2.0 XML); a process tree as BPMN, and the Petri net semantics of a BPMN model and the way back. [26], [27] *(`openprocess.mining.bpmn`)*
+- **CPN Tools models** — Reading and writing `.cpn`. [29], [24] *(`openprocess.io`)*
 - **Dotted chart** — Events as dots over time, per case or per resource. [11] *(`openprocess.gui.studio.dotted_chart`)*
-- **Layered graph layout** — How discovered models and graphs are drawn. [27] *(`openprocess.mining.layout`)*
+- **Layered graph layout** — How discovered models and graphs are drawn. [30] *(`openprocess.mining.layout`)*
 
 ## Works cited
 
@@ -69,10 +70,13 @@ Where OpenProcess's notation and algorithms come from. Each topic names the work
 18. T. Murata. *Petri Nets: Properties, Analysis and Applications*. Proceedings of the IEEE 77(4):541–580, 1989.
 19. R.M. Karp and R.E. Miller. *Parallel Program Schemata*. Journal of Computer and System Sciences 3(2):147–195, 1969.
 20. J. Desel and J. Esparza. *Free Choice Petri Nets*. Cambridge Tracts in Theoretical Computer Science 40. Cambridge University Press, 1995.
-21. J. Cortadella, M. Kishinevsky, L. Lavagno and A. Yakovlev. *Deriving Petri Nets from Finite Transition Systems*. IEEE Transactions on Computers 47(8):859–882, 1998.
-22. A. Ehrenfeucht and G. Rozenberg. *Partial (Set) 2-Structures. Part I: Basic Notions and the Representation Problem*, Acta Informatica 27(4):315–342, 1990; *Part II: State Spaces of Concurrent Systems*, Acta Informatica 27(4):343–368, 1990.
-23. K. Jensen and L.M. Kristensen. *Coloured Petri Nets: Modelling and Validation of Concurrent Systems*. Springer, 2009. <https://doi.org/10.1007/b95112>
-24. IEEE Standard for eXtensible Event Stream (XES) for Achieving Interoperability in Event Logs and Event Streams. IEEE Std 1849-2016 (revised as IEEE Std 1849-2023). <https://xes-standard.org>
-25. ISO/IEC 15909-2:2011. *Systems and software engineering — High-level Petri nets — Part 2: Transfer format*.
-26. CPN Tools and its model file format (`.cpn`).
-27. K. Sugiyama, S. Tagawa and M. Toda. *Methods for Visual Understanding of Hierarchical System Structures*. IEEE Transactions on Systems, Man, and Cybernetics 11(2):109–125, 1981. <https://doi.org/10.1109/TSMC.1981.4308636>
+21. J. Desel. *Can a Single Transition Stop an Entire Petri Net?* Algorithms & Theories for the Analysis of Event Data (ATAED 2019), CEUR Workshop Proceedings Vol. 2371, pp. 23–35, 2019. <https://ceur-ws.org/Vol-2371/ATAED2019-23-35.pdf>
+22. J. Cortadella, M. Kishinevsky, L. Lavagno and A. Yakovlev. *Deriving Petri Nets from Finite Transition Systems*. IEEE Transactions on Computers 47(8):859–882, 1998.
+23. A. Ehrenfeucht and G. Rozenberg. *Partial (Set) 2-Structures. Part I: Basic Notions and the Representation Problem*, Acta Informatica 27(4):315–342, 1990; *Part II: State Spaces of Concurrent Systems*, Acta Informatica 27(4):343–368, 1990.
+24. K. Jensen and L.M. Kristensen. *Coloured Petri Nets: Modelling and Validation of Concurrent Systems*. Springer, 2009. <https://doi.org/10.1007/b95112>
+25. IEEE Standard for eXtensible Event Stream (XES) for Achieving Interoperability in Event Logs and Event Streams. IEEE Std 1849-2016 (revised as IEEE Std 1849-2023). <https://xes-standard.org>
+26. OMG. *Business Process Model and Notation (BPMN), Version 2.0*. Object Management Group, formal/2011-01-03, 2011. <https://www.omg.org/spec/BPMN/2.0/>
+27. R.M. Dijkman, M. Dumas and C. Ouyang. *Semantics and analysis of business process models in BPMN*. Information and Software Technology 50(12):1281–1294, 2008. <https://doi.org/10.1016/j.infsof.2008.02.006>
+28. ISO/IEC 15909-2:2011. *Systems and software engineering — High-level Petri nets — Part 2: Transfer format*.
+29. CPN Tools and its model file format (`.cpn`).
+30. K. Sugiyama, S. Tagawa and M. Toda. *Methods for Visual Understanding of Hierarchical System Structures*. IEEE Transactions on Systems, Man, and Cybernetics 11(2):109–125, 1981. <https://doi.org/10.1109/TSMC.1981.4308636>

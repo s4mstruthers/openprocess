@@ -125,7 +125,12 @@ class RegionCheck:
 
 
 def check_region(ts: TransitionSystem, states) -> RegionCheck:
-    """Is ``states`` a region of ``ts``?  If not, which event breaks it and how."""
+    """Is ``states`` a region of ``ts``?  If not, which event breaks it and how.
+
+    ``states`` is a collection of state names, or the set written as text
+    (``"{s1, s3}"``)."""
+    if isinstance(states, str):
+        states = [s.strip() for s in states.strip().strip("{}").split(",") if s.strip()]
     region = frozenset(states)
     unknown = sorted(region - set(ts.states))
     if unknown:
@@ -461,6 +466,12 @@ def synthesise(ts: TransitionSystem, analysis: RegionAnalysis | None = None,
               for end in ts.final}
     if len(finals) == 1:
         net.final_marking = finals.pop()
+    elif finals:
+        result.warnings.append(f"The traces end in {len(ts.final)} different states that stand for "
+                               f"{len(finals)} different markings, so the net has no single final marking; "
+                               "token replay and alignments need one, so set it before checking "
+                               "conformance (an abstraction with a shorter horizon or the postfix "
+                               "direction usually gives one).")
     loops = sorted({e for s, e, t in ts.transitions if s == t})
     if loops:
         result.warnings.append("Self-loops (" + ", ".join(loops) + ") cross no region, so "

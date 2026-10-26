@@ -47,7 +47,7 @@ from .provenance import add_code
 from .widgets import (
     suggested_path,
     Card, ElidedLabel, PageHeader, SegmentedControl, StatTile, Verdict, button, fitness_status, flow, hbox, label,
-    paint_chips, scroll, status_for, vbox,
+    paint_chips, property_status, scroll, status_for, vbox,
 )
 from .workers import run_in_background
 
@@ -493,7 +493,7 @@ class ModelPage(ConcealsResults, QWidget):
                     filled = instances.short_circuit(soundness, key)
                 else:
                     filled = instances.properties(properties, key) if key else None
-                self.properties_card.add(Verdict(name, status_for(value), detail,
+                self.properties_card.add(Verdict(name, property_status(name, value), detail,
                                                  instance=filled))
             self.properties_card.add(label(
                 f"{len(properties.graph.states):,} reachable markings explored "

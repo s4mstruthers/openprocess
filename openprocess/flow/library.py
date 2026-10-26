@@ -215,8 +215,11 @@ def library_for(folder: str | Path | None = None, packages: bool = True) -> Libr
     if packages:
         library.load_entry_points()
     if folder is not None:
-        boxes = Path(folder) / "boxes" if (Path(folder) / "boxes").is_dir() else Path(folder)
-        library.load_folder(boxes)
+        # Only the folder's boxes/ is a box folder.  Loading the folder itself
+        # would import (and so run) every script beside a workflow -- an
+        # example's make_workflow.py, an experiment's run.py -- which nobody
+        # asked for; `openprocess boxes <a boxes folder>` loads one explicitly.
+        library.load_folder(Path(folder) / "boxes")
     return library
 
 

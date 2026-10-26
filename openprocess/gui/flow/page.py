@@ -854,7 +854,8 @@ class WorkflowPage(QWidget):
                       f"</span> &nbsp; <span style='color: {colour}; font-weight: 600'>{chip_text}</span>")
         chips.setTextFormat(Qt.RichText)
         layout.addWidget(chips)
-        help_text = label(_paragraphs(spec.description), "muted", wrap=True)
+        help_text = label(_emphasis_html(_paragraphs(spec.description)), "muted", wrap=True)
+        help_text.setTextFormat(Qt.RichText)        # *noise* in a docstring is emphasis, not asterisks
         layout.addWidget(help_text)
         tabs = SegmentedControl(TABS, compact=True)
         tabs.set_index(self.tab)
@@ -997,7 +998,7 @@ class WorkflowPage(QWidget):
         if index == 1:
             if result is None or result.status not in (DONE, FAILED):
                 return label("Runs first, then shows how it got there.", "muted", wrap=True)
-            return how_widget(result.explanation, self, result.value)
+            return how_widget(result.explanation, self, result.value, spec=spec, title=self.workflow.title(node))
         if index == 2:
             return code_widget(spec, self)
         settings = SettingsWidget(spec, node.settings, self.folder,
@@ -1322,6 +1323,16 @@ def _paragraphs(text: str | None) -> str:
     """A docstring as paragraphs: the source's line breaks joined, blank lines kept."""
     blocks = re.split(r"\n\s*\n", textwrap.dedent(text or "").strip())
     return "\n\n".join(" ".join(line.strip() for line in block.splitlines()) for block in blocks)
+
+
+def _emphasis_html(text: str) -> str:
+    """A box's help as rich text: ``*word*`` in italics, ``code`` in a fixed
+    font, paragraphs kept, everything else escaped."""
+    from html import escape
+    html = escape(text)
+    html = re.sub(r"``([^`]+)``|`([^`]+)`", lambda m: f"<code>{m.group(1) or m.group(2)}</code>", html)
+    html = re.sub(r"(?<![\w*])\*([^*\n]+?)\*(?![\w*])", r"<i>\1</i>", html)
+    return html.replace("\n\n", "<br><br>")
 
 
 def _delete_layout(layout) -> None:

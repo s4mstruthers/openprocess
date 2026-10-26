@@ -651,8 +651,17 @@ class StudioWindow(QMainWindow):
         self.notes_button.setCursor(Qt.PointingHandCursor)
         self.notes_button.setFocusPolicy(Qt.NoFocus)
         self.notes_button.clicked.connect(lambda: self.toggle_notes())
+        #: "AI changed 3 files · Review": shown while an assistant's changes await review.
+        self.review_button = button("", self.review_changes, kind="reproBadge",
+                                    tooltip="Files an AI assistant changed in this folder, with a diff "
+                                            "and Undo for each (Help ▸ Review AI Changes…)")
+        self.review_button.setFocusPolicy(Qt.NoFocus)
+        self.review_button.hide()
+        self.statusBar().addPermanentWidget(self.review_button)
         self.statusBar().addPermanentWidget(self.notes_button)
         self.modes.currentChanged.connect(lambda _index: self._update_notes_button())
+        self._rescan_timer.timeout.connect(self.refresh_review)
+        self.watcher.fileChanged.connect(self._journal_changed)
         self._build_menus()
         if not self._setting("window/sidebar", True):
             self.toggle_sidebar(False)
@@ -1461,6 +1470,8 @@ class StudioWindow(QMainWindow):
         self._action(help_menu, "Writing Exercise Packs", None,
                      lambda: self.show_guide("exercise-packs"))
         self._action(help_menu, "Cite OpenProcess…", None, self.cite_app)
+        self._action(help_menu, "Review AI Changes…", None, self.review_changes)
+        self._action(help_menu, "Connect an AI Assistant…", None, lambda: self.show_guide("mcp"))
         self._action(help_menu, "Check for Updates…", None,
                      lambda: self.check_for_updates(manual=True))
         self._action(help_menu, f"About {APPLICATION_NAME}", None, self._about)
@@ -2334,8 +2345,8 @@ class StudioWindow(QMainWindow):
     def action_open(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Open", dialog_folder(),
-            "Supported files (*.xes *.gz *.csv *.pnml *.cpn *.cpnflow *.zip);;Event logs (*.xes *.gz *.csv);;"
-            "Petri nets (*.pnml);;CPN Tools models (*.cpn);;Analyses (*.cpnflow);;"
+            "Supported files (*.xes *.gz *.csv *.pnml *.bpmn *.cpn *.cpnflow *.zip);;Event logs (*.xes *.gz *.csv);;"
+            "Petri nets (*.pnml);;BPMN models (*.bpmn);;CPN Tools models (*.cpn);;Analyses (*.cpnflow);;"
             "Exported experiments (*.zip);;All files (*)")
         self.open_files(paths)
 
@@ -2531,8 +2542,8 @@ class StudioWindow(QMainWindow):
                                         if problems else ""), 10000)
             elif lower.endswith(".txt") and file_kind(Path(path)) in ("log", "ts"):
                 self.add_document(self._read_text_file(path))
-            elif file_kind(Path(path)) == "ocel":
-                # An object-centric log has no page of its own: it is a box on an analysis.
+            elif file_kind(Path(path)) in ("ocel", "bpmn"):
+                # An object-centric log or a BPMN model has no page of its own: it is a box on an analysis.
                 self.boxes_for_files([path])
             elif lower.endswith(".csv"):
                 if csv_mapping is not None:          # reopening: reuse the saved mapping
@@ -2574,7 +2585,7 @@ class StudioWindow(QMainWindow):
                                   lambda message: self._load_failed(path, message, size))
             else:
                 QMessageBox.information(self, "Unsupported file",
-                                        f"{name}: open .xes, .csv, .pnml or .cpn files (or a "
+                                        f"{name}: open .xes, .csv, .pnml, .bpmn or .cpn files (or a "
                                         "log in textbook notation named log.txt or "
                                         "….log.txt, a transition system named ts.txt or "
                                         "….ts.txt).")
@@ -3203,6 +3214,53 @@ class StudioWindow(QMainWindow):
                                                   start or str(Path.home()))
         if folder:
             self.open_workspace(folder)
+
+    # -- an assistant's changes --------------------------------------------------------
+    def refresh_review(self) -> None:
+        """Show (or hide) the pill counting the AI changes not reviewed yet, and
+        watch the folder's journal so a new change shows up by itself."""
+        from ...flow import changes as journal
+        if self.workspace is None:
+            self.review_button.hide()
+            return
+        try:
+            pending = journal.pending(self.workspace.folder)
+        except OSError:
+            pending = []
+        if pending:
+            files = len({c.path for c in pending})
+            self.review_button.setText(f"AI changed {files} file{'s' * (files != 1)} · Review")
+            self.review_button.show()
+        else:
+            self.review_button.hide()
+        journal_file = journal.journal_folder(self.workspace.folder) / journal.JOURNAL
+        if journal_file.is_file() and str(journal_file) not in self.watcher.files():
+            self.watcher.addPath(str(journal_file))
+        dialog = getattr(self, "_review_dialog", None)
+        if dialog is not None and dialog.isVisible():
+            dialog.refresh()
+
+    def _journal_changed(self, path: str) -> None:
+        from ...flow import changes as journal
+        if path.endswith(journal.JOURNAL):
+            self.refresh_review()
+            if Path(path).is_file() and path not in self.watcher.files():
+                self.watcher.addPath(path)          # the journal was replaced, not appended to
+
+    def review_changes(self) -> None:
+        """Help ▸ Review AI Changes…: the list of changes, a diff and Undo for each."""
+        from .review import ReviewDialog
+        if self.workspace is None:
+            QMessageBox.information(self, "AI changes", "Open a folder first: an assistant's changes are "
+                                                        "journaled per folder.")
+            return
+        dialog = getattr(self, "_review_dialog", None)
+        if dialog is None or not dialog.isVisible() or dialog.folder != Path(self.workspace.folder):
+            dialog = ReviewDialog(self.workspace.folder, window=self, parent=self)
+            self._review_dialog = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def open_workspace(self, folder: str) -> bool:
         """Work in ``folder``: list its logs and nets, reopen what was open there.
@@ -4745,6 +4803,9 @@ def main(argv: list[str] | None = None) -> int:
             lambda *_: (application.setStyleSheet(style.stylesheet()), window.restyle()))
     window.show()
     window.restore_session()
+    # The command port: notebooks, the CLI and AI assistants hand files to this window.
+    from .remote import RemoteServer
+    window.remote = RemoteServer(window)
     QTimer.singleShot(3000, window.check_automatically)
     for path in argv[1:]:
         if path == "--new-cpn":             # `openprocess-cpn` without a file

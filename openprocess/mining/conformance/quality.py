@@ -54,25 +54,21 @@ from collections import Counter, defaultdict, deque
 
 from ..log import SimpleLog
 from ..petrinet import Marking, PetriNet
-from .token_replay import ReplayResult, silent_path
+from .token_replay import ReplayResult, enabling_path
 
 
-def _visible_enabled(net: PetriNet, marking: Marking, max_states: int = 2000) -> set[str]:
-    """Labels that can fire next, possibly after τ moves."""
+def _visible_enabled(net: PetriNet, marking: Marking, max_states: int = 200_000) -> set[str]:
+    """Labels that can fire next, possibly after τ moves: a label is there when
+    some transition with it is enabled now or after τ moves that enable it
+    (:func:`enabling_path`, exact, rather than visiting every marking the τ
+    moves reach, which explodes on block-structured nets)."""
     result: set[str] = set()
-    seen = {marking}
-    queue = deque([marking])
-    while queue and len(seen) < max_states:
-        current = queue.popleft()
-        for transition in net.enabled(current):
-            label = net.transitions[transition].label
-            if label is not None:
-                result.add(label)
-            else:
-                successor = net.fire(current, transition)
-                if successor not in seen:
-                    seen.add(successor)
-                    queue.append(successor)
+    for transition_id, transition in net.transitions.items():
+        label = transition.label
+        if label is None or label in result:
+            continue
+        if net.is_enabled(marking, transition_id) or enabling_path(net, marking, transition_id) is not None:
+            result.add(label)
     return result
 
 
@@ -89,7 +85,7 @@ def _step(net: PetriNet, before: Marking | None, activity: str, paths: dict) -> 
     for transition in candidates:
         key = (before, transition)
         if key not in paths:
-            paths[key] = silent_path(net, before, lambda m, t=transition: net.is_enabled(m, t))
+            paths[key] = enabling_path(net, before, transition)
         path = paths[key]
         if path is not None:
             marking = before

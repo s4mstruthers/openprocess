@@ -2843,3 +2843,11 @@ def test_a_workflow_opened_from_another_folder_reads_its_files_from_there(app, t
     while time.time() < end and (page._running or page.run is None):
         _pump(app, 0.05)
     assert page.run is not None and all(page.run.status(n) == "done" for n in page.workflow.nodes.values())
+
+
+def test_not_terminating_is_shown_as_info():
+    from openprocess.gui.studio.widgets import property_status
+    assert property_status("Terminating", False) == "info"
+    assert property_status("Terminating", True) == "good"
+    assert property_status("Terminating", None) == "unknown"
+    assert property_status("Safe", False) == "critical"

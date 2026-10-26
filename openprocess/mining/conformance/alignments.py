@@ -99,6 +99,9 @@ class Alignment:
     #: False if the search gave up (state limit); then moves are empty, the
     #: cost is a stand-in (every event a log move) and the fitness 0.
     complete: bool = True
+    #: True when the search ran out of states to try: the final marking
+    #: cannot be reached from the initial one at all (``complete`` is False).
+    unreachable: bool = False
 
     @property
     def log_moves(self) -> int:
@@ -284,7 +287,8 @@ def align_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
                 heapq.heappush(frontier, (new_cost + unavoidable[successor[1]], new_cost,
                                           next(tie), successor))
 
-    return Alignment(trace, count, [], len(trace), 0.0, len(closed), complete=False)
+    return Alignment(trace, count, [], len(trace), 0.0, len(closed), complete=False,
+                     unreachable=len(best_cost) <= max_states)
 
 
 def align_log(net: PetriNet, log: SimpleLog, max_states: int = MAX_STATES,
@@ -311,7 +315,13 @@ def align_log(net: PetriNet, log: SimpleLog, max_states: int = MAX_STATES,
     gave_up = result.incomplete
     if not empty.complete:
         gave_up = [empty, *gave_up]
-    if gave_up:
+    if gave_up and all(a.unreachable for a in gave_up):
+        result.notes.append(
+            f"The final marking {net.final_marking.describe(net) or '(empty)'} cannot be reached from the "
+            f"initial marking {net.initial_marking.describe(net) or '(empty)'}: no run of the net ends "
+            "there, so no trace can be aligned and every fitness is 0. Check the net's initial and final "
+            "markings (a WF-net starts with [i] and ends with [o]).")
+    elif gave_up:
         cases = sum(a.count for a in result.incomplete)
         result.notes.append(
             f"No optimal alignment was found for {len(result.incomplete)} of {len(variants)} "

@@ -432,7 +432,8 @@ class LogPage(ConcealsResults, QWidget):
         case_table = _table(shown)
         header = case_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)     # sizing to contents would read every row
-        for column, width in enumerate((150, 60, 130, 80)):
+        # Narrow enough that Duration (stretched last) shows in a card ~400 px wide.
+        for column, width in enumerate((120, 52, 124)):
             case_table.setColumnWidth(column, width)
         header.setStretchLastSection(True)
 

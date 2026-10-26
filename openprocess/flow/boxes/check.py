@@ -48,6 +48,11 @@ def check_fit(model: PetriNet, log: EventLog,
     scores = Scores(model.name, {"fitness": fitness, "precision": precision(model, simple),
                                  "generalisation": generalisation(replay), "simplicity": simplicity(model)})
     scores.note = f"Checked against all {replay.trace_count} cases of {log.name} ({method.lower()})."
+    if method == "Alignments" and alignments.incomplete:
+        cases = sum(a.count for a in alignments.incomplete)
+        scores.note += (f" No optimal alignment was found for {len(alignments.incomplete)} variants "
+                        f"({cases:,} cases), counted as fitness 0, so this fitness is a lower bound; "
+                        "token replay gives a figure for every case.")
     return scores
 
 

@@ -32,7 +32,7 @@ LAYERS = [
      ["mining", "mining.discovery", "mining.conformance", "ml", "model", "sim", "analysis", "io", "core"]),
     ("Framework", "workflows of boxes; no Qt", ["flow", "flow.boxes"]),
     ("Teaching", "exercise packs and checks; no Qt", ["learn", "teaching"]),
-    ("App", "PySide6", ["gui", "gui.studio", "gui.flow", "gui.learn", "cli"]),
+    ("App", "PySide6", ["gui", "gui.studio", "gui.flow", "gui.learn", "cli", "mcp"]),
 ]
 UNIT_NAMES = {
     "core": "top level: citation, references, packages, palette",
@@ -53,6 +53,7 @@ UNIT_NAMES = {
     "gui.flow": "the workflow canvas",
     "gui.learn": "Learn mode",
     "cli": "the openprocess command",
+    "mcp": "the MCP server for AI assistants",
 }
 
 

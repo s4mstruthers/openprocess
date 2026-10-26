@@ -41,7 +41,7 @@ from .widgets import shortcut_text
 @dataclass
 class NodeSpec:
     id: str
-    kind: str                       # place | transition | silent | activity | start | end | state
+    kind: str                       # place | transition | silent | activity | start | end | state | gateway
     text: str = ""
     subtext: str = ""               # second line (counts, durations)
     below: str = ""                 # label under the node (place names)
@@ -82,6 +82,8 @@ def node_size(spec: NodeSpec) -> tuple[float, float]:
         return 26.0, 26.0
     if spec.kind == "operator":
         return 34.0, 34.0
+    if spec.kind == "gateway":
+        return 40.0, 40.0
     if spec.kind == "silent":
         return 14.0, 40.0
     if spec.kind == "state":
@@ -130,6 +132,9 @@ class NodeItem(QGraphicsObject):
             length = math.hypot(dx, dy)
             r = self.w / 2 + 1
             return QPointF(centre.x() + dx / length * r, centre.y() + dy / length * r)
+        if self.spec.kind == "gateway":                  # a diamond: |dx|/hw + |dy|/hh = 1
+            scale = 1 / (abs(dx) / (self.w / 2 + 1) + abs(dy) / (self.h / 2 + 1))
+            return QPointF(centre.x() + dx * scale, centre.y() + dy * scale)
         half_w, half_h = self.w / 2 + 1, self.h / 2 + 1
         scale = min(half_w / abs(dx) if dx else math.inf, half_h / abs(dy) if dy else math.inf)
         return QPointF(centre.x() + dx * scale, centre.y() + dy * scale)
@@ -200,6 +205,18 @@ class NodeItem(QGraphicsObject):
         elif spec.kind == "silent":
             painter.setBrush(QColor(spec.fill or t.silent_fill))
             painter.drawRoundedRect(rect, 2.5, 2.5)
+        elif spec.kind == "gateway":
+            diamond = QPainterPath()
+            diamond.moveTo(0, rect.top())
+            diamond.lineTo(rect.right(), 0)
+            diamond.lineTo(0, rect.bottom())
+            diamond.lineTo(rect.left(), 0)
+            diamond.closeSubpath()
+            painter.setBrush(fill)
+            painter.drawPath(diamond)
+            painter.setPen(QColor(spec.stroke or t.text))
+            painter.setFont(_font(17, True))
+            painter.drawText(rect, Qt.AlignCenter, spec.text)
         else:
             radius = 9 if spec.kind in ("activity", "state") else 7
             painter.setBrush(fill)

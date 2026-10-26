@@ -69,6 +69,7 @@ for `typing.Any`.
 | `cpn` | `CPNet` | Coloured Petri net | a CPN Tools model |
 | `marking` | `Marking` | Marking | a multiset of places |
 | `tree` | `ProcessTree` | Process tree | |
+| `bpmn` | `BPMN` | BPMN model | start and end events, tasks, exclusive and parallel gateways, sequence flows (`mining/bpmn.py`) |
 | `ts` | `TransitionSystem` | Transition system | |
 | `dfg` | `DFG` | Directly-follows graph | |
 | `ocel` / `ocdfg` | `OCEL` / `OCDFG` | Object-centric log / map | |
@@ -509,6 +510,6 @@ freeze is planned to cover them, the `.cpnflow` format and the command line
 `Explanation`, `current`, `note`, `show`, `steps` (§6);
 `save`, `load`, `check`, `differences` (§8);
 `Library`, `library_for`, `standard_library` (§10);
-`register_type` and the types `Any`, `AlignmentResult`, `CPNet`, `Column`, `DFG`, `Dataset`, `EventLog`,
+`register_type` and the types `Any`, `AlignmentResult`, `BPMN`, `CPNet`, `Column`, `DFG`, `Dataset`, `EventLog`,
 `Figure`, `Footprint`, `Marking`, `PetriNet`, `Predictions`, `Predictor`, `ProcessTree`, `Regions`,
 `ReplayResult`, `Scores`, `SimpleLog`, `Table`, `Text`, `TransitionSystem` (§2).

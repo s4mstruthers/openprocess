@@ -37,6 +37,23 @@ _LATEX = {"\\{": "{", "\\}": "}", "\\langle": "⟨", "\\rangle": "⟩", "\\empty
 _OPEN = {"{": "}", "(": ")", "<": ">", "⟨": "⟩", "[": "]"}
 _CLOSE = set(_OPEN.values())
 
+#: An α-place as typed, ``p({a},{b,e})`` or ``p({a}, {b, e})``: one name, not a pair.
+_ALPHA_PLACE = re.compile(r"\bp\s*\(\s*\{([^{}]*)\}\s*,\s*\{([^{}]*)\}\s*\)")
+
+
+def place_atom(inputs, outputs) -> str:
+    """The α-algorithm's place p(A, B) as one name, members sorted, with no
+    character the set reader splits on: ``p〈a | b·e〉``.  Both the computed
+    answer (``alpha.P_L``) and what a student types, ``p({a},{b,e})``, become
+    this, so they compare equal whatever the order or spacing."""
+    def side(items) -> str:
+        return "·".join(sorted(name(str(i)) for i in items if str(i).strip()))
+    return f"p〈{side(inputs)} | {side(outputs)}〉"
+
+
+def _alpha_places(text: str) -> str:
+    return _ALPHA_PLACE.sub(lambda m: place_atom(m.group(1).split(","), m.group(2).split(",")), text)
+
 
 def name(text: str) -> str:
     """One name, as compared: ``" S_1 "`` and ``"s1"`` are the same."""
@@ -49,7 +66,7 @@ def _tokens(text: str) -> list[str]:
     text = _SUBSCRIPT.sub(lambda m: m.group(1) if m.group(1) is not None else m.group(2), text)
     for latex, plain in _LATEX.items():
         text = text.replace(latex, plain)
-    text = text.replace("$", "")
+    text = _alpha_places(text.replace("$", ""))
     tokens, current = [], []
     for char in text:
         if char in _OPEN or char in _CLOSE or char in ",;":
@@ -168,8 +185,10 @@ def show_set(value) -> str:
 
 
 def number(text: str) -> float:
-    """``0.75``, ``0,75``, ``3/4`` or ``75%``."""
-    text = text.strip().replace(" ", "")
+    """``0.75``, ``0,75``, ``3/4`` or ``75%``; also ``−1`` and ``∞``."""
+    text = text.strip().replace(" ", "").replace("−", "-").replace("–", "-")
+    if text.casefold() in ("∞", "inf", "infinity", "unbounded"):
+        return float("inf")
     if text.endswith("%"):
         return float(text[:-1].replace(",", ".")) / 100
     if "/" in text:

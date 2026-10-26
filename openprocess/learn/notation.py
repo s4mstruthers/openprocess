@@ -126,7 +126,10 @@ def show_markings(keys) -> str:
 # ---------------------------------------------------------------------------
 OPERATORS = {"→": "→", "->": "→", "seq": "→", "sequence": "→", "x": "×", "×": "×", "xor": "×",
              "choice": "×", "exclusive": "×", "^": "∧", "∧": "∧", "and": "∧", "parallel": "∧",
-             "par": "∧", "concurrent": "∧", "↺": "↺", "loop": "↺", "*": "↺", "redo": "↺"}
+             "par": "∧", "concurrent": "∧", "↺": "↺", "loop": "↺", "*": "↺", "redo": "↺",
+             # LaTeX, as the guide promises it does not matter
+             "\\rightarrow": "→", "\\to": "→", "\\times": "×", "\\wedge": "∧", "\\land": "∧",
+             "\\circlearrowleft": "↺", "\\curvearrowleft": "↺", "\\circlearrowright": "↺"}
 
 
 def _operator(token: str) -> str:
@@ -355,7 +358,11 @@ def alignment(text: str) -> tuple[list[str], list[str]]:
         parts = [c.strip() for c in re.split(r"\s*\|\s*|,", line)] if ("|" in line or "," in line) \
             else line.split()
         parts = [p for p in parts if p != ""]
-        if parts and answers.name(parts[0]) in ("log", "model", "trace", "net", "l", "m"):
+        # A row label ("log:", "model |", "L:") is dropped; a single letter only
+        # when a colon or bar marks it as a label, since l and m are activities too.
+        if parts and (answers.name(parts[0]).rstrip(":") in ("log", "model", "trace", "net")
+                      or (answers.name(parts[0]).rstrip(":") in ("l", "m")
+                          and re.match(r"^\s*\|?\s*[lmLM]\s*[:|]", line))):
             parts = parts[1:]
         return [SKIP if p.casefold() in SKIP_WORDS else answers.name(p) for p in parts]
     top, bottom = cells(lines[0]), cells(lines[1])

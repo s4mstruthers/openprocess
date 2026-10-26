@@ -1,9 +1,10 @@
 """Command-line interface: ``openprocess <command> [options]``.
 
 The CLI exists so that the engine is usable without the GUI -- in a script, in
-a notebook, from a Makefile, or over SSH.  Every command works on a ``.cpn``
-file, except ``example``, which writes one of the built-in demo models so you
-have something to try immediately.
+a notebook, from a Makefile, or over SSH.  The first five commands work on a
+``.cpn`` file (``example`` writes one of the built-in demo models so you have
+something to try immediately); the others take event logs, PNML nets,
+workflow files and exercise packs.
 
 Commands
 --------
@@ -24,6 +25,7 @@ Commands
                 ``--export`` and ``--report`` write a zip and an HTML page
 ``boxes``       list the boxes (OpenProcess's own, a folder's ``boxes/``, packages)
 ``datasets``    the public logs known by name: ``list``, ``fetch``, ``where``
+``mcp``         the MCP server for AI assistants; ``install CLIENT``, ``status``
 """
 
 from __future__ import annotations
@@ -338,7 +340,7 @@ def command_mine_invariants(arguments: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 def command_exercises_check(arguments: argparse.Namespace) -> int:
     """List a pack's exercises and answer boxes; report mistakes in them."""
-    from .learn.checks import Context, TaskError, model_answer_text, validate
+    from .learn.checks import Context, TaskError, computed_answer_text, validate
     from .learn.pack import load_pack
     pack = load_pack(arguments.folder)
     if not pack.exercises:
@@ -357,11 +359,15 @@ def command_exercises_check(arguments: argparse.Namespace) -> int:
             checked = "checked" if task.checkable else "self-checked"
             line = f"  - {task.id:<8} {task.type:<10} {checked}"
             if arguments.answers and task.type not in ("net", "footprint", "trace", "open"):
+                # The answer the app works out (not the author's solution text),
+                # so the author can compare the two.
                 try:
-                    answer = model_answer_text(exercise, task, context)
+                    answer = computed_answer_text(exercise, task, context)
                 except TaskError as error:
                     answer = f"(cannot work it out: {error})"
                 line += "  →  " + " ".join(answer.split())[:100]
+                if task.solution and task.type not in ("open",):
+                    line += "   (solution: " + " ".join(task.solution.split())[:60] + ")"
             print(line)
         for problem in found:
             print(f"  ! {problem}")
@@ -452,6 +458,10 @@ def command_run(arguments: argparse.Namespace) -> int:
         target.write_text(requirements_lock(record), encoding="utf-8")
         print(f"Wrote {target}")
         return 0
+    if arguments.sweep and arguments.check:
+        print("openprocess: --check compares the recorded results, which a sweep changes; "
+              "run the two separately", file=sys.stderr)
+        return 2
     for spec in arguments.sweep or []:
         name, _, values = spec.partition("=")
         node_id, _, setting = name.rpartition(".")
@@ -517,7 +527,10 @@ def _brief(value) -> str:
     from .flow.figures import tile_parts
     from .flow.types import Figure, Scores, Table
     if dataclasses.is_dataclass(value) and not isinstance(value, type) and tile_parts(value):
-        return " · ".join(tile_parts(value))
+        big, small = tile_parts(value)
+        if " · " in big and big.count(" · ") == small.count(" · "):      # "8 · 7" over "places · transitions"
+            return " · ".join(f"{a} {b}" for a, b in zip(big.split(" · "), small.split(" · ")))
+        return f"{big} ({small})" if small and small not in big else big
     if isinstance(value, Scores):
         return ", ".join(f"{k} {v:.3f}" if isinstance(v, float) else f"{k} {v}" for k, v in value.metrics.items())
     if isinstance(value, Table):
@@ -533,26 +546,70 @@ def _brief(value) -> str:
 
 
 def _write_outputs(workflow, run, folder: Path) -> None:
-    from .flow.types import Figure, Scores, Table
+    """Every result that has a file form (tables, scores, figures, nets, logs,
+    texts), named after its box; the same files --export puts in the zip."""
+    from .flow.record import as_file
+    from .flow.types import Figure, Table
     folder.mkdir(parents=True, exist_ok=True)
+    written = 0
     for node in workflow.order():
         value = run.value(node)
         stem = f"{node.id} {workflow.title(node)}".replace("/", "-")
-        if isinstance(value, Table):
+        if isinstance(value, Table):              # with their provenance sidecars
             value.to_csv(folder / f"{stem}.csv")
-        elif isinstance(value, Scores):
-            Table.from_scores([value]).to_csv(folder / f"{stem}.csv")
-        elif isinstance(value, Figure):
+        elif isinstance(value, Figure) and (value.svg or value.png):
             value.save(folder / f"{stem}.svg" if value.svg else folder / f"{stem}.png")
-        elif value.__class__.__name__ == "PetriNet":
-            from .mining.pnml import write_pnml
-            write_pnml(value, folder / f"{stem}.pnml")
-    print(f"Wrote the results into {folder}")
+        else:
+            found = as_file(value, stem)
+            if found is None:
+                continue
+            name, content = found
+            if isinstance(content, bytes):
+                (folder / name).write_bytes(content)
+            else:
+                (folder / name).write_text(content, encoding="utf-8")
+        written += 1
+    print(f"Wrote {written} result file(s) into {folder}")
+
+
+def command_mcp(arguments: argparse.Namespace) -> int:
+    """``openprocess mcp``: the MCP server, and connecting assistants to it."""
+    if arguments.action == "install":
+        from .mcp.install import install
+        if not arguments.client:
+            print("openprocess: say which assistant: claude-desktop, claude-code, cursor, windsurf, or print",
+                  file=sys.stderr)
+            return 2
+        try:
+            print(install(arguments.client))
+        except ValueError as error:
+            print(f"openprocess: {error}", file=sys.stderr)
+            return 1
+        return 0
+    if arguments.action == "status":
+        from .mcp.install import server_command, status
+        print("Server command: " + " ".join(server_command()))
+        for client, state in status().items():
+            print(f"  {client:16} {'connected' if state['configured'] else 'not connected':14} {state['config'] or ''}")
+        return 0
+    try:
+        from .mcp.server import main as serve
+    except ImportError as error:
+        print(f"openprocess: {error}", file=sys.stderr)
+        return 1
+    argv = ["--http", "--host", arguments.host, "--port", str(arguments.port)] if arguments.http else []
+    return serve(argv)
 
 
 def command_boxes(arguments: argparse.Namespace) -> int:
     from .flow import library_for
-    library = library_for(arguments.folder)
+    folder = arguments.folder
+    if folder is not None and not (Path(folder) / "boxes").is_dir():
+        # The folder given is itself a folder of box files (Week 5/boxes).
+        library = library_for(None)
+        library.load_folder(folder)
+    else:
+        library = library_for(folder)
     for group, specs in library.by_group().items():
         print(f"{group}")
         for spec in specs:
@@ -577,8 +634,9 @@ def command_datasets(arguments: argparse.Namespace) -> int:
         return 0
     try:
         path = datasets.fetch(arguments.name)
-    except datasets.DatasetMissing as error:
-        print(f"openprocess: {error}", file=sys.stderr)
+    except (datasets.DatasetMissing, KeyError) as error:
+        message = error.args[0] if isinstance(error, KeyError) and error.args else error
+        print(f"openprocess: {message}", file=sys.stderr)
         return 1
     print(f"{arguments.name}: {path}\nsha256 {datasets.sha256_file(path)}")
     return 0
@@ -587,7 +645,8 @@ def command_datasets(arguments: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openprocess",
-        description="Coloured Petri Net tools: edit, simulate and analyse .cpn models.",
+        description="OpenProcess from the command line: process mining on event logs, Petri net "
+                    "analysis, coloured net simulation, workflows, exercise packs and an MCP server.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -682,6 +741,17 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("name")
     dataset_commands.add_parser("where", help="print the cache folder")
     datasets.set_defaults(handler=command_datasets)
+
+    mcp = subparsers.add_parser("mcp", help="serve OpenProcess to AI assistants (Model Context Protocol)",
+                                description="Without a command: serve on stdio, as an assistant starts it. "
+                                            "`install CLIENT` connects Claude Desktop, Claude Code or Cursor; "
+                                            "`status` says which have it.")
+    mcp.add_argument("action", nargs="?", choices=["serve", "install", "status"], default="serve")
+    mcp.add_argument("client", nargs="?", help="for install: claude-desktop, claude-code, cursor, windsurf or print")
+    mcp.add_argument("--http", action="store_true", help="serve Streamable HTTP on localhost instead of stdio")
+    mcp.add_argument("--host", default="127.0.0.1")
+    mcp.add_argument("--port", type=int, default=8765)
+    mcp.set_defaults(handler=command_mcp)
 
     mine = subparsers.add_parser("mine", help="process mining on event logs")
     mining = mine.add_subparsers(dest="mining_command", required=True)

@@ -25,6 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
+from ..mining.bpmn import BPMN
 from ..mining.conformance.alignments import AlignmentResult
 from ..mining.conformance.token_replay import ReplayResult
 from ..mining.dfg import DFG
@@ -287,6 +288,7 @@ for _cls, _key, _name, _colour in (
     (CPNet, "cpn", "Coloured Petri net", "#2e9e4f"),
     (Marking, "marking", "Marking", "#2e9e4f"),
     (ProcessTree, "tree", "Process tree", "#2e9e4f"),
+    (BPMN, "bpmn", "BPMN", "#2e9e4f"),
     (TransitionSystem, "ts", "Transition system", "#b0430f"),
     (DFG, "dfg", "Directly-follows graph", "#b0430f"),
     (OCEL, "ocel", "Object-centric log", "#0f6e9e"),
@@ -307,7 +309,7 @@ for _cls, _key, _name, _colour in (
 
 __all__ = [
     "Column",
-    "AlignmentResult", "Any", "CPNet", "DFG", "Dataset", "EventLog", "Figure", "Footprint", "OCDFG", "OCEL",
+    "AlignmentResult", "Any", "BPMN", "CPNet", "DFG", "Dataset", "EventLog", "Figure", "Footprint", "OCDFG", "OCEL",
     "Marking", "PetriNet", "Predictions", "Predictor", "ProcessTree", "Regions", "ReplayResult",
     "Scores", "SimpleLog", "Table", "Text", "TransitionSystem", "TypeInfo", "TYPES",
     "is_known", "register_type", "type_by_key", "type_info",

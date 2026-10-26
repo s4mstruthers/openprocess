@@ -101,6 +101,9 @@ REFERENCES: tuple[Reference, ...] = (
               "Computer and System Sciences 3(2):147–195, 1969."),
     Reference("desel1995", "J. Desel and J. Esparza. *Free Choice Petri Nets*. Cambridge "
               "Tracts in Theoretical Computer Science 40. Cambridge University Press, 1995."),
+    Reference("desel2019", "J. Desel. *Can a Single Transition Stop an Entire Petri Net?* Algorithms "
+              "& Theories for the Analysis of Event Data (ATAED 2019), CEUR Workshop Proceedings "
+              "Vol. 2371, pp. 23–35, 2019.", "https://ceur-ws.org/Vol-2371/ATAED2019-23-35.pdf"),
     Reference("cortadella1998", "J. Cortadella, M. Kishinevsky, L. Lavagno and A. Yakovlev. "
               "*Deriving Petri Nets from Finite Transition Systems*. IEEE Transactions on "
               "Computers 47(8):859–882, 1998."),
@@ -114,6 +117,11 @@ REFERENCES: tuple[Reference, ...] = (
     Reference("xes", "IEEE Standard for eXtensible Event Stream (XES) for Achieving "
               "Interoperability in Event Logs and Event Streams. IEEE Std 1849-2016 "
               "(revised as IEEE Std 1849-2023).", "https://xes-standard.org"),
+    Reference("bpmn", "OMG. *Business Process Model and Notation (BPMN), Version 2.0*. Object "
+              "Management Group, formal/2011-01-03, 2011.", "https://www.omg.org/spec/BPMN/2.0/"),
+    Reference("dijkman2008", "R.M. Dijkman, M. Dumas and C. Ouyang. *Semantics and analysis of business "
+              "process models in BPMN*. Information and Software Technology 50(12):1281–1294, 2008.",
+              "10.1016/j.infsof.2008.02.006"),
     Reference("pnml", "ISO/IEC 15909-2:2011. *Systems and software engineering — High-level "
               "Petri nets — Part 2: Transfer format*."),
     Reference("cpntools", "CPN Tools and its model file format (`.cpn`)."),
@@ -217,9 +225,11 @@ TOPICS: tuple[tuple[str, tuple[Topic, ...]], ...] = (
         Topic("Free-choice, well-structured, S-coverable",
               "Structural properties and the handles behind a problem.",
               ("aalst2000", "desel1995"), "openprocess.mining.structure"),
-        Topic("Boundedness, liveness, deadlocks, reversibility",
+        Topic("Boundedness, liveness, deadlocks, reversibility, termination",
               "Decided on the reachability graph, or the coverability graph for unbounded "
-              "nets.", ("murata1989", "karp1969"), "openprocess.mining.analysis"),
+              "nets. A bounded net terminates iff its reachability graph has no cycle, and an "
+              "unbounded net never does.", ("murata1989", "karp1969", "desel2019"),
+              "openprocess.mining.analysis"),
         Topic("Incidence matrix and invariants", "P- and T-invariants.", ("murata1989",),
               "openprocess.mining.invariants"),
         Topic("CPN simulation and state spaces", "Bindings, enabling and the state space "
@@ -229,6 +239,9 @@ TOPICS: tuple[tuple[str, tuple[Topic, ...]], ...] = (
         Topic("XES event logs", "Reading and writing `.xes` and `.xes.gz`.", ("xes",),
               "openprocess.mining.xes"),
         Topic("PNML Petri nets", "Reading and writing `.pnml`.", ("pnml",), "openprocess.mining.pnml"),
+        Topic("BPMN models", "Reading and writing `.bpmn` (BPMN 2.0 XML); a process tree as BPMN, and "
+              "the Petri net semantics of a BPMN model and the way back.", ("bpmn", "dijkman2008"),
+              "openprocess.mining.bpmn"),
         Topic("CPN Tools models", "Reading and writing `.cpn`.", ("cpntools", "jensen2009"),
               "openprocess.io"),
         Topic("Dotted chart", "Events as dots over time, per case or per resource.",

@@ -153,11 +153,11 @@ $$
 (N, M_0) \text{ is terminating} \iff \neg \exists \text{ infinite } \sigma \colon M_0 \xrightarrow{\sigma}
 $$
 
-On a finite reachability graph: terminating iff the graph has no cycle. An unbounded net is never terminating, and a terminating net always has a dead marking, so it is not live.
+A bounded net is terminating iff its reachability graph has no cycle; an unbounded net is never terminating (its reachability tree is infinite and finitely branching, so by König's lemma it has an infinite path). A terminating net with at least one transition always reaches a dead marking, so it is not live.
 
 Builds on: [Reachable markings](#reachable-markings).
 
-*Source: course lecture on Petri net properties.*
+*Source: J. Desel, Can a Single Transition Stop an Entire Petri Net? (ATAED 2019, CEUR-WS Vol. 2371, pp. 23–35), Section 2.*
 
 ### Deadlock-free
 
@@ -712,3 +712,4 @@ Builds on: [Minimal region](#minimal-region), [Pre-region and post-region](#pre-
 - W.M.P. van der Aalst, *Workflow Verification: Finding Control-Flow Errors Using Petri-Net-Based Techniques* (2000).
 - W.M.P. van der Aalst, *Process Mining: Data Science in Action* (2016).
 - J. Cortadella, M. Kishinevsky, L. Lavagno and A. Yakovlev, *Deriving Petri Nets from Finite Transition Systems*, IEEE Transactions on Computers 47(8) (1998).
+- J. Desel, *Can a Single Transition Stop an Entire Petri Net?* (ATAED 2019, CEUR-WS Vol. 2371, pp. 23–35).

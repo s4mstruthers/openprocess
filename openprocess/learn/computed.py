@@ -102,14 +102,16 @@ def split_expression(expression: str) -> tuple[str, str]:
 
 def lookup(expression: str) -> tuple[Compute, str]:
     """The compute an expression names, and its argument."""
-    key, argument = split_expression(expression)
-    key = " ".join(key.split()).casefold()
+    written, argument = split_expression(expression)
+    written = " ".join(written.split())
+    key = written.casefold()
     if key in COMPUTED:
         return COMPUTED[key], argument
-    # box(id).path and workflow(file).path keep the path in the key
+    # box(id).path and workflow(file).path keep the path in the key -- as
+    # written, since an attribute path is case-sensitive (net.T, net.P).
     for prefix in ("box", "workflow"):
         if key.startswith(prefix) and prefix in COMPUTED:
-            head, _, path = key.partition(".") if not key.startswith(prefix + "(") else (prefix, "", key[len(prefix):])
+            path = written[len(prefix):] if key.startswith(prefix + "(") else written.partition(".")[2]
             return COMPUTED[prefix], argument + "|" + path.strip(". ")
     raise TaskError(f"unknown compute “{expression}” (known: " + ", ".join(sorted(COMPUTED)) + ")")
 
@@ -278,9 +280,9 @@ def _y_l(context, argument, task):
 
 @computed("alpha.P_L", of="log")
 def _p_l(context, argument, task):
-    """The places of α(L): i_L, o_L and one p(A, B) per pair of Y_L."""
-    return frozenset({"i_L", "o_L"} | {f"p({','.join(sorted(a))}|{','.join(sorted(b))})"
-                                       for a, b in context.alpha.Y_L})
+    """The places of α(L): i_L, o_L and one p(A, B) per pair of Y_L (typed as
+    ``p({a},{b,e})``; shown as ``p〈a | b·e〉``)."""
+    return frozenset({"i_L", "o_L"} | {answers.place_atom(a, b) for a, b in context.alpha.Y_L})
 
 
 @computed("alpha.place", of="log")
@@ -1129,7 +1131,7 @@ def run_box(context: Context, box_id: str, task: Task, settings: dict | None = N
         elif port.type_name in ("PetriNet", "Net", "Model") or port.name in ("net", "model"):
             if context.files.net is None and not task.get("of"):
                 raise TaskError(f"“{spec.name}” needs a net and the exercise has none")
-            inputs.append(wf.add("open_net", {"path": str(context.path(task.get("of"), context.files.net, "net"))}))
+            inputs.append(wf.add("open_net", {"file": str(context.path(task.get("of"), context.files.net, "net"))}))
         else:
             inputs.append(None)
     node = wf.add(spec.id, settings or {})
@@ -1146,7 +1148,7 @@ def run_box(context: Context, box_id: str, task: Task, settings: dict | None = N
 @computed("box", of="box")
 def _box(context, argument, task):
     """A box of the library run on the exercise's log, then an attribute of its
-    result: ``box(alpha_miner).net.transitions``, ``box(check_fit).fitness``."""
+    result: ``box(alpha_miner).net.transitions``, ``box(check_fit).metrics.fitness``."""
     box_id, _, path = argument.partition("|")
     settings = None
     if task.get("settings"):

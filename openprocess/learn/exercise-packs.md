@@ -180,7 +180,7 @@ all with what each works out; the main ones:
 | Of the log | Of the net (`net.pnml`, or `of: file.pnml`) | Of the transition system (`ts.txt`) |
 |---|---|---|
 | `activities`, `start activities`, `end activities`, `variants`, `cases`, `events` | `wf-net`, `sound`, `option to complete`, `proper completion`, `no dead transitions`, `dead transitions`, `dead(t)` | `regions`, `minimal regions` |
-| `alpha.T_L`, `alpha.T_I`, `alpha.T_O`, `alpha.X_L`, `alpha.Y_L`, `alpha.P_L`, `alpha.place(({a}, {b}))` | `bounded`, `bound`, `bound(p)`, `safe`, `live`, `deadlock-free`, `deadlocks`, `reversible`, `terminating` | `ger(e)`, `pre-regions(e)`, `post-regions(e)` (minimal) |
+| `alpha.T_L`, `alpha.T_I`, `alpha.T_O`, `alpha.X_L`, `alpha.Y_L`, `alpha.P_L` (places typed `i_L, p({a},{b,e}), o_L`), `alpha.place(({a}, {b}))` | `bounded`, `bound`, `bound(p)`, `safe`, `live`, `deadlock-free`, `deadlocks`, `reversible`, `terminating` | `ger(e)`, `pre-regions(e)`, `post-regions(e)` (minimal) |
 | `dfg`, `prefixes`, `language.M`, `language.M'` | `free-choice`, `well-structured`, `s-coverable` | `region({s1, s3})` (yes/no) |
 | `im.cut`, `im.cut(2)`, `im.split(2)`, `im.tree`, `im.dfg(2)` | `net.P`, `net.T`, `net.F`, `net.m0`, `pre(t)`, `post(t)`, `enabled([p1])`, `fire(t, [p1])` | `elementary`, `state separation`, `forward closure` |
 | `fitness`, `replay`, `alignment fitness(⟨a, b⟩)`, `alignment cost(⟨a, b⟩)` | `reachable`, `terminal`, `reachability graph`, `incidence`, `parikh(⟨a, b⟩)`, `state equation(⟨a, b⟩)`, `synchronous product(⟨a, b⟩)` | |

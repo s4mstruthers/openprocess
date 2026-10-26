@@ -85,6 +85,14 @@ class WorkflowError(ValueError):
     """A connection or a structure the canvas would refuse."""
 
 
+def _coerced(setting, value):
+    """The value as the setting takes it; a sweep's values one by one, so a
+    swept choice is one of the choices and a swept number is a number."""
+    if is_sweep(value):
+        return Sweep(tuple(setting.coerce(v) for v in value.values))
+    return setting.coerce(value)
+
+
 class Workflow:
     """Nodes, edges and groups, with the checks the canvas relies on."""
 
@@ -122,7 +130,7 @@ class Workflow:
             setting = spec.setting(key)
             if setting is None:
                 raise WorkflowError(f"{spec.name} has no setting {key!r}")
-            values[key] = value if is_sweep(value) else setting.coerce(value)
+            values[key] = _coerced(setting, value)
         node = Node(node_id, spec.id, values, tuple(position), title)
         self.nodes[node_id] = node
         return node
@@ -134,7 +142,7 @@ class Workflow:
             setting = spec.setting(key)
             if setting is None:
                 raise WorkflowError(f"{spec.name} has no setting {key!r}")
-            node.settings[key] = value if is_sweep(value) else setting.coerce(value)
+            node.settings[key] = _coerced(setting, value)
 
     def can_connect(self, source: Node | str, target: Node | str, input: str | None = None,
                     output: str = "out") -> tuple[bool, str]:
@@ -320,6 +328,21 @@ class Workflow:
         return node.title or self.spec(node).name
 
     # -- files ----------------------------------------------------------------------------
+    def open_in_studio(self, path=None, run=None, folder=None) -> dict:
+        """Save the workflow (with ``run``'s record when given) and open it in
+        OpenProcess Studio, starting the app if it is not running.
+
+        ``path`` defaults to ``<name>.cpnflow`` in ``folder`` (or the working
+        folder); the app works in ``folder`` when one is given."""
+        from pathlib import Path
+        from .record import save
+        from .studio import open_in_studio
+        if path is None:
+            safe = "".join(c for c in self.name if c not in '\\/:*?"<>|') or "workflow"
+            path = Path(folder or ".") / f"{safe}.cpnflow"
+        save(self, path, run)
+        return open_in_studio(path, folder=folder)
+
     def to_dict(self) -> dict:
         return {
             "name": self.name,
@@ -354,7 +377,10 @@ class Workflow:
                 node.layout = {str(k): (float(v[0]), float(v[1])) for k, v in layout.items()
                                if isinstance(v, (list, tuple)) and len(v) == 2}
         for item in data.get("connections", []):
-            wf.connect(item["from"], item["to"], item["input"], item.get("output", "out"))
+            try:
+                wf.connect(item["from"], item["to"], item["input"], item.get("output", "out"))
+            except KeyError as missing:
+                raise WorkflowError(f"A connection in the file lacks its {missing.args[0]!r}: {item}") from None
         for item in data.get("groups", []):
             group = wf.group(item["boxes"], item.get("name", "Group"), id=item.get("id"))
             group.position = tuple(item.get("position", group.position))

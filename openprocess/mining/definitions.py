@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 AALST_2000 = ("W.M.P. van der Aalst, *Workflow Verification: Finding Control-Flow Errors "
               "Using Petri-Net-Based Techniques* (2000)")
 AALST_2016 = "W.M.P. van der Aalst, *Process Mining: Data Science in Action* (2016)"
+DESEL_2019 = ("J. Desel, *Can a Single Transition Stop an Entire Petri Net?* (ATAED 2019, "
+              "CEUR-WS Vol. 2371, pp. 23–35)")
 
 
 @dataclass(frozen=True)
@@ -154,10 +156,12 @@ DEFINITIONS: tuple[Definition, ...] = (
         "Every run ends: there is no infinite firing sequence.",
         (r"(N, M_0) \text{ is terminating} \iff \neg \exists \text{ infinite } "
          r"\sigma \colon M_0 \xrightarrow{\sigma}",),
-        ("On a finite reachability graph: terminating iff the graph has no cycle. An "
-         "unbounded net is never terminating, and a terminating net always has a dead "
-         "marking, so it is not live.",),
-        "course lecture on Petri net properties", "behaviour", ("reachability",)),
+        ("A bounded net is terminating iff its reachability graph has no cycle; an "
+         "unbounded net is never terminating (its reachability tree is infinite and "
+         "finitely branching, so by König's lemma it has an infinite path). A terminating "
+         "net with at least one transition always reaches a dead marking, so it is not "
+         "live.",),
+        f"{DESEL_2019}, Section 2", "behaviour", ("reachability",)),
     Definition(
         "deadlock_free", "Deadlock-free",
         "No reachable marking is dead, i.e. the net can never get stuck with nothing "
@@ -573,7 +577,7 @@ def markdown() -> str:
             if definition.source:
                 lines += [f"*Source: {definition.source.replace('*', '')}.*", ""]
     lines += ["## Sources", "",
-              f"- {AALST_2000}.", f"- {AALST_2016}.", f"- {CORTADELLA_1998}.", ""]
+              f"- {AALST_2000}.", f"- {AALST_2016}.", f"- {CORTADELLA_1998}.", f"- {DESEL_2019}.", ""]
     return "\n".join(lines)
 
 
