@@ -32,7 +32,7 @@ flowchart LR
   B -- "Workflow.add" --> N["Node"]
   N -- "Workflow.connect" --> W["Workflow (a DAG)"]
   W -- "Runner.run" --> R["Run<br/>(a Result per node and variant)"]
-  R -- "save" --> C[".cpnflow file<br/>workflow + record"]
+  R -- "save" --> C[".analysis file<br/>workflow + record"]
   C -- "load + run + check" --> V["reproduced or not, box by box"]
 ```
 
@@ -348,8 +348,8 @@ so a box's algorithm is readable without the author documenting it twice.
 ## 7 Fingerprints
 
 `fingerprint(value, scheme=2)` is the SHA-256 of a canonical form of the
-value's **content**. It is what the record compares (§8) and what the Runs
-tab compares between runs.
+value's **content**. It is what the record compares (§8) and what the
+Versions view compares between a version and now.
 
 ### 7.1 Scheme 2 (from 0.12)
 
@@ -394,11 +394,11 @@ could change between sessions).
 
 ## 8 The record and the file
 
-### 8.1 The `.cpnflow` file
+### 8.1 The `.analysis` file
 
 ```json
 {
-  "format": "cpnflow/1",
+  "format": "analysis/1",
   "name": "…",
   "boxes": [{"id": "n1", "box": "openprocess.flow.boxes.input.open_log", "settings": {"file": "log.xes"},
              "position": [0, 0], "title": "…", "layout": {"p1": [10, 20]}}],
@@ -434,9 +434,17 @@ that is nowhere is an error naming it.
   result whose fingerprint (in the record's scheme) differs, or whose box did
   not finish. With `complete=True` (the command line) a recorded box that is
   gone or did not run is a difference too. An empty list is a reproduction.
-* `reproducibility.status(wf, record, run, folder)` turns both into the
-  badge: *Not recorded*, *Recorded, not run*, *Reproducible*, *n changes
-  since*, *Differs from the record*.
+* `reproducibility.status(wf, record, run, folder, versions)` turns both,
+  and the settings against the latest version's, into the badge: *Not
+  recorded*, *v3 · not run*, *v3 · reproducible*, *v3 · n changes*, *Changed
+  since v3* (the results differ, and the changes listed say why: a warning)
+  and *Differs from v3* (the same inputs, settings and versions gave another
+  result: the critical one).
+* `versions.Versions` is the list of versions the file keeps; `keep(wf, run,
+  record, note)` adds one with the whole workflow, the record and a snapshot
+  of every box's key figure. `record.save(..., keep=note)` writes it; without
+  `keep` a save carries the previous record, except that the first run with
+  no failure is kept as v1.
 
 ### 8.3 Experiments
 
@@ -445,7 +453,7 @@ its record with the inputs moved under `inputs/` (settings rewritten to
 match, so it runs where it is unpacked), the inputs, the custom box files,
 every result as a file (CSV, PNML, SVG, PNG, XES, text), `requirements.lock`,
 `run.py` (the same analysis as a script, `script_text`), `CITATIONS.bib`
-and a README. `openprocess run X.cpnflow --check` and `python run.py` work in
+and a README. `openprocess run X.analysis --check` and `python run.py` work in
 the unpacked folder as they are (tested). `import_experiment` unpacks one
 into a new folder.
 
@@ -494,7 +502,7 @@ what it can (marked ✓).
 
 ## 11 The command line
 
-`openprocess run FILE.cpnflow` runs a workflow headless (file settings
+`openprocess run FILE.analysis` runs a workflow headless (file settings
 relative to its folder) and prints every box's status, time and key figure.
 Options: `--check` (exit 1 unless every recorded result is reproduced; a
 file with no recorded results also exits 1), `--save` (record the results),
@@ -534,7 +542,7 @@ file with no recorded results also exits 1), `--save` (record the results),
 ## 13 The public interface
 
 The names exported by `openprocess.flow`, each described above; the 1.0
-freeze is planned to cover them, the `.cpnflow` format and the command line
+freeze is planned to cover them, the `.analysis` format and the command line
 (see "Open decisions" in [design.md](design.md)):
 
 `box`, `Box`, `BoxError`, `BoxSpec`, `Port`, `Setting` (§3);

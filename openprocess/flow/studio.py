@@ -7,14 +7,14 @@ notebook, a script or the MCP server can hand things to the app::
 
     from openprocess.flow.studio import open_in_studio, publish_box
 
-    open_in_studio("Week 3/analysis.cpnflow")      # the app opens it (and starts if it is not running)
+    open_in_studio("Week 3/orders.analysis")      # the app opens it (and starts if it is not running)
     publish_box(my_box)                            # a @box defined in the notebook appears under + Add box
 
 A :class:`~.workflow.Workflow` has ``open_in_studio()`` and a
 :class:`~.box.Box` has ``publish()`` that call these.  The protocol is one
 JSON object per line, answered by one JSON object per line::
 
-    {"open": ["/path/a.cpnflow"], "folder": "/path"}     -> {"ok": true, "opened": [...]}
+    {"open": ["/path/a.analysis"], "folder": "/path"}     -> {"ok": true, "opened": [...]}
     {"publish_box": {"name": "last_two", "source": "..."}} -> {"ok": true, "file": ".../boxes/last_two.py"}
     {"ping": true}                                       -> {"ok": true, "version": "0.13.0", "folder": "..."}
     {"changed": ["/path/net.pnml"]}                      -> {"ok": true}   (the journal has new entries)

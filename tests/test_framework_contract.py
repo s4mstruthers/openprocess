@@ -97,9 +97,9 @@ def test_a_record_is_checked_with_the_scheme_it_was_made_with(tmp_path):
     log = wf.add("typed_log", {"text": L1})
     model = wf.add("alpha_miner"); wf.connect(log, model)
     run = Runner().run(wf)
-    record = save(wf, tmp_path / "w.cpnflow", run)
+    record = save(wf, tmp_path / "w.analysis", run)
     assert record.scheme == FINGERPRINT == 2
-    data = json.loads((tmp_path / "w.cpnflow").read_text())
+    data = json.loads((tmp_path / "w.analysis").read_text())
     assert data["record"]["fingerprint"] == 2
     old = Record.from_dict({"results": {model.id: fingerprint(run.value(model), 1)}})     # a 0.11 file
     assert old.scheme == 1 and check(wf, old, run) == []
@@ -118,10 +118,44 @@ def test_check_on_the_command_line_fails_without_recorded_results(tmp_path):
     """Regression (0.12): `--check` on a file with nothing recorded said every result was reproduced."""
     wf = Workflow("w")
     wf.add("typed_log", {"text": L1})
-    save(wf, tmp_path / "w.cpnflow")                                      # no run: no results
-    done = subprocess.run([sys.executable, "-m", "openprocess.cli", "run", str(tmp_path / "w.cpnflow"), "--check"],
+    save(wf, tmp_path / "w.analysis")                                      # no run: no results
+    done = subprocess.run([sys.executable, "-m", "openprocess.cli", "run", str(tmp_path / "w.analysis"), "--check"],
                           capture_output=True, text=True, cwd=ROOT)
     assert done.returncode == 1 and "no recorded results" in done.stderr
+
+
+def test_save_keeps_versions_and_check_compares_with_one(tmp_path):
+    """`--save` keeps the run as the next version (with `--note`); `--check` compares
+    with the latest, `--against N` with an older one."""
+    from openprocess.flow.record import load_all
+    folder = tmp_path
+    (folder / "orders.log.txt").write_text(L1)
+    wf = Workflow("w")
+    log = wf.add("open_log", {"file": "orders.log.txt"})
+    model = wf.add("inductive_miner", {"noise": 0.0}); wf.connect(log, model)
+    path = folder / "w.analysis"
+    save(wf, path, Runner(folder=folder).run(wf), folder, lock=False)          # the first good run: v1
+    _wf, record, versions = load_all(path)
+    assert [v.title for v in versions.items] == ["v1 · First run"] and record.results
+    save(wf, path, Runner(folder=folder).run(wf), folder, lock=False, previous=record, versions=versions)
+    assert [v.number for v in load_all(path)[2].items] == [1]                 # a plain save keeps v1
+
+    def cli(*args):
+        return subprocess.run([sys.executable, "-m", "openprocess.cli", "run", str(path), *args],
+                              capture_output=True, text=True, cwd=ROOT)
+    done = cli("--save", "--note", "same again")
+    assert done.returncode == 0 and "Kept the results as v2" in done.stdout and "same again" in done.stdout
+    _wf, record, versions = load_all(path)
+    assert [v.title for v in versions.items] == ["v1 · First run", "v2 · same again"]
+    assert versions.latest.label == "Run again, same results" and versions.latest.record.results == record.results
+    (folder / "orders.log.txt").write_text("[<a,b>^9]")
+    done = cli("--check")
+    assert done.returncode == 1 and "DIFFERS from v2" in done.stdout
+    done = cli("--check", "--against", "1")
+    assert done.returncode == 1 and "DIFFERS from v1" in done.stdout
+    assert cli("--check", "--against", "7").returncode == 2
+    assert "Kept the results as v3" in cli("--save").stdout
+    assert cli("--check").returncode == 0 and cli("--check", "--against", "3").returncode == 0
 
 
 # -- §8.3: an exported experiment runs where it is unpacked --------------------------------
@@ -142,7 +176,7 @@ def test_an_exported_experiment_reproduces_from_its_own_zip(tmp_path):
         zipped.extractall(unpacked)
     assert (unpacked / "inputs" / "orders.log.txt").is_file()
     env = {**os.environ, "PYTHONPATH": str(ROOT)}
-    done = subprocess.run([sys.executable, "-m", "openprocess.cli", "run", "orders.cpnflow", "--check"],
+    done = subprocess.run([sys.executable, "-m", "openprocess.cli", "run", "orders.analysis", "--check"],
                           capture_output=True, text=True, cwd=unpacked, env=env)
     assert done.returncode == 0, done.stdout + done.stderr
     done = subprocess.run([sys.executable, "run.py"], capture_output=True, text=True, cwd=unpacked, env=env)

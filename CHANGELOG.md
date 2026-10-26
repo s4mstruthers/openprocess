@@ -6,6 +6,40 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.16.0
+
+- **Versions: the record is yours to move, and every version is kept.** The
+  badge beside an analysis said *Differs from the record* after an update
+  changed a result, and the only way out was to save, which quietly replaced
+  the record. Now the first run in which no box fails is kept as **v1** by
+  itself, and after that saving as you work never touches the record:
+  **⋯ › Keep as version…** records the run as the next version, with a note
+  on what changed (suggested from the settings, or "After the update to
+  OpenProcess 0.16.0"). The header switch is **Report | Canvas | Versions**:
+  the *Versions* view says where the numbers stand (the badge's words, every
+  change listed, *Keep as version…* and *Run from scratch*), lists the runs
+  since the latest version in a line each, and every version kept, newest
+  first, with its note, when and with which OpenProcess it was kept, what
+  changed before it, **Compare with now** (every box's key figure then and
+  now, the boxes whose result differs first) and **Restore** (the whole
+  workflow as it was; ⌘Z undoes it). It replaces the *Runs* view and its
+  A/B radio buttons. The badge reads *v2 · reproducible*, *v2 · 3 changes*,
+  *Changed since v2* (the results differ and the listed changes say why: a
+  warning) or *Differs from v2* (the same inputs, settings and versions gave
+  another result: the critical one); a click opens the Versions view.
+  `openprocess run FILE --save` keeps a version (`--note TEXT` names it),
+  `--check` compares with the latest and `--check --against N` with version
+  N. A file saved before 0.16 opens with its record as v1.
+- **The analysis file is `.analysis`, not `.cpnflow`.** The old name said
+  "coloured Petri net" about a file that holds an analysis. Opening a folder
+  renames its `.cpnflow` files (the content is the same) and says how many;
+  a `.cpnflow` opened by itself, an exported experiment from before, an
+  exercise's *my workflow* and `openprocess run` still read the old name.
+- **Run ▶ says what it does.** Its tooltip now explains that a box whose
+  settings and inputs did not change keeps its result, and the ⋯ menu's
+  *Re-run* is **Run from scratch**: every box computed again, nothing from
+  the cache.
+
 ## 0.15.0
 
 - **An analysis opens on its Report: every box's result, in run order, on

@@ -310,10 +310,10 @@ def test_sweep_runs_the_boxes_after_it_once_per_value_and_collects():
 def test_save_load_and_check(tmp_path):
     wf, nodes = discovery_workflow()
     run = Runner().run(wf)
-    record = save(wf, tmp_path / "compare.cpnflow", run)
+    record = save(wf, tmp_path / "compare.analysis", run)
     assert record.versions["openprocess"] and "packages" in record.environment
     assert len(record.results) == 8
-    again, loaded = load(tmp_path / "compare.cpnflow")
+    again, loaded = load(tmp_path / "compare.analysis")
     assert len(again.nodes) == 8 and len(again.edges) == 12
     assert again.nodes[nodes["im"].id].settings["noise"] == 0.2
     assert differences(loaded, again, tmp_path) == []
@@ -332,7 +332,7 @@ def test_record_notices_a_changed_input_file(tmp_path):
     model = wf.add(inductive_miner)
     wf.connect(log, model)
     run = Runner(library=wf.library, folder=tmp_path).run(wf)
-    record = save(wf, tmp_path / "w.cpnflow", run, folder=tmp_path)
+    record = save(wf, tmp_path / "w.analysis", run, folder=tmp_path)
     assert record.inputs[0]["file"] == "orders.txt" and len(record.inputs[0]["sha256"]) == 64
     log_file.write_text("[<a,b,c,d>^3, <a,c,b,d>^2, <a,d>]", encoding="utf-8")
     report = differences(record, wf, tmp_path)
@@ -666,11 +666,17 @@ def test_reproducibility_status_follows_the_record_and_the_run(tmp_path):
     (tmp_path / "orders.log.txt").write_text("[<a,b>^9]", encoding="utf-8")
     status = reproducibility.status(wf, record, run, tmp_path)
     assert status.state == "changed" and status.headline == "Recorded · 1 change since" and "has changed" in status.details[0]
-    assert status.short == "1 change since"
+    assert status.short == "Recorded · 1 change"
     again = runner.run(wf)                               # the changed log gives another model
     status = reproducibility.status(wf, record, again, tmp_path)
-    assert status.state == "differs" and status.tone == "critical"
+    # The numbers moved for a reason that is listed: a warning, not a reproducibility problem.
+    assert status.state == "moved" and status.tone == "warning" and status.can_keep
+    assert status.headline == "The results differ from the record after 1 change"
     assert any("different result" in d for d in status.details)
+    # The same inputs, another result: that is the critical one.
+    (tmp_path / "orders.log.txt").write_text("[<a,b,c,d>^3, <a,c,b,d>^2, <a,e,d>]", encoding="utf-8")
+    status = reproducibility.status(wf, record, again, tmp_path)
+    assert status.state == "differs" and status.tone == "critical" and status.short == "Differs from the record"
 
 
 def test_an_edited_input_file_is_not_served_from_the_cache(tmp_path):

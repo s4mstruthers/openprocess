@@ -1,7 +1,7 @@
 """Build the BPI Challenge 2019 analysis as a workflow file.
 
-    python make_workflow.py                   # writes "BPI Challenge 2019.cpnflow" beside this file
-    openprocess run "BPI Challenge 2019.cpnflow" --save --report report.html
+    python make_workflow.py                   # writes "BPI Challenge 2019.analysis" beside this file
+    openprocess run "BPI Challenge 2019.analysis" --save --report report.html
 
 Each part of the challenge is a group of boxes on the canvas (double-click a
 group to open it), and every number in the answer comes from a box whose
@@ -90,6 +90,6 @@ def build() -> Workflow:
 
 if __name__ == "__main__":
     workflow = build()
-    target = HERE / "BPI Challenge 2019.cpnflow"
+    target = HERE / "BPI Challenge 2019.analysis"
     save(workflow, target, folder=HERE)
     print(f"Wrote {target.name}: {len(workflow.nodes)} boxes in {len(workflow.groups)} groups")

@@ -1,7 +1,8 @@
-"""The ``.cpnflow`` file: a workflow, and the record that makes it reproducible.
+"""The ``.analysis`` file: a workflow, and the record that makes it reproducible.
 
-A workflow file is JSON: the boxes, their settings and positions, the
-connections, the groups, and a **record**:
+An analysis file is JSON: the boxes, their settings and positions, the
+connections, the groups, its **versions** (:mod:`.versions`: the record as
+it was each time the user kept it) and the **record** of the latest version:
 
 * the versions of OpenProcess, Python and the optional libraries;
 * the environment: every installed package and its version (the lock);
@@ -34,7 +35,44 @@ from .runner import DONE, Run
 from .types import Dataset, Figure, Predictions, Scores, Table, Text
 from .workflow import Workflow
 
-FORMAT = "cpnflow/1"
+FORMAT = "analysis/1"
+
+#: The extension of an analysis file, and the ones it had before (``.cpnflow``,
+#: from when the app was CPNpy: the content is the same, only the name changed).
+EXTENSION = ".analysis"
+OLD_EXTENSIONS = (".cpnflow",)
+
+
+def is_analysis_file(path) -> bool:
+    """Whether ``path`` is an analysis file by its name, under either extension."""
+    return str(path).lower().endswith((EXTENSION,) + OLD_EXTENSIONS)
+
+
+def analysis_name(path) -> Path:
+    """``path`` under the current extension (``orders.cpnflow`` → ``orders.analysis``)."""
+    path = Path(path)
+    return path.with_name(path.stem + EXTENSION) if path.suffix.lower() in OLD_EXTENSIONS else path
+
+
+def carry_over(folder, depth: int = 3) -> list[Path]:
+    """Rename every ``.cpnflow`` under ``folder`` to ``.analysis`` (the content is
+    read either way); a file whose new name is taken is left.  Returns the new paths."""
+    renamed = []
+    root = Path(folder)
+    for old in OLD_EXTENSIONS:
+        for source in sorted(root.rglob(f"*{old}")):
+            if len(source.relative_to(root).parts) - 1 > depth or any(
+                    part.startswith(".") for part in source.relative_to(root).parts):
+                continue
+            target = analysis_name(source)
+            if target.exists():
+                continue
+            try:
+                source.replace(target)
+            except OSError:
+                continue
+            renamed.append(target)
+    return renamed
 
 
 # ---------------------------------------------------------------------------
@@ -460,17 +498,45 @@ def differences(record: Record, workflow: Workflow, folder: str | Path | None = 
 # ---------------------------------------------------------------------------
 def save(workflow: Workflow, path: str | Path, run: Run | None = None,
          folder: str | Path | None = None, lock: bool = True, history: list[dict] | None = None,
-         previous: Record | None = None) -> Record:
-    """Write the workflow and its record to ``path``; returns the record.
-    ``history``: the analysis's snapshots (see :mod:`.snapshots`), kept in the file.
-    ``previous``: the file's record so far; see :func:`carried`."""
+         previous: Record | None = None, versions: "Versions | None" = None,
+         keep: str | None = None) -> Record:
+    """Write the workflow, its versions and its record to ``path``; returns the record.
+
+    ``history``: the analysis's runs (see :mod:`.snapshots`), kept in the file.
+    ``previous``: the file's record so far, and ``versions`` the versions it
+    holds; see :func:`carried`.  ``keep``: a note, to keep this run as a new
+    version (``""`` for a version without one): the record becomes this run's.
+    Without ``keep`` the record stays as it was, except that the first run in
+    which no box fails is kept as version 1 by itself, so a new analysis is
+    recorded without a word.
+
+    ``versions`` is updated in place when a version is kept."""
+    from .versions import Versions
     path = Path(path)
     folder = folder if folder is not None else path.parent
-    record = make_record(workflow, run, folder, lock)
-    if previous is not None:
-        record = carried(record, previous, workflow, run)
+    versions = versions if versions is not None else Versions()
+    if keep is not None and (run is None or run.failed()):
+        raise ValueError("A version keeps a run in which no box failed")
+    if keep is None and previous is not None and previous.results:
+        record = carried(previous, workflow)
+    elif keep is None and (run is None or run.failed()):
+        record = make_record(workflow, None, folder, lock)      # nothing to keep yet
+    else:
+        record = make_record(workflow, run, folder, lock)
+        if previous is not None and previous.scheme == record.scheme:
+            # A box that could not run here (a library it needs is missing)
+            # keeps the fingerprint recorded where it could.
+            still = {k: v for k, v in previous.results.items() if k in workflow.nodes}
+            record.results = {**still, **record.results}
+        for entry in record.inputs:
+            if entry["sha256"] == "missing" and previous is not None:
+                then = next((i for i in previous.inputs if i["node"] == entry["node"]
+                             and i["setting"] == entry["setting"] and i["file"] == entry["file"]), None)
+                if then is not None:
+                    entry["sha256"] = then["sha256"]
+        versions.keep(workflow, run, record, keep or ("First run" if not versions.items else ""))
     record.history = list(history or [])
-    data = {"format": FORMAT, **workflow.to_dict(), "record": record.to_dict()}
+    data = {"format": FORMAT, **workflow.to_dict(), "versions": versions.to_list(), "record": record.to_dict()}
     text = json.dumps(data, indent=2, ensure_ascii=False, default=str)
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_text(text, encoding="utf-8")
@@ -478,37 +544,34 @@ def save(workflow: Workflow, path: str | Path, run: Run | None = None,
     return record
 
 
-def carried(record: Record, previous: Record, workflow: Workflow, run: Run | None) -> Record:
-    """The record to write, given the file's ``previous`` one: the record of the
-    last successful run stays until a successful run replaces it.
-
-    No run, or a run in which a box failed (the input file was not found, say),
-    leaves the previous record as it was, results of boxes since removed aside.
-    A run in which no box failed replaces it; a box that could not run here (a
-    library it needs is missing) keeps its recorded fingerprint if the scheme is
-    the same, and an input file that is missing now keeps the fingerprint
-    recorded when it was read."""
+def carried(previous: Record, workflow: Workflow) -> Record:
+    """The record to write when no version is kept: the previous one as it
+    was, results of boxes since removed aside.  Saving as you work never
+    replaces the record; keeping a version does (:func:`save` with ``keep``)."""
     still = {k: v for k, v in previous.results.items() if k in workflow.nodes}
-    if run is None or run.failed():
-        return Record(**{**previous.__dict__, "results": still})
-    if previous.scheme == record.scheme:
-        record.results = {**still, **record.results}
-    for entry in record.inputs:
-        if entry["sha256"] == "missing":
-            then = next((i for i in previous.inputs if i["node"] == entry["node"]
-                         and i["setting"] == entry["setting"] and i["file"] == entry["file"]), None)
-            if then is not None:
-                entry["sha256"] = then["sha256"]
-    return record
+    return Record(**{**previous.__dict__, "results": still})
 
 
 def load(path: str | Path, library=None) -> tuple[Workflow, Record]:
-    """Read a ``.cpnflow`` file."""
+    """Read an analysis file (``.analysis``, or ``.cpnflow`` as it was called)."""
+    workflow, record, _versions = load_all(path, library)
+    return workflow, record
+
+
+def load_all(path: str | Path, library=None) -> "tuple[Workflow, Record, Versions]":
+    """Read an analysis file: its workflow, the record of its latest version, and
+    every version kept.  A file from before versions (a record, no list) gives
+    its record as version 1."""
+    from .versions import Versions
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    if data.get("format", FORMAT).split("/")[0] != "cpnflow":
-        raise ValueError(f"{path} is not a workflow file")
+    if data.get("format", FORMAT).split("/")[0] not in ("analysis", "cpnflow"):
+        raise ValueError(f"{path} is not an analysis file")
     workflow = Workflow.from_dict(data, library)
-    return workflow, Record.from_dict(data.get("record"))
+    record = Record.from_dict(data.get("record"))
+    versions = Versions.from_list(data.get("versions"))
+    if not versions.items and record.results:
+        versions = Versions.first_from(workflow, record)
+    return workflow, record, versions
 
 
 def check(workflow: Workflow, record: Record, run: Run, complete: bool = False) -> list[str]:
@@ -578,7 +641,7 @@ def export_experiment(workflow: Workflow, run: Run | None, target: str | Path,
     name = workflow.name or "workflow"
     lines = [f"# {name}", "", f"Exported {record.saved} with OpenProcess {record.versions.get('openprocess', '')}, "
              f"Python {record.versions.get('python', '')}.", "",
-             "Run it again with `openprocess run " + f"{name}.cpnflow --check`: it fails if any result differs "
+             "Run it again with `openprocess run " + f"{name}{EXTENSION} --check`: it fails if any result differs "
              "from the recorded one. `requirements.lock` is the environment it ran in. `run.py` is the same "
              "analysis as a plain Python script (`python run.py`). Or drop this zip on OpenProcess: it unpacks "
              "it into a folder and runs it.", "", "## Boxes", ""]
@@ -606,7 +669,7 @@ def export_experiment(workflow: Workflow, run: Run | None, target: str | Path,
     lines += ["", "## How to cite", "", citation.app_text(), "",
               "`CITATIONS.bib` has this entry and the papers the algorithms follow, as BibTeX."]
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as zipped:
-        zipped.writestr(f"{name}.cpnflow", json.dumps(data, indent=2, ensure_ascii=False, default=str))
+        zipped.writestr(f"{name}{EXTENSION}", json.dumps(data, indent=2, ensure_ascii=False, default=str))
         zipped.writestr("requirements.lock", requirements_lock(record))
         from .script import script_text
         zipped.writestr("run.py", script_text(packed_workflow, "run.py"))
@@ -642,11 +705,11 @@ def _describe(value) -> str:
 
 
 def is_experiment(path) -> bool:
-    """Whether ``path`` is a zip :func:`export_experiment` wrote: one ``.cpnflow`` at the top."""
+    """Whether ``path`` is a zip :func:`export_experiment` wrote: one analysis file at the top."""
     import zipfile
     try:
         with zipfile.ZipFile(path) as zipped:
-            return sum(1 for n in zipped.namelist() if n.endswith(".cpnflow") and "/" not in n) == 1
+            return sum(1 for n in zipped.namelist() if is_analysis_file(n) and "/" not in n) == 1
     except (OSError, zipfile.BadZipFile):
         return False
 
@@ -661,9 +724,9 @@ def import_experiment(archive, into) -> Path:
     archive = Path(archive)
     with zipfile.ZipFile(archive) as zipped:
         names = zipped.namelist()
-        flows = [n for n in names if n.endswith(".cpnflow") and "/" not in n]
+        flows = [n for n in names if is_analysis_file(n) and "/" not in n]
         if len(flows) != 1:
-            raise ValueError(f"{archive.name} is not an exported experiment (one .cpnflow at the top is needed)")
+            raise ValueError(f"{archive.name} is not an exported experiment (one {EXTENSION} file at the top is needed)")
         folder = Path(into) / archive.stem
         counter = 2
         while folder.exists():
@@ -679,6 +742,9 @@ def import_experiment(archive, into) -> Path:
             target.write_bytes(zipped.read(name))
     flow_file = folder / flows[0]
     data = json.loads(flow_file.read_text(encoding="utf-8"))
+    if flow_file.suffix.lower() in OLD_EXTENSIONS:          # an experiment exported before 0.16
+        flow_file.unlink()
+        flow_file = analysis_name(flow_file)
     moved: dict[tuple[str, str], str] = {}
     for item in data.get("record", {}).get("inputs", []):
         new = f"inputs/{Path(item['file']).name}"
@@ -728,6 +794,7 @@ def _as_file(value, stem: str):
 #: (name, bytes or text) for a result worth a file of its own; the script an experiment carries uses it.
 as_file = _as_file
 
-__all__ = ["FORMAT", "Record", "as_file", "check", "differences", "environment", "export_experiment",
-           "fingerprint", "import_experiment", "is_experiment", "load", "make_record", "requirements_lock",
-           "save", "sha256_file", "sha256_text", "versions"]
+__all__ = ["EXTENSION", "FORMAT", "OLD_EXTENSIONS", "Record", "analysis_name", "as_file", "carry_over", "check",
+           "differences", "environment", "export_experiment", "fingerprint", "import_experiment",
+           "is_analysis_file", "is_experiment", "load", "load_all", "make_record", "requirements_lock", "save",
+           "sha256_file", "sha256_text", "versions"]

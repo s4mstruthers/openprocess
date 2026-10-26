@@ -2,7 +2,8 @@
 
 The page opens on its *Report* (:mod:`.report`): every box's result, in run
 order, on one scrolling page.  *Canvas* in the header is the boxes and
-wires, *Runs* every finished run.  *+ Add box* (or a double-click on the
+wires, *Versions* (:mod:`.versions`) where the numbers stand against the
+record and every version kept.  *+ Add box* (or a double-click on the
 canvas) opens the box picker (:mod:`.picker`).  Click a box on the canvas
 (or *Open ›* under its section of the Report) and the side panel appears
 beside the canvas, on *Result* (the viewer for its output type); its other tabs are
@@ -16,8 +17,8 @@ Boxes run on a worker thread (:mod:`openprocess.gui.studio.workers`); the runner
 reports each box's status through a signal, so the canvas updates while
 the rest keeps working.  An exception stays in its box.
 
-The page edits a :class:`~openprocess.flow.workflow.Workflow` and saves it as a
-``.cpnflow`` file with its record (:mod:`openprocess.flow.record`).
+The page edits a :class:`~openprocess.flow.workflow.Workflow` and saves it as an
+``.analysis`` file with its versions and record (:mod:`openprocess.flow.record`).
 """
 
 from __future__ import annotations
@@ -32,12 +33,13 @@ from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QStackedWidget,
-    QDialog, QFileDialog, QLineEdit, QMenu, QMessageBox, QPlainTextEdit, QSizePolicy, QSplitter, QVBoxLayout,
-    QWidget,
+    QDialog, QFileDialog, QInputDialog, QLineEdit, QMenu, QMessageBox, QPlainTextEdit, QSizePolicy, QSplitter,
+    QVBoxLayout, QWidget,
 )
 
 from ...flow import record as records
 from ...flow import reproducibility, snapshots
+from ...flow.versions import Version, Versions
 from ...flow.library import Library
 from ...flow.runner import (BLOCKED, DONE, FAILED, IDLE, RUNNING, WAITING, Cache, Result, Run, Runner,
                             columns_connected)
@@ -53,12 +55,12 @@ from ..studio.workers import run_in_background
 from .canvas import WorkflowScene, WorkflowView
 from .picker import BoxPicker, input_box_for
 from .report import ReportWidget
-from .runs import RunsWidget
+from .versions import VersionsWidget
 from .viewers import SettingsWidget, code_widget, how_widget, pop_out, result_widget, status_text
 
 TABS = ["Result", "How", "Code", "Settings"]
 #: The header switch's views, and the body's pages in the same order.
-REPORT, CANVAS, RUNS = 0, 1, 2
+REPORT, CANVAS, VERSIONS = 0, 1, 2
 HINT = "Click a box to see what it gives. Drag from the dot on its right to connect it to another."
 
 
@@ -169,22 +171,24 @@ class WorkflowPage(QWidget):
         #: The first check hashes the inputs on disk (a 700 MB log takes a second or two),
         #: so it runs in the background; hashing does not hold Python's lock.
         record = getattr(document, "record", None)
+        #: Every version kept (the record is the latest one's); see openprocess.flow.versions.
+        self.versions: Versions = getattr(document, "versions", None) or Versions()
         self._repro = reproducibility.Status("unchecked", "Checking the inputs…") if record is not None \
-            and record.results else reproducibility.status(self.workflow, record, None, self.folder)
+            and record.results else reproducibility.status(self.workflow, record, None, self.folder, self.versions)
         if record is not None and record.results:
-            workflow, folder = self.workflow, self.folder
+            workflow, folder, versions = self.workflow, self.folder, self.versions
 
             def first_check(status) -> None:
                 if self.run is None:                     # a run finished meanwhile has the newer word
                     self._repro = status
                     self.refresh_title()
-            run_in_background(lambda: reproducibility.status(workflow, record, None, folder), first_check,
+            run_in_background(lambda: reproducibility.status(workflow, record, None, folder, versions), first_check,
                               lambda _message: None)
         # Report: every box's result, in run order.  Canvas: the boxes and wires.
-        self.view_switch = SegmentedControl(["Report", "Canvas", "Runs"], compact=True)
+        self.view_switch = SegmentedControl(["Report", "Canvas", "Versions"], compact=True)
         self.view_switch.setToolTip("Report: every box's result, in the order the boxes run.\nCanvas: the "
-                                    "boxes and wires.\nRuns: every finished run, two compared.")
-        record = getattr(document, "record", None)
+                                    "boxes and wires.\nVersions: where the numbers stand against the record, "
+                                    "and every version kept.")
         #: The last runs, with what changed before each (kept in the workflow file).
         self.history = snapshots.History.from_dict(record.history if record is not None else [])
         self.view_switch.changed.connect(self.show_view)
@@ -197,11 +201,15 @@ class WorkflowPage(QWidget):
         self.add_button = button("+ Add box", self.add_box_menu, kind="primary",
                                  tooltip="Every box, by group; or double-click the canvas")
         self.header.actions.addWidget(self.add_button)
-        self.run_button = button("Run ▶", lambda: self.run_from(None), tooltip="Run every box")
+        self.run_button = button("Run ▶", lambda: self.run_from(None),
+                                 tooltip="Run every box; a box whose settings and inputs did not change keeps "
+                                         "its result (⋯ › Run from scratch computes them all again)")
         self.header.actions.addWidget(self.run_button)
         self.more_menu = QMenu(self)
-        self.more_menu.addAction("Re-run", self.rerun).setToolTip(
-            "Run again, after checking the record for changed inputs")
+        self.more_menu.addAction("Run from scratch", self.rerun).setToolTip(
+            "Compute every box again, nothing from the cache, after saying what changed since the record")
+        self.keep_action = self.more_menu.addAction("Keep as version…", self.keep_version)
+        self.keep_action.setToolTip("Record this run as the next version, with a note on what changed")
         self.more_menu.addAction("Record…", self.show_record).setToolTip(
             "The workflow as Python, and the file with its record")
         self.more_menu.addAction("Export experiment…", self.export_experiment).setToolTip(
@@ -215,7 +223,7 @@ class WorkflowPage(QWidget):
             "follows, what it read, and how to cite. For a supervisor, a reviewer, a hand-in")
         self.more_menu.addSeparator()
         self.more_menu.addAction("Save", self.save).setToolTip("Save the workflow and its record")
-        self.more_button = button("⋯", self._show_more_menu, tooltip="Re-run, Record, Export experiment, Export as Python script, Export report, Save")
+        self.more_button = button("⋯", self._show_more_menu, tooltip="Run from scratch, Keep as version, Record, Export, Save")
         self.more_button.setObjectName("moreButton")
         self.more_button.setFixedWidth(40)
         self.header.actions.addWidget(self.more_button)
@@ -266,13 +274,13 @@ class WorkflowPage(QWidget):
         self.report = ReportWidget(self)
         report_wrapper = QWidget()
         report_wrapper.setLayout(vbox(self.report, margins=(20, 0, 20, 16)))
-        self.runs = RunsWidget(self)
-        runs_wrapper = QWidget()
-        runs_wrapper.setLayout(vbox(scroll(self.runs), margins=(20, 0, 20, 16)))
+        self.versions_view = VersionsWidget(self)
+        versions_wrapper = QWidget()
+        versions_wrapper.setLayout(vbox(scroll(self.versions_view), margins=(20, 0, 20, 16)))
         self.body = QStackedWidget()
         self.body.addWidget(report_wrapper)
         self.body.addWidget(wrapper)
-        self.body.addWidget(runs_wrapper)
+        self.body.addWidget(versions_wrapper)
         root.addWidget(self.body, 1)
         self._picker: BoxPicker | None = None
 
@@ -308,7 +316,7 @@ class WorkflowPage(QWidget):
         self.select(None)
 
     def show_view(self, index: int) -> None:
-        """Report (0), Canvas (1) or Runs (2); the Report and Runs are brought up to date when shown."""
+        """Report (0), Canvas (1) or Versions (2); the Report and Versions are brought up to date when shown."""
         if self.body.currentIndex() != index:
             self.body.setCurrentIndex(index)
             motion.lift(self.body)
@@ -318,8 +326,8 @@ class WorkflowPage(QWidget):
             self.view_switch.blockSignals(False)
         if index == REPORT:
             self.report.refresh()
-        elif index == RUNS:
-            self.runs.refresh()
+        elif index == VERSIONS:
+            self.versions_view.refresh()
 
     def apply_snapshot(self, snapshot: snapshots.Snapshot) -> None:
         """Put a run's settings back on the boxes that still exist, and run."""
@@ -436,15 +444,19 @@ class WorkflowPage(QWidget):
         status = self._repro
         self.header.set_badge(status.short, status.tone,
                               "\n".join([status.headline] + ["· " + d for d in status.details]
-                                        + ["", "Click for the record."]),
-                              self.show_record)
+                                        + ["", "Click for the versions."]),
+                              lambda: self.show_view(VERSIONS))
+        if hasattr(self, "keep_action"):
+            self.keep_action.setEnabled(self.run is not None and not self.run.failed() and not self._running)
 
     def refresh_reproducibility(self) -> None:
         """Compare the record with the inputs on disk and the latest run (a run
         finished, the analysis was saved)."""
         self._repro = reproducibility.status(self.workflow, getattr(self.document, "record", None),
-                                             self.run, self.folder)
+                                             self.run, self.folder, self.versions)
         self.refresh_title()
+        if self.body.currentIndex() == VERSIONS:
+            self.versions_view.refresh()
 
     # -- adding boxes: the picker ---------------------------------------------------------------
     def picker(self) -> BoxPicker:
@@ -676,8 +688,8 @@ class WorkflowPage(QWidget):
         self._render_panel()
         if isinstance(outcome, Run) and not outcome.stopped and not self._has_queue:
             if self.history.add(snapshots.take(self.workflow, outcome, self.history.latest)) \
-                    and self.body.currentIndex() == RUNS:
-                self.runs.refresh()
+                    and self.body.currentIndex() == VERSIONS:
+                self.versions_view.refresh()
             if self._record_pending:
                 self._record_pending = False
                 self.document.dirty = True
@@ -698,13 +710,13 @@ class WorkflowPage(QWidget):
             self.run_from(queued)
 
     def rerun(self) -> None:
-        """Run everything again, after saying what differs from the record."""
+        """Run everything from scratch, after saying what differs from the record."""
         record = getattr(self.document, "record", None)
         differences = records.differences(record, self.workflow, self.folder) if record and record.results else []
         if differences:
             box = QMessageBox(self)
             box.setWindowTitle("This is not the recorded experiment")
-            box.setText("Re-running now would not reproduce the saved results, because:")
+            box.setText(f"Running now would not reproduce {self._repro.version or 'the record'}, because:")
             box.setInformativeText("\n".join("• " + d for d in differences))
             box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
             box.button(QMessageBox.Ok).setText("Run anyway")
@@ -712,6 +724,62 @@ class WorkflowPage(QWidget):
                 return
         self.runner.cache.clear()
         self.run = None
+        self.run_from(None)
+
+    # -- versions --------------------------------------------------------------------------------
+    def keep_version(self) -> None:
+        """⋯ › Keep as version: a note, then the run is recorded as the next version."""
+        if self.run is None or self.run.failed() or self._running:
+            self.status.emit("Keep a version once a run finished with no box failed")
+            return
+        if not self.document.path:
+            self.status.emit("Keep the analysis in the folder first (the Keep button); versions live in its file")
+            return
+        number = (self.versions.latest.number if self.versions.latest else 0) + 1
+        suggested = self.suggested_note()
+        note, ok = QInputDialog.getText(self.window(), f"Keep as v{number}",
+                                        "A note on what changed, or why (shown beside the version):",
+                                        QLineEdit.Normal, suggested)
+        if not ok:
+            return
+        self.write_to(self.document.path, quiet=True, keep=note.strip())
+        self.status.emit(f"Kept v{number}" + (f": {note.strip()}" if note.strip() else ""))
+        if self.body.currentIndex() == VERSIONS:
+            self.versions_view.refresh()
+
+    def suggested_note(self) -> str:
+        """A note for the next version, from what changed: the settings, or the software."""
+        latest = self.versions.latest
+        if latest is None:
+            return "First run"
+        label = snapshots.describe_change(latest.snapshot, snapshots.take(self.workflow, self.run))
+        if not label.startswith("Run again"):
+            return label
+        from ... import __version__
+        if latest.software and latest.software != __version__:
+            return f"After the update to OpenProcess {__version__}"
+        return ""
+
+    def restore_version(self, version: Version) -> None:
+        """Put the whole workflow back as it was in ``version`` (⌘Z undoes it), and run."""
+        try:
+            fresh = Workflow.from_dict(version.workflow, self.library)
+        except Exception as error:  # noqa: BLE001 - a box gone missing since, say
+            self.status.emit(f"Could not restore v{version.number}: {error}")
+            return
+        if fresh.to_dict() == self.workflow.to_dict():
+            self.status.emit(f"The workflow is as it was in v{version.number} already")
+            return
+        self._pending.clear()
+        self.workflow.nodes, self.workflow.edges, self.workflow.groups = fresh.nodes, fresh.edges, fresh.groups
+        if self.selected is not None and self.selected not in self.workflow.nodes:
+            self.selected = None
+        self.scene.rebuild()
+        self.select(self.selected)
+        self._mark_edited(f"restoring v{version.number}")
+        self.refresh_title()
+        self.status.emit(f"Restored v{version.number}; running")
+        self.show_view(REPORT)
         self.run_from(None)
 
     # -- edits ----------------------------------------------------------------------------------
@@ -1167,7 +1235,8 @@ class WorkflowPage(QWidget):
     def show_record(self) -> None:
         python = to_python(self.workflow)
         record = records.make_record(self.workflow, self.run, self.folder, lock=False)
-        data = {"format": records.FORMAT, **self.workflow.to_dict(), "record": record.to_dict()}
+        data = {"format": records.FORMAT, **self.workflow.to_dict(), "versions": self.versions.to_list(),
+                "record": record.to_dict()}
         text = json.dumps(data, indent=2, ensure_ascii=False, default=str)
         dialog = QDialog(self.window())
         dialog.setWindowTitle(f"{self.workflow.name}: the record")
@@ -1195,14 +1264,17 @@ class WorkflowPage(QWidget):
         dialog.show()
         self._record_dialog = dialog
 
-    def write_to(self, path: str, quiet: bool = False) -> None:
-        """Save the workflow and its record to ``path`` (the window's Keep / Save As)."""
+    def write_to(self, path: str, quiet: bool = False, keep: str | None = None) -> None:
+        """Save the workflow, its versions and its record to ``path`` (the window's
+        Keep / Save As, autosave); ``keep``: a note, and this run is kept as the next version."""
         target = Path(path)
         if target.stem and (not self.document.path or Path(self.document.path) != target):
             self.workflow.name = target.stem          # Keep / Save As: named after the file; a save keeps the name
         self.document.record = records.save(self.workflow, target, self.run, self.folder or target.parent,
                                             history=self.history.to_dict(),
-                                            previous=getattr(self.document, "record", None))
+                                            previous=getattr(self.document, "record", None),
+                                            versions=self.versions, keep=keep)
+        self.document.versions = self.versions
         self.document.path = str(target)
         self.document.dirty = False
         # Saved while a run was going: the record is of the run before, so the one
@@ -1230,11 +1302,12 @@ class WorkflowPage(QWidget):
 
     def export(self) -> None:
         from ..studio.widgets import suggested_path
-        path, _ = QFileDialog.getSaveFileName(self, "Save workflow", suggested_path(f"{self.workflow.name}.cpnflow"),
-                                              "Workflow (*.cpnflow)")
+        path, _ = QFileDialog.getSaveFileName(self, "Save analysis",
+                                              suggested_path(f"{self.workflow.name}{records.EXTENSION}"),
+                                              f"Analysis (*{records.EXTENSION})")
         if path:
-            if not path.lower().endswith(".cpnflow"):
-                path += ".cpnflow"
+            if not path.lower().endswith(records.EXTENSION):
+                path += records.EXTENSION
             self.write_to(path)
 
     def drawings(self) -> dict[str, str]:

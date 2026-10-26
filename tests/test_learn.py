@@ -215,7 +215,7 @@ def test_replay_alignments_rankings_and_workflows_are_checked(tmp_path):
     wf.connect(miner, fit, "model")
     wf.connect(log, fit, "log")
     save(wf, ex.workflow_path, Runner(context.library).run(wf), folder)
-    result = check(ex, workflow, "my workflow.cpnflow", context)
+    result = check(ex, workflow, "my workflow.analysis", context)
     assert result.correct, result.message
     alpha = Workflow("my workflow", context.library)
     log = alpha.add("typed_log", {"text": LOG, "name": "L"})

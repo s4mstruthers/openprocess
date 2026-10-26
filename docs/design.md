@@ -44,7 +44,7 @@ not by the discipline of the person using it.
    hints; the function still runs in a notebook or a test exactly as the
    app runs it; and the Code tab can show the box's few lines and the
    algorithm it calls, because the box *is* the code.
-2. **Every analysis is a workflow file that can be re-run.** The `.cpnflow`
+2. **Every analysis is a workflow file that can be re-run.** The `.analysis`
    file records the boxes, settings and connections, plus fingerprints of
    the inputs and the box code, every seed, the versions and the installed
    packages. *Buys:* the badge, `--check` in CI, the experiment zip for a
@@ -125,12 +125,11 @@ not by the discipline of the person using it.
 
 ## Open decisions
 
-- **The workflow file's name.** `.cpnflow` and `"format": "cpnflow/1"`
-  predate the rename from CPNpy to OpenProcess. Changing them is a
-  compatibility decision to take with the 1.0 API freeze, with a reader that
-  accepts both.
+- ~~The workflow file's name.~~ Decided in 0.16: `.analysis` and
+  `"format": "analysis/1"`; the reader accepts `.cpnflow` / `cpnflow/1` as
+  well, and the app renames the files when their folder is opened.
 - **What the 1.0 freeze covers.** The proposal: `@box` and what it reads
-  from a signature, the types in `openprocess.flow.types`, the `.cpnflow`
+  from a signature, the types in `openprocess.flow.types`, the `.analysis`
   format and its record, and the `openprocess run` command line. Everything
   in the GUI stays free to change.
 - **Where heavy results live.** In memory and recomputed on open (what the

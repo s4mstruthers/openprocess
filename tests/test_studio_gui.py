@@ -2704,7 +2704,7 @@ def test_an_exported_experiment_opens_as_a_folder_of_its_own(app, tmp_path, monk
     assert asked and "Shared.zip" in asked[0][0] and asked[0][1] == str(tmp_path)
     assert window.workspace is not None and Path(window.workspace.folder).resolve() == (home / "Shared").resolve()
     documents = [d for d in window.documents if isinstance(d, WorkflowDocument)]
-    assert len(documents) == 1 and documents[0].path.endswith("Shared.cpnflow")
+    assert len(documents) == 1 and documents[0].path.endswith("Shared.analysis")
     page = window.pages[documents[0].id]
     end = time.time() + 15
     while time.time() < end and (page._running or page.run is None):
@@ -2824,7 +2824,7 @@ def test_a_large_dotted_chart_is_worked_out_in_the_background(app, monkeypatch):
 
 
 def test_a_workflow_opened_from_another_folder_reads_its_files_from_there(app, tmp_path):
-    """Double-clicking an example's .cpnflow: its log is beside it, not in the open folder."""
+    """Double-clicking an example's .analysis: its log is beside it, not in the open folder."""
     from openprocess.flow import Workflow, save
     from openprocess.gui.studio.app import StudioWindow
     from openprocess.gui.studio.documents import WorkflowDocument
@@ -2834,11 +2834,11 @@ def test_a_workflow_opened_from_another_folder_reads_its_files_from_there(app, t
     (example / "log.txt").write_text("[<a,b,c>^3, <a,c,b>]")
     wf = Workflow("Example")
     wf.connect(wf.add("open_log", {"file": "log.txt"}), wf.add("alpha_miner"))
-    save(wf, example / "Example.cpnflow", folder=example)
+    save(wf, example / "Example.analysis", folder=example)
     window = StudioWindow()
     window.show()
     assert window.open_workspace(str(elsewhere))
-    window.open_path(str(example / "Example.cpnflow"))
+    window.open_path(str(example / "Example.analysis"))
     document = next(d for d in window.documents if isinstance(d, WorkflowDocument))
     page = window.pages[document.id]
     end = time.time() + 15

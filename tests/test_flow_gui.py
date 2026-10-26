@@ -194,7 +194,7 @@ def test_workflow_files_in_a_folder(app, tmp_path):
     window.action_new_workflow(TEMPLATES[0][1])                     # Discover and check, on the folder's log
     page = window.current_page()
     document = page.document
-    assert document.path and document.path.endswith(".cpnflow") and Path(document.path).parent == tmp_path
+    assert document.path and document.path.endswith(".analysis") and Path(document.path).parent == tmp_path
     assert str(_node(page, "open_log").settings["file"]) == "orders.log.txt"
     _wait_run(app, page)
     assert page.run.ok, [r.error for r in page.run.failed()]
@@ -326,9 +326,10 @@ def test_the_page_opens_calm_and_the_panel_comes_with_a_click(app):
     _wait_run(app, page)
     header = [b.text() for b in page.header.findChildren(QPushButton)
               if b.isVisible() and b.objectName() != "reproBadge"]
-    assert header == ["Report", "Canvas", "Runs", "+ Add box", "Run ▶", "⋯"]
+    assert header == ["Report", "Canvas", "Versions", "+ Add box", "Run ▶", "⋯"]
     assert [a.text() for a in page.more_menu.actions() if a.text()] == [
-        "Re-run", "Record…", "Export experiment…", "Export as Python script…", "Export report…", "Save"]
+        "Run from scratch", "Keep as version…", "Record…", "Export experiment…", "Export as Python script…",
+        "Export report…", "Save"]
     assert not page.panel.isVisible() and not hasattr(page, "box_tree")
     assert page.body.currentIndex() == 0 and page.view_switch.index() == 0          # the Report
     log, miner = page.workflow.order()[:2]
@@ -952,25 +953,24 @@ def test_the_header_says_whether_the_analysis_is_reproducible(app, tmp_path):
     assert page.header.badge is not None and page.header.badge.text() == "●  Not recorded"
     assert "Not recorded yet" in page.header.badge.toolTip()
     _wait_run(app, page)
-    window._flush_autosaves()                                # the run is recorded on save
-    assert page.header.badge.text() == "●  Reproducible"
+    window._flush_autosaves()                                # the first good run is kept as v1 on save
+    assert page.header.badge.text() == "●  v1 · reproducible"
     assert page.document.record is not None and page.document.record.results
+    assert [v.title for v in page.versions.items] == ["v1 · First run"]
     (week / "orders.log.txt").write_text("[<a,b>^9]", encoding="utf-8")
     page.refresh_reproducibility()
-    assert page.header.badge.text() == "●  1 change since"
+    assert page.header.badge.text() == "●  v1 · 1 change"
     assert "has changed" in page.header.badge.toolTip()
     window.resize(700, 600)                                  # short of room: the dot alone
     _pump(app, 0.3)
     assert page.header.badge.text() == "●"
     window.resize(1400, 900)
     _pump(app, 0.3)
-    assert page.header.badge.text() == "●  1 change since"
-    page.header.badge.click()                                # the record, with the status on top
+    assert page.header.badge.text() == "●  v1 · 1 change"
+    page.header.badge.click()                                # the Versions view, the status on top
     _pump(app, 0.2)
-    from PySide6.QtWidgets import QDialog, QLabel
-    dialog = next(d for d in window.findChildren(QDialog) if "the record" in d.windowTitle())
-    assert any("1 change since" in w.text() for w in dialog.findChildren(QLabel))
-    dialog.close()
+    assert page.body.currentIndex() == 2
+    assert any("1 change since" in w.text() for w in page.versions_view.status.findChildren(QLabel))
     page.document.dirty = False
     window.close()
 
@@ -1086,36 +1086,104 @@ def test_export_report_writes_one_page_with_the_drawings(app, tmp_path, monkeypa
     window.close()
 
 
-def test_runs_keeps_every_run_and_puts_settings_back(app):
-    """Report | Canvas | Runs: each finished run is a snapshot with what
-    changed; A and B compare box by box; Use A's settings goes back to the Report."""
+def test_versions_keep_the_record_and_come_back(app, tmp_path, monkeypatch):
+    """Report | Canvas | Versions: the first good run is v1; a changed setting
+    shows as a change against it; Keep as version makes v2 with a note;
+    Compare with now lines the boxes up; Restore puts v1's workflow back."""
+    from PySide6.QtWidgets import QInputDialog, QPushButton
+
     from openprocess.gui.flow.templates import TEMPLATES
     from openprocess.gui.studio.app import StudioWindow
 
+    week = tmp_path / "Week 1"
+    week.mkdir()
+    (week / "orders.log.txt").write_text("[<a,b,c,d>^3, <a,c,b,d>^2, <a,e,d>]", encoding="utf-8")
     window = StudioWindow()
     window.resize(1400, 900)
     window.show()
+    assert window.open_workspace(str(week))
     window.action_new_workflow(TEMPLATES[0][1])
     page = window.current_page()
     _wait_run(app, page)
+    window._flush_autosaves()
     assert [s.label for s in page.history.snapshots] == ["First run"]
+    assert [v.title for v in page.versions.items] == ["v1 · First run"]
+    assert page.header.badge.text() == "●  v1 · reproducible"
     miner = page.workflow.order()[1]
     before = page.workflow.nodes[miner.id].settings["noise"]        # the template's IMf noise
     page.workflow.set(miner.id, noise=0.4)
-    page.run_from([miner.id])
+    page._edited([miner.id])
     _wait_run(app, page)
-    assert [s.label for s in page.history.snapshots] == ["First run", f"Inductive Miner: noise {before} → 0.4"]
+    window._flush_autosaves()                                      # a save keeps the record as it is
+    assert [v.number for v in page.versions.items] == [1]
+    assert page.header.badge.text() == "●  v1 · 1 change" and page._repro.can_keep
+    assert f"noise {before} → 0.4" in page.header.badge.toolTip()
     page.view_switch.set_index(2)
     _pump(app, 0.3)
-    assert page.body.currentIndex() == 2 and page.runs.table.rowCount() == 2
-    assert page.runs.a is page.history.snapshots[0] and page.runs.b is page.history.snapshots[1]
-    rows = [page.runs.diff.item(r, 0).text() for r in range(page.runs.diff.rowCount())]
-    assert rows == [page.workflow.title(n.id) for n in page.workflow.order()]
-    assert f"noise {before} → 0.4" in page.runs.diff.item(1, 3).text()
-    page.runs.use_a.click()                                   # back to the first run's noise
+    assert page.body.currentIndex() == 2
+    titles = [c.title_label.text() for c in page.versions_view.cards if hasattr(c, "title_label")]
+    assert titles == ["Since v1 · 1 run not kept", "v1 · First run"]
+    assert page.suggested_note() == f"Inductive Miner: noise {before} → 0.4"
+    monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("more noise", True)))
+    page.keep_version()
+    _pump(app, 0.3)
+    assert [v.title for v in page.versions.items] == ["v1 · First run", "v2 · more noise"]
+    assert page.versions.latest.label == f"Inductive Miner: noise {before} → 0.4"
+    assert page.header.badge.text() == "●  v2 · reproducible"
+    titles = [c.title_label.text() for c in page.versions_view.cards if hasattr(c, "title_label")]
+    assert titles == ["v2 · more noise", "v1 · First run"]
+    assert not page.versions_view.comparison.isVisible()
+    page.versions_view.compare(page.versions.get(1))
+    assert page.versions_view.comparison.isVisible()
+    rows = [page.versions_view.diff.item(r, 0).text() for r in range(page.versions_view.diff.rowCount())]
+    assert set(rows) == {page.workflow.title(n.id) for n in page.workflow.order()}
+    changed = [page.versions_view.diff.item(r, 3).text() for r in range(page.versions_view.diff.rowCount())]
+    assert any(f"noise {before} → 0.4" in c for c in changed)
+    restore = next(b for b in page.versions_view.cards[-1].findChildren(QPushButton) if b.text() == "Restore")
+    restore.click()                                               # v1's workflow back, and running
     assert page.workflow.nodes[miner.id].settings["noise"] == before and page.body.currentIndex() == 0
     _wait_run(app, page)
-    assert page.history.snapshots[-1].label == f"Inductive Miner: noise 0.4 → {before}"
+    assert page.header.badge.text() == "●  v2 · 1 change"
+    page.undo()                                                   # ⌘Z undoes the restore
+    assert page.workflow.nodes[miner.id].settings["noise"] == 0.4
+    _wait_run(app, page)
+    page.document.dirty = False
+    window.close()
+
+
+def test_an_older_cpnflow_file_is_renamed_when_its_folder_opens(app, tmp_path):
+    """A folder with analyses saved before 0.16 (.cpnflow) opens them as
+    .analysis files: renamed on disk, listed, and still open next time."""
+    import json
+
+    from openprocess.flow import Runner, Workflow, save
+    from openprocess.gui.studio.app import StudioWindow
+    from openprocess.gui.studio.documents import WorkflowDocument
+
+    week = tmp_path / "Week 1"
+    week.mkdir()
+    (week / "orders.log.txt").write_text("[<a,b,c>^3, <a,c,b>]", encoding="utf-8")
+    wf = Workflow("Orders")
+    wf.connect(wf.add("open_log", {"file": "orders.log.txt"}), wf.add("alpha_miner"))
+    save(wf, week / "Orders.cpnflow", Runner(folder=week).run(wf), week, lock=False)
+    old = json.loads((week / "Orders.cpnflow").read_text(encoding="utf-8"))     # as 0.15 wrote it
+    old.pop("versions")
+    old["format"] = "cpnflow/1"
+    (week / "Orders.cpnflow").write_text(json.dumps(old, default=str), encoding="utf-8")
+    (week / ".openprocess").write_text(json.dumps({"open": [{"path": str(week / "Orders.cpnflow")}],
+                                                   "selected": str(week / "Orders.cpnflow")}))
+    window = StudioWindow()
+    window.resize(1400, 900)
+    window.show()
+    assert window.open_workspace(str(week))
+    assert not (week / "Orders.cpnflow").exists() and (week / "Orders.analysis").is_file()
+    assert "renamed from .cpnflow" in window.statusBar().currentMessage()
+    document = next(d for d in window.documents if isinstance(d, WorkflowDocument))
+    assert document.path == str(week / "Orders.analysis")
+    page = window.pages[document.id]
+    assert [v.title for v in page.versions.items] == ["v1 · Recorded before versions"]
+    _wait_run(app, page, 15)
+    assert page.header.badge.text() == "●  v1 · reproducible"
     page.document.dirty = False
     window.close()
 
@@ -1463,8 +1531,8 @@ def _energy_example(tmp_path: Path) -> Path:
 
     folder = tmp_path / "energy"
     folder.mkdir()
-    shutil.copy(Path(__file__).parent.parent / "examples" / "energy_contracts" / "Energy contracts.cpnflow",
-                folder / "Energy contracts.cpnflow")
+    shutil.copy(Path(__file__).parent.parent / "examples" / "energy_contracts" / "Energy contracts.analysis",
+                folder / "Energy contracts.analysis")
     approve = ["Receive application", "Add customer details", "Add meter details", "Start cancellation",
                "Cancel previous contract", "Approve contract"]
     reject = ["Receive application", "Add customer details", "Add meter details", "Reject contract"]
@@ -1505,7 +1573,7 @@ def test_the_report_lists_every_box_and_follows_the_run(app, tmp_path):
     window = StudioWindow()
     window.resize(1400, 900)
     window.show()
-    window.open_path(str(folder / "Energy contracts.cpnflow"))
+    window.open_path(str(folder / "Energy contracts.analysis"))
     page = window.current_page()
     assert isinstance(page, WorkflowPage) and len(page.workflow.nodes) == 35
     assert page.body.currentIndex() == REPORT and page.view_switch.index() == REPORT
@@ -1588,7 +1656,7 @@ def test_opening_and_running_a_workflow_leaves_its_file_alone(app, tmp_path):
     from openprocess.gui.flow.page import WorkflowPage
     from openprocess.gui.studio.app import AUTOSAVE_DELAY, StudioWindow
 
-    source = Path(__file__).resolve().parent.parent / "examples" / "bpi2019" / "BPI Challenge 2019.cpnflow"
+    source = Path(__file__).resolve().parent.parent / "examples" / "bpi2019" / "BPI Challenge 2019.analysis"
     target = tmp_path / source.name
     shutil.copy(source, target)                    # without BPI_Challenge_2019.xes beside it
     original = target.read_bytes()

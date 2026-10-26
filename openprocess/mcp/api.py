@@ -252,7 +252,7 @@ def dotted_chart(source: str, output: str | None = None, *, x: str = "actual", r
 # Models
 # ---------------------------------------------------------------------------
 def load_net(path: str) -> PetriNet:
-    """A Petri net from a PNML file (or a BPMN file, converted; or a .cpnflow's
+    """A Petri net from a PNML file (or a BPMN file, converted; or a .analysis's
     first net result)."""
     target = Path(path).expanduser()
     if not target.is_file():
@@ -392,7 +392,7 @@ def discover(source: str, algorithm: str = "inductive", *, noise: float = 0.0, d
            "reproduce": {"python": code, "command": command.format(output=_q(target)), "box": box_id,
                          "note": "The same log and settings give the same model: the algorithms are "
                                  "deterministic. For a record that can be checked later, build a workflow "
-                                 "(build_workflow) and keep the .cpnflow with its results."}}
+                                 "(build_workflow) and keep the .analysis with its results."}}
     if draw:
         from ..mining.drawing import svg_of
         out["svg"] = svg_of(net)
@@ -764,7 +764,7 @@ def _result_summary(workflow, run, node, how: bool) -> dict:
 
 def build_workflow(spec: dict, output: str, *, folder: str | None = None, run: bool = True,
                    how: bool = True, overwrite: bool = False, client: str = "") -> dict:
-    """Build an analysis from a description, save it as a ``.cpnflow`` and (by
+    """Build an analysis from a description, save it as a ``.analysis`` and (by
     default) run it and keep the record that makes it reproducible.
 
     ``spec``: ``{"name": "…", "boxes": [{"id": "n1", "box": "open_log", "settings": {"file":
@@ -800,7 +800,7 @@ def build_workflow(spec: dict, output: str, *, folder: str | None = None, run: b
         results = {node.id: _result_summary(wf, run_object, node, how) for node in wf.order()}
     with changes.recording(target, "build_workflow", f"Analysis {wf.name}" + (" (run and recorded)" if run_object else ""),
                            client=client) as change:
-        save(wf, target, run_object, folder=base)
+        save(wf, target, run_object, folder=base)          # a run with no box failed is kept as v1
     return {"file": str(target), "name": wf.name, "boxes": [{"id": n.id, "box": n.box, "title": wf.title(n),
                                                              "settings": n.settings} for n in wf.order()],
             "problems": problems, "ran": run_object is not None, "results": results, "change": change.id,
@@ -813,15 +813,15 @@ def build_workflow(spec: dict, output: str, *, folder: str | None = None, run: b
 
 def run_workflow(path: str, *, check: bool = False, how: bool = False, report: str | None = None,
                  client: str = "") -> dict:
-    """Run a saved ``.cpnflow`` (headless), optionally checking every result
+    """Run a saved ``.analysis`` (headless), optionally checking every result
     against the file's record, and optionally writing the HTML report."""
-    from ..flow.record import check as check_record, differences, load
+    from ..flow.record import check as check_record, differences, load_all
     from ..flow.runner import Runner
     target = Path(path).expanduser()
     if not target.is_file():
         raise ToolError(f"No such workflow: {path}")
     library = _library(target.parent)
-    wf, record = load(target, library)
+    wf, record, versions = load_all(target, library)
     notes = list(differences(record, wf, target.parent))
     problems = wf.validate()
     if problems:
@@ -836,7 +836,8 @@ def run_workflow(path: str, *, check: bool = False, how: bool = False, report: s
                                                                "(run it in OpenProcess or with --save once)."}
         else:
             differing = check_record(wf, record, run, complete=True)
-            out["check"] = {"status": "reproduced" if not differing else "differs", "differences": differing}
+            out["check"] = {"status": "reproduced" if not differing else "differs", "differences": differing,
+                            "against": f"v{versions.latest.number}" if versions.latest else "the record"}
     if report:
         from ..flow.report import write_report
         rpath = _target(report, Path(report).expanduser(), True)
