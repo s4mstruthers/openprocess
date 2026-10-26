@@ -99,7 +99,7 @@ jobs:
             # cryptography (for the connector's sign-in support) has no Intel
             # macOS wheel from 49 on; a copy compiled on the runner does not
             # load in the app, so the last release with one is used.
-            pins: "cryptography<49"
+            pins: "cryptography~=48.0"      # no shell symbols: it goes on the pip command line as is
           - name: Windows
             os: windows-latest
           - name: Linux
