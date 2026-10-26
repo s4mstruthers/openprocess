@@ -21,13 +21,13 @@ it.  The page then writes the edited log back to its file (see
 from __future__ import annotations
 
 import copy
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHeaderView,
-    QInputDialog, QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPlainTextEdit,
+    QInputDialog, QLineEdit, QListView, QMessageBox, QPlainTextEdit,
     QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -57,6 +57,8 @@ NOTATION_HELP = ("Write traces as <a,b,c>^n, separated by commas. Activity names
 
 def is_plain(log: EventLog) -> bool:
     """Nothing but activity names: saving it in notation loses nothing."""
+    if log.columnar:
+        return log.traces.store.is_plain()
     for trace in log.traces:
         if set(trace.attributes) - {KEY_NAME}:
             return False
@@ -195,14 +197,138 @@ def parse_time(text: str):
     return datetime.fromisoformat(text.replace("T", " ", 1) if "T" in text else text)
 
 
+class CaseListModel(QAbstractListModel):
+    """The cases of the log being edited, one row each, read on demand.
+
+    A log of a quarter of a million cases would be that many list items,
+    each built from its trace; this keeps a small tuple per case (from a
+    columnar log's arrays) and formats a row only when it is drawn.  The
+    search filters the tuples in Python."""
+
+    def __init__(self, log: EventLog, parent=None) -> None:
+        super().__init__(parent)
+        self.log = log
+        self.rows: list[tuple[str, int]] = []       # (case id, number of events)
+        self.visible: list[int] | None = None       # indices into rows, or all
+        self._by_activity: dict[str, list[int]] | None = None   # activity -> cases, columnar only
+
+    def refresh(self) -> None:
+        """Read the cases again (after a case was added or removed)."""
+        self.beginResetModel()
+        log = self.log
+        if log.columnar:
+            store = log.traces.store
+            offsets = store.offsets
+            self.rows = [(store.case_ids[i], offsets[i + 1] - offsets[i]) for i in range(store.case_count)]
+        else:
+            self.rows = [(trace.case_id, len(trace.events)) for trace in log.traces]
+            self._by_activity = None
+        self.endResetModel()
+
+    def refresh_row(self, trace_index: int) -> None:
+        trace = self.log.traces[trace_index]
+        self.rows[trace_index] = (trace.case_id, len(trace.events))
+        row = self.row_of(trace_index)
+        if row is not None:
+            self.dataChanged.emit(self.index(row), self.index(row))
+
+    def row_of(self, trace_index: int) -> int | None:
+        if self.visible is None:
+            return trace_index
+        try:
+            return self.visible.index(trace_index)
+        except ValueError:
+            return None
+
+    def trace_index(self, row: int) -> int:
+        return row if self.visible is None else self.visible[row]
+
+    def set_filter(self, text: str) -> None:
+        """Show the cases whose id or activities contain ``text`` (any case)."""
+        needle = text.strip().lower()
+        self.beginResetModel()
+        if not needle:
+            self.visible = None
+        else:
+            matches = {i for i, (case_id, _n) in enumerate(self.rows) if needle in case_id.lower()}
+            if self.log.columnar:
+                for activity, cases in self._activity_index().items():
+                    if needle in activity:
+                        matches.update(cases)
+            else:
+                for i, trace in enumerate(self.log.traces):
+                    if i not in matches and any(needle in str(e.activity or "").lower()
+                                                for e in trace.events):
+                        matches.add(i)
+            self.visible = sorted(matches)
+        self.endResetModel()
+
+    def _activity_index(self) -> dict[str, list[int]]:
+        """Per activity (lower case), the cases it occurs in: one pass over the
+        arrays the first time an activity is searched for."""
+        if self._by_activity is None:
+            store = self.log.traces.store
+            codes, offsets = store.activity.codes, store.offsets
+            by_code: list[list[int]] = [[] for _ in store.activity.values]
+            for case in range(store.case_count):
+                for code in set(codes[offsets[case]:offsets[case + 1]]):
+                    if code >= 0:
+                        by_code[code].append(case)
+            self._by_activity = {value.lower(): cases for value, cases in zip(store.activity.values, by_code)}
+        return self._by_activity
+
+    def rowCount(self, parent=QModelIndex()) -> int:
+        if parent.isValid():
+            return 0
+        return len(self.rows) if self.visible is None else len(self.visible)
+
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        trace_index = self.trace_index(index.row())
+        if role == Qt.UserRole:
+            return trace_index
+        if role == Qt.DisplayRole:
+            case_id, count = self.rows[trace_index]
+            return f"{case_id or '(no id)'}  ·  {count}"
+        if role == Qt.ToolTipRole:
+            return " → ".join(str(e.activity) for e in self.log.traces[trace_index].events)
+        return None
+
+
+class CaseList(QListView):
+    """The list of cases, with the row API the editor (and its tests) use."""
+
+    def __init__(self, model: CaseListModel, parent=None) -> None:
+        super().__init__(parent)
+        self.setModel(model)
+        self.setUniformItemSizes(True)
+        self.setEditTriggers(QAbstractItemView.NoEditTriggers)
+
+    def count(self) -> int:
+        return self.model().rowCount()
+
+    def currentRow(self) -> int:
+        return self.currentIndex().row()
+
+    def setCurrentRow(self, row: int) -> None:
+        self.setCurrentIndex(self.model().index(row))
+
+
 class CaseEditor(QWidget):
-    """Cases on the left, the events of the selected case on the right."""
+    """Cases on the left, the events of the selected case on the right.
+
+    The log is edited in place; the first change marks a columnar log as
+    modified, so everything else reads its trace objects, not its arrays."""
 
     def __init__(self, log: EventLog, columns: list[str] | None = None, parent=None) -> None:
         super().__init__(parent)
         self.log = log
-        present = {key for trace in log.traces for event in trace.events
-                   for key in event.attributes}
+        if log.columnar:
+            present = log.traces.store.present_keys()
+        else:
+            present = {key for trace in log.traces for event in trace.events
+                       for key in event.attributes}
         self.columns = [(k, h) for k, h in COLUMNS
                         if k == KEY_NAME or (columns is None and k in present)
                         or (columns is not None and k in columns)]
@@ -210,8 +336,12 @@ class CaseEditor(QWidget):
         self._filling = False
         #: The time zone of the log's timestamps: a time typed without an offset
         #: gets it (naive and zone-aware times cannot be compared).
-        self.zone = next((e.timestamp.tzinfo for t in log.traces for e in t.events
-                          if e.timestamp is not None and e.timestamp.tzinfo is not None), None)
+        if log.columnar:
+            offset = log.traces.store.first_offset()
+            self.zone = None if offset is None else timezone(timedelta(minutes=offset))
+        else:
+            self.zone = next((e.timestamp.tzinfo for t in log.traces for e in t.events
+                              if e.timestamp is not None and e.timestamp.tzinfo is not None), None)
         self.bad_cells: set[tuple[int, int, int]] = set()     # (trace id, row, column)
 
         layout = QVBoxLayout(self)
@@ -232,10 +362,14 @@ class CaseEditor(QWidget):
         self.search = QLineEdit()
         self.search.setPlaceholderText("Find a case or activity")
         self.search.setClearButtonEnabled(True)
-        self.search.textChanged.connect(self._filter)
+        # Typing filters after a short pause, not at every keystroke.
+        self._search_timer = QTimer(self, singleShot=True, interval=200)
+        self._search_timer.timeout.connect(lambda: self._filter(self.search.text()))
+        self.search.textChanged.connect(lambda _text: self._search_timer.start())
         column.addWidget(self.search)
-        self.cases = QListWidget()
-        self.cases.currentRowChanged.connect(lambda _row: self._show_case())
+        self.case_model = CaseListModel(log, self)
+        self.cases = CaseList(self.case_model)
+        self.cases.selectionModel().currentChanged.connect(lambda _c, _p: self._show_case())
         column.addWidget(self.cases, 1)
         column.addLayout(hbox(button("＋ Case", self.add_case, tooltip="Add an empty case"),
                               button("Duplicate", self.duplicate_case,
@@ -283,41 +417,43 @@ class CaseEditor(QWidget):
         self._fill_cases()
 
     # -- cases -----------------------------------------------------------------------
-    def _case_text(self, trace: Trace) -> str:
-        return f"{trace.case_id or '(no id)'}  ·  {len(trace.events)}"
-
     def _fill_cases(self, select: int = 0) -> None:
+        """Read the cases again and select the one at ``select`` (a trace index)."""
         self.cases.blockSignals(True)
-        self.cases.clear()
-        for index, trace in enumerate(self.log.traces):
-            item = QListWidgetItem(self._case_text(trace))
-            item.setData(Qt.UserRole, index)
-            item.setToolTip(" → ".join(str(e.activity) for e in trace.events))
-            self.cases.addItem(item)
+        self.case_model.refresh()
+        self.case_model.set_filter(self.search.text())
         self.cases.blockSignals(False)
-        self._filter(self.search.text())
         if self.log.traces:
-            self.cases.setCurrentRow(max(0, min(select, len(self.log.traces) - 1)))
+            select = max(0, min(select, len(self.log.traces) - 1))
+            row = self.case_model.row_of(select)
+            self.cases.setCurrentRow(row if row is not None else 0)
         self._show_case()
 
     def _filter(self, text: str) -> None:
-        needle = text.strip().lower()
-        for row in range(self.cases.count()):
-            trace = self.log.traces[row]
-            hit = not needle or needle in trace.case_id.lower() or any(
-                needle in str(e.activity or "").lower() for e in trace.events)
-            self.cases.item(row).setHidden(not hit)
+        current = self.current_trace_index()
+        self.case_model.set_filter(text)
+        row = self.case_model.row_of(current) if current is not None else None
+        if row is None and self.case_model.rowCount():
+            row = 0
+        if row is not None:
+            self.cases.setCurrentRow(row)
+        self._show_case()
+
+    def current_trace_index(self) -> int | None:
+        row = self.cases.currentRow()
+        if not 0 <= row < self.case_model.rowCount():
+            return None
+        index = self.case_model.trace_index(row)
+        return index if index < len(self.log.traces) else None
 
     def current_trace(self) -> Trace | None:
-        row = self.cases.currentRow()
-        return self.log.traces[row] if 0 <= row < len(self.log.traces) else None
+        index = self.current_trace_index()
+        return None if index is None else self.log.traces[index]
 
     def _refresh_case_row(self) -> None:
-        row = self.cases.currentRow()
-        trace = self.current_trace()
-        if trace is not None:
-            self.cases.item(row).setText(self._case_text(trace))
-            self.cases.item(row).setToolTip(" → ".join(str(e.activity) for e in trace.events))
+        index = self.current_trace_index()
+        if index is not None:
+            self.case_model.refresh_row(index)
 
     def _unique_case_id(self, base: str = "case") -> str:
         taken = {t.case_id for t in self.log.traces}
@@ -337,20 +473,20 @@ class CaseEditor(QWidget):
             return
         twin = copy.deepcopy(trace)
         twin.attributes[KEY_NAME] = self._unique_case_id()
-        index = self.cases.currentRow() + 1
+        index = self.current_trace_index() + 1
         self.log.traces.insert(index, twin)
         self._modified()
         self._fill_cases(index)
 
     def delete_case(self) -> None:
-        row = self.cases.currentRow()
-        if row < 0:
+        index = self.current_trace_index()
+        if index is None:
             return
-        gone = id(self.log.traces[row])
-        del self.log.traces[row]
+        gone = id(self.log.traces[index])
+        del self.log.traces[index]
         self.bad_cells = {cell for cell in self.bad_cells if cell[0] != gone}
         self._modified()
-        self._fill_cases(row)
+        self._fill_cases(index)
 
     def _rename_case(self) -> None:
         trace = self.current_trace()
@@ -481,6 +617,8 @@ class CaseEditor(QWidget):
 
     # -- whole log ----------------------------------------------------------------------
     def activities(self) -> list[str]:
+        if self.log.columnar:
+            return sorted(self.log.traces.store.activity.values)
         return sorted({str(e.activity) for t in self.log.traces for e in t.events
                        if e.activity is not None})
 
@@ -501,7 +639,7 @@ class CaseEditor(QWidget):
                 if event.activity == old:
                     event.attributes[KEY_NAME] = new
         self._modified()
-        self._fill_cases(self.cases.currentRow())
+        self._fill_cases(self.current_trace_index() or 0)
 
     def remove_activity(self) -> None:
         names = self.activities()
@@ -515,10 +653,16 @@ class CaseEditor(QWidget):
             trace.events = [e for e in trace.events if e.activity != old]
         self.bad_cells.clear()
         self._modified()
-        self._fill_cases(self.cases.currentRow())
+        self._fill_cases(self.current_trace_index() or 0)
 
     def _modified(self) -> None:
+        """An edit was made.  A columnar log's trace objects now differ from
+        its arrays: from here on it is read as objects (see
+        :meth:`~openprocess.mining.columns.LazyTraces.mark_modified`)."""
         self.changed = True
+        mark = getattr(self.log.traces, "mark_modified", None)
+        if mark is not None:
+            mark()
 
     def _update_problem(self) -> None:
         if self.bad_cells:
@@ -550,7 +694,13 @@ class LogEditorDialog(QDialog):
         self.plain = is_plain(document.log)
         #: The original notation, when the log was written in it.
         self.original_notation = getattr(document, "notation", None)
-        self.working = copy.deepcopy(document.log)
+        # The working copy: a columnar log's arrays are never changed in place
+        # (edits go to trace objects built from them), so it shares them; a
+        # log of objects is copied.  A summary worked out for the original
+        # does not come along.
+        self.working = (document.log.with_same_traces() if document.log.columnar
+                        else copy.deepcopy(document.log))
+        self.working.__dict__.pop("precomputed_summaries", None)
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
@@ -562,8 +712,12 @@ class LogEditorDialog(QDialog):
         notation_page = QWidget()
         column = QVBoxLayout(notation_page)
         column.setContentsMargins(0, 0, 0, 0)
+        # A large log's notation (a line per variant) is written when the
+        # Notation tab is first shown, not when the dialog opens.
+        self._notation_ready = self.plain or self.original_notation is not None
         self.notation = NotationEditor(self.original_notation
-                                       or notation_of(self.working, document.classifier),
+                                       or (notation_of(self.working, document.classifier)
+                                           if self._notation_ready else ""),
                                        examples=False)
         self.notation_warning = label(
             "This log has timestamps or other attributes. Saving it from the notation keeps "
@@ -603,6 +757,10 @@ class LogEditorDialog(QDialog):
     def _switch(self, index: int) -> None:
         if index == self._mode:
             return
+        if index == self.NOTATION and not self._notation_ready:
+            self._notation_ready = True
+            self.notation.set_text(notation_of(self.working, self._classifier()))
+            self._notation_text = self._initial_notation = self.notation.text()
         if index == self.EVENTS:
             if self.notation.text() != self._notation_text:
                 if not self.notation.valid:

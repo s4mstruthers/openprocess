@@ -6,6 +6,32 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## Unreleased
+
+- **A large log's page no longer freezes the window.** Measured on the BPI
+  Challenge 2019 log (1.6 million events, a quarter of a million cases):
+  typing in the Cases tab's filter cost 1.3 s a keystroke and now filters
+  after a short pause in a hundredth of a second; *Filter…* opened in 34 s
+  using 700 MB and now opens in a second using none, and works out its
+  preview in the background while you tick things; *Edit…* opened in 10 s
+  with a copy of the whole log and now opens in a second without one, with
+  a case list that is read as it scrolls and a search that waits for you to
+  stop typing; *Export…* wrote the whole file in memory first and froze the
+  window for 13 s, and now writes it in the background, straight from the
+  log's columns, in 3 s, counting the cases in the status bar (the log is
+  that file at once); dragging the process map's sliders redraws when you
+  let go, as the Discover tab does; and switching the classifier back to
+  one you looked at before costs nothing (the Cases tab is kept, with the
+  variant numbers updated).
+- **Edits to a large log were not seen by the views.** Renaming an activity
+  or changing a cell in *Edit…* on a log read into columns changed the
+  saved file but not the overview, the variants or the process map, which
+  kept reading the unchanged columns. An edit now marks the log, so every
+  view reads the edited cases.
+- A filter that keeps only some activities' events, and a filter with
+  nothing ticked, keep a large log in its columns instead of turning it
+  into objects.
+
 ## 0.13.2
 
 - **Claude Desktop can open its results in OpenProcess.** When Claude

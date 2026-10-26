@@ -159,6 +159,8 @@ def filter_activities(log: EventLog, activities: set[str], mode: str = "keep eve
         raise ValueError(f"mode must be one of {ACTIVITY_MODES}")
     classifier = classifier or log.default_classifier()
     if mode == "keep events":
+        if log.columnar:
+            return _keep_events_in_columns(log, activities, classifier)
         kept = []
         for trace in log:
             events = [event for event in trace if classifier.label(event) in activities]
@@ -168,6 +170,21 @@ def filter_activities(log: EventLog, activities: set[str], mode: str = "keep eve
     kept = [i for i, sequence in enumerate(log.sequences(classifier))
             if any(activity in activities for activity in sequence) == (mode == "mandatory")]
     return _keep(log, kept)
+
+
+def _keep_events_in_columns(log: EventLog, activities: set[str], classifier: Classifier) -> EventLog:
+    """The *keep events* projection of a columnar log, from its arrays and
+    back into columns (see :meth:`.columns.ColumnStore.select_events`)."""
+    store = log.traces.store
+    labels = store.event_labels(classifier.keys)
+    accepted = store.accepted(classifier.lifecycles)
+    kept: list[tuple[int, list[int]]] = []
+    offsets = store.offsets
+    for case in range(store.case_count):
+        events = [i for i in range(offsets[case], offsets[case + 1]) if labels[i] in activities]
+        if events and (accepted is None or any(accepted[i] for i in events)):
+            kept.append((case, events))
+    return EventLog.from_columns(store.select_events(kept), **log.metadata())
 
 
 def filter_case_length(log: EventLog, minimum: int, maximum: int,
@@ -237,7 +254,7 @@ def apply_filters(log: EventLog, settings: FilterSettings,
         result = filter_variants(result, classifier, coverage=settings.variant_coverage,
                                  count=settings.top_variants)
     if result is log:
-        result = _derived(log, list(log.traces))
+        result = log.with_same_traces()
     result.attributes = dict(log.attributes)
     result.attributes[KEY_NAME] = name or f"{log.name} (filtered)"
     result.attributes["openprocess:filter"] = "; ".join(settings.describe()) or "none"

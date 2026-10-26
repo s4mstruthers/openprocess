@@ -49,6 +49,10 @@ class DFG:
     durations: dict[tuple[str, str], list[float]] = field(default_factory=dict)
     trace_count: int = 0
     empty_traces: int = 0
+    #: Each edge's (mean, median) duration once asked for: a map of a million
+    #: events is redrawn at every move of a slider, and the durations do not
+    #: change.  Simplified maps share the entries.
+    _stats: dict = field(default_factory=dict, repr=False, compare=False)
 
     # -- queries --------------------------------------------------------
     def successors(self, activity: str) -> set[str]:
@@ -57,13 +61,19 @@ class DFG:
     def predecessors(self, activity: str) -> set[str]:
         return {a for (a, b) in self.edges if b == activity}
 
+    def _duration_stats(self, edge: tuple[str, str]) -> tuple[float | None, float | None]:
+        stats = self._stats.get(edge)
+        if stats is None:
+            values = self.durations.get(edge)
+            stats = (statistics.fmean(values), statistics.median(values)) if values else (None, None)
+            self._stats[edge] = stats
+        return stats
+
     def mean_duration(self, edge: tuple[str, str]) -> float | None:
-        values = self.durations.get(edge)
-        return statistics.fmean(values) if values else None
+        return self._duration_stats(edge)[0]
 
     def median_duration(self, edge: tuple[str, str]) -> float | None:
-        values = self.durations.get(edge)
-        return statistics.median(values) if values else None
+        return self._duration_stats(edge)[1]
 
     def all_edges(self) -> list[tuple[str, str, int]]:
         """Edges including the artificial start/end ones, as (a, b, count)."""
@@ -112,6 +122,8 @@ class DFG:
                 result.edges[(a, b)] = n
                 if (a, b) in self.durations:
                     result.durations[(a, b)] = self.durations[(a, b)]
+                    if (a, b) in self._stats:
+                        result._stats[(a, b)] = self._stats[(a, b)]
         return result
 
 
