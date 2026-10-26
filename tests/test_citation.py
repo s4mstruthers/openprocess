@@ -46,7 +46,8 @@ def test_the_algorithms_cite_the_works_they_follow():
 def test_the_app_cites_itself_and_the_cff_file_is_current():
     text = citation.app_bibtex("0.10.0", 2026)
     assert text.startswith("@software{openprocess,") and "version = {0.10.0}" in text and "Struthers, Sam" in text
-    assert "0.10.0" in citation.app_text("0.10.0", 2026) and citation.APP_URL in citation.app_text("0.10.0", 2026)
+    assert "0.10.0" in citation.app_text("0.10.0", 2026)
+    assert citation.app_text("0.10.0", 2026).endswith("https://doi.org/" + citation.concept_doi())   # archived on Zenodo
     cff = Path(__file__).resolve().parents[1] / "CITATION.cff"
     assert cff.exists()
     assert f"version: {openprocess.__version__}" in cff.read_text(encoding="utf-8"), \
@@ -65,7 +66,7 @@ def test_the_doi_comes_from_citation_cff_when_there_is_one(tmp_path, monkeypatch
     assert "doi     = {10.5281/zenodo.1234567}" in entry.bibtex()
     assert citation.app_text("1.0.0", 2030, doi="10.5281/zenodo.1234567").endswith("https://doi.org/10.5281/zenodo.1234567")
     assert citation.app_text("1.0.0", 2030, doi="").endswith(citation.APP_URL)
-    assert citation.concept_doi() == ""                     # not archived yet: CITATION.cff has no doi line
+    assert citation.concept_doi() == "10.5281/zenodo.23295550"   # the concept DOI in CITATION.cff, for all versions
 
 
 def test_citation_cff_is_valid_yaml_despite_the_colon_in_the_title():
