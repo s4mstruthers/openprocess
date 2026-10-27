@@ -107,3 +107,28 @@ def test_the_pointer_finds_the_nearest_shown_dot(app, monkeypatch):
     assert found is not None and d.rows[found] == 0 and d.xs[found] == 1.0
     chart.hidden_colours = set(range(len(d.colour_values)))
     assert chart.dot_at(point) is None
+
+
+def test_the_hover_counts_the_dots_drawn_under_one(app, monkeypatch):
+    from openprocess.gui.studio import dotted_chart
+    from openprocess.gui.studio.documents import LogDocument
+    chart = _chart(app, monkeypatch, batch_from=10_000)
+    # Rows by activity, x by position in case (from 0): the 10 <b,a> cases
+    # put 10 dots on one spot.
+    chart.set_data(dotted_chart.DotData(LogDocument(LOG), DotSettings(x_mode=4, rows="Activity")))
+    chart.show()
+    app.processEvents()
+    chart.repaint()
+    d = chart.data
+    a_row = d.rows[next(j for j in range(len(d.xs)) if d.event(j).activity == "a" and d.xs[j] == 1.0)]
+    pile = np.flatnonzero((d.rows == a_row) & (d.xs == 1.0))
+    assert len(pile) == 10
+    i = int(pile[0])
+    stack = chart.stacked_with(i)
+    assert stack[0] == i and len(stack) == len(pile)
+    text = chart.describe_dot(i)
+    assert f"{len(pile) - 1} more events under this dot" in text
+    # Hidden colours are not counted, and a lone dot says nothing.
+    chart.hidden_colours = set(range(len(d.colour_values)))
+    assert len(chart.stacked_with(i)) == 1
+    assert "under this dot" not in chart.describe_dot(i)
