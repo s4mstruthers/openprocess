@@ -73,6 +73,7 @@ SHAPES = ["circle", "square", "triangle", "diamond", "cross", "star"]
 #: log stays a picture of milliseconds, not seconds.  Shapes, rings and the
 #: lines between a case's events come back as soon as a zoom shows fewer.
 BATCH_FROM = 40_000
+STACK_ALPHA = 0.72        # opacity of a dot; a stack of dots shows darker
 #: Above this many events the dots are worked out on a worker thread.
 BACKGROUND_FROM = 200_000
 #: When drawing the picture took longer than this, a pan or zoom first shows
@@ -381,6 +382,15 @@ class DottedChart(QWidget):
             painter.end()
         return pixmap
 
+    def dot_radius(self, rect: QRectF) -> float:
+        """The radius a dot is drawn with: the size the rows allow (4 px
+        when they are tall, down to 1.6 px when a row is a hairline), scaled
+        by the Dot size setting (4 is 1×), so the slider always does
+        something and a dense chart stays readable."""
+        row_h = rect.height() / max(self.vy1 - self.vy0, 1e-9)
+        fitting = max(1.6, min(4.0, row_h * 0.45))
+        return max(1.0, fitting * self.data.settings.dot_size / 4.0)
+
     def _visible(self, candidates: np.ndarray) -> np.ndarray:
         """The dots of ``candidates`` (dots in the x window) that are in the
         row window and whose colour the legend shows."""
@@ -402,12 +412,7 @@ class DottedChart(QWidget):
         rect = self.plot_rect()
         self._paint_axes(painter, rect, t, s.grid_lines)
 
-        row_h = rect.height() / max(self.vy1 - self.vy0, 1e-9)
-        # The dot size the rows allow (4 px when they are tall, down to 1.6 px
-        # when a row is a hairline), scaled by the Dot size setting (4 is 1×):
-        # the slider always does something, and a dense chart stays readable.
-        fitting = max(1.6, min(4.0, row_h * 0.45))
-        radius = max(1.0, fitting * s.dot_size / 4.0)
+        radius = self.dot_radius(rect)
         # A ring in the surface colour sets a dot apart from its neighbours;
         # drawn on every dot it erases overlapping ones into slivers, so it is
         # kept for the selected case alone, which sits on top.
@@ -423,6 +428,13 @@ class DottedChart(QWidget):
             self._paint_dense(painter, rect, colours, faded, radius, visible)
             on_top = visible[d.case[visible] == selected] if selected >= 0 else []
         else:
+            if selected < 0:
+                # Dots a little translucent, so a stack of events drawn on
+                # the same spot shows darker than a single one.  The dense
+                # picture sets each pixel once, so it stays opaque; the
+                # selected case is opaque to stand out.
+                for colour in colours:
+                    colour.setAlphaF(STACK_ALPHA)
             if s.connect:
                 self._paint_connections(painter, rect, visible, t)
             # Unselected first, the selected case last so it sits on top.
@@ -634,6 +646,16 @@ class DottedChart(QWidget):
         nearest = int(distance.argmin())
         return int(near[nearest]) if distance[nearest] <= tolerance else None
 
+    def stacked_with(self, i: int) -> np.ndarray:
+        """The shown dots drawn over dot ``i``: those on its row whose centre
+        is within a dot's width of it on screen, ``i`` itself first."""
+        d = self.data
+        rect = self.plot_rect()
+        reach = 2 * self.dot_radius(rect) / rect.width() * (self.vx1 - self.vx0)
+        near = d.between(d.xs[i] - reach, d.xs[i] + reach)
+        near = near[(d.rows[near] == d.rows[i]) & d.shown(self.hidden_colours)[d.colour[near]]]
+        return np.concatenate(([i], near[near != i]))
+
     def describe_dot(self, i: int) -> str:
         d = self.data
         event = d.event(i)
@@ -646,6 +668,19 @@ class DottedChart(QWidget):
             if key not in ("concept:name", "time:timestamp"):
                 text = str(value)
                 lines.append(f"{key}: {text[:60] + '…' if len(text) > 60 else text}")
+        stack = self.stacked_with(i)
+        if len(stack) > 1:
+            # A pile of dots looks like one: say how many, and over what span.
+            cases = len(set(d.case[stack].tolist()))
+            text = f"<i>{len(stack) - 1} more event{'s' if len(stack) > 2 else ''} under this dot"
+            if cases > 1:
+                text += f" ({cases} cases)"
+            stamps = [d.event(int(j)).timestamp for j in stack]
+            if all(stamps):
+                first, last = min(stamps), max(stamps)
+                if last > first:
+                    text += f", spanning {format_duration((last - first).total_seconds())}"
+            lines.append(text + ". Drag to zoom in.</i>")
         return "<br>".join(lines)
 
     # -- interaction ------------------------------------------------------------------
