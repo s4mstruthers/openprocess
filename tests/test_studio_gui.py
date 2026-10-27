@@ -2847,6 +2847,37 @@ def test_a_workflow_opened_from_another_folder_reads_its_files_from_there(app, t
     assert page.run is not None and all(page.run.status(n) == "done" for n in page.workflow.nodes.values())
 
 
+def test_an_open_workflow_changed_on_disk_is_reloaded(app, tmp_path):
+    """A .analysis written elsewhere (by Claude through the MCP server) while it is
+    open: the page shows the new boxes, and a later save does not put the old ones back."""
+    from openprocess.flow import Workflow, save
+    from openprocess.flow.record import load_all
+    from openprocess.gui.studio.app import StudioWindow
+    from openprocess.gui.studio.documents import WorkflowDocument
+    week = _week(tmp_path)
+    (week / "log.txt").write_text("[<a,b,c>^3, <a,c,b>]")
+    path = week / "Orders.analysis"
+    wf = Workflow("Orders")
+    wf.connect(wf.add("open_log", {"file": "log.txt"}), wf.add("alpha_miner"))
+    save(wf, path, folder=week)
+    window = StudioWindow()
+    window.show()
+    window.open_workspace(str(week))
+    window.open_path(str(path))
+    document = next(d for d in window.documents if isinstance(d, WorkflowDocument))
+    before = window.pages[document.id]
+    _pump(app, 0.5)
+
+    wf.add("inductive_miner")
+    save(wf, path, folder=week)
+    assert _wait_for(app, lambda: len(document.workflow.nodes) == 3)
+    assert window.pages[document.id] is not before
+    assert "changed on disk — reloaded" in window.statusBar().currentMessage()
+    window.pages[document.id].save()
+    assert len(load_all(path)[0].nodes) == 3
+    window.close()
+
+
 def test_not_terminating_is_shown_as_info():
     from openprocess.gui.studio.widgets import property_status
     assert property_status("Terminating", False) == "info"
