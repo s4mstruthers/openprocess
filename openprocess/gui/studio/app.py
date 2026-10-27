@@ -4261,6 +4261,16 @@ class StudioWindow(QMainWindow):
             self.statusBar().showMessage(message, 8000)
 
         try:
+            if isinstance(document, WorkflowDocument):
+                # Changed by Claude (through the MCP server) or another copy of the
+                # app: the boxes, versions and record are all read again.
+                from ...flow.record import load_all
+                document.workflow, document.record, document.versions = load_all(path, self.library())
+                document.dirty = False
+                self._remember_identity(document)
+                self._replace_page(document)
+                self.statusBar().showMessage(message, 8000)
+                return
             if isinstance(document, TransitionSystemDocument):
                 content = self._read_text_file(path)
                 document.ts = content.ts
