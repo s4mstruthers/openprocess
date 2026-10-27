@@ -6,6 +6,19 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.16.1
+
+- **Changes Claude makes to an open analysis show up straight away.** When
+  Claude changed an analysis through the connector while it was open in
+  OpenProcess, the app kept showing the old version, and its next save put
+  the old boxes back. You had to quit the app first. Now the analysis
+  reloads by itself, like logs and models do; if you have unsaved edits to
+  it, the app asks whether to reload or keep yours.
+- **Piled-up dots in the dotted chart show.** Events drawn on the same spot
+  looked like a single dot. Dots are now slightly see-through, so a pile
+  reads darker, and hovering a dot says how many more events are under it,
+  from how many cases and over what span.
+
 ## 0.16.0
 
 - **Versions: the record is yours to move, and every version is kept.** The
