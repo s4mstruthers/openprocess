@@ -742,6 +742,9 @@ the file format. [**docs/design.md**](docs/design.md) is the *why*:
 the problem, the claim, the three ideas and the decisions that follow from
 them. `tests/cross_check_inductive_miner.py` compares the built-in Inductive
 Miner with PM4Py's on hundreds of logs and reports where they differ.
+`tests/regression/` freezes the results for a set of small tricky logs
+(short loops, empty traces, noise at the threshold), so that no result of
+discovery or conformance checking changes without a test failing.
 
 ## Workflows
 
