@@ -36,6 +36,9 @@ numbers.
 - **Learn: an answer given after *Show answer* does not count.** You could
   press *Show answer*, type what it showed, and be marked correct. The task
   now reads *Answer shown* and adds nothing to your score.
+- **The Report's key figure is readable.** In the *Key figure* tile of a
+  check, the small line under the figure wrapped and was drawn over it. The
+  tile is now as wide as its line needs.
 
 ## 0.16.1
 
