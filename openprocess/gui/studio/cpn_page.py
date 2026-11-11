@@ -823,7 +823,11 @@ class CpnPage(QWidget):
     def _update_sim_status(self) -> None:
         if not self.simulating:
             problems = len(self.net.errors)
-            self.sim_status.setText("✓ compiles" if not problems else
+            ignored = len(self.net.warnings)
+            self.sim_status.setText((f"⚠ compiles, but {ignored} priorit"
+                                     f"{'y or code segment is' if ignored == 1 else 'ies or code segments are'}"
+                                     " not used — see the Problems tab" if ignored else "✓ compiles")
+                                    if not problems else
                                     f"⚠ {problems} problem{'s' * (problems != 1)} — see "
                                     "the Problems tab")
             return
@@ -909,18 +913,19 @@ class CpnPage(QWidget):
 
     def _fill_problems(self) -> None:
         errors = list(self.net.errors)
-        count = len(errors)
+        warnings = list(self.net.warnings)
+        count = len(errors) + len(warnings)
         self.inspector_tabs.buttons[2].setText(f"Problems ({count})" if count else "Problems")
         card = self.problems_card
         card.clear()
         if not errors:
             card.add(Verdict("Model compiles", "good", "Every declaration and inscription "
                              "parsed. The model is ready to simulate."))
-            return
-        for issue in errors[:200]:
+        for issue in (errors + warnings)[:200]:
             row = QWidget()
             title = f"{issue.element_name or 'Declarations'} — {issue.field_name}"
-            layout = hbox(Verdict(title, "critical", issue.message), spacing=6)
+            layout = hbox(Verdict(title, "critical" if issue in errors else "warning",
+                                  issue.message), spacing=6)
             if issue.element_id:
                 layout.addWidget(button("Show", lambda _=False, i=issue.element_id:
                                         self.reveal_element(i), kind="ghost"), 0, Qt.AlignTop)

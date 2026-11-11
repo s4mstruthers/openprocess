@@ -1020,6 +1020,7 @@ def cpn_info(path: str) -> dict:
     compile problems."""
     net = _cpn(path)
     return {"name": net.name, "problems": [str(e) for e in net.errors],
+            "not_implemented": [str(w) for w in net.warnings],
             "pages": [{"name": p.name, "places": len(p.places), "transitions": len(p.transitions),
                        "arcs": len(p.arcs)} for p in net.pages],
             "colour_sets": {n: type(c).__name__ for n, c in sorted(net.declarations.colour_sets.items())},
@@ -1041,6 +1042,7 @@ def cpn_simulate(path: str, steps: int = 50, seed: int = 0) -> dict:
     return {"steps": taken, "asked": steps, "clock": simulator.clock, "dead": taken < steps,
             "log": [record.describe(net) for record in simulator.log][-200:],
             "final_marking": simulator.marking.describe(net),
+            "not_implemented": [str(w) for w in net.warnings],
             "cite": citations("openprocess.sim"),
             "reproduce": f"openprocess simulate {_q(path)} --steps {steps} --seed {seed}"}
 

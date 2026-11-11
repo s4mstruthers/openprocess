@@ -94,7 +94,8 @@ def value_markdown(value: Any, limit: int = 50) -> str:
                 + _md_table(["Variant", "Cases", "p", "c", "m", "r"], rows))
     if isinstance(value, AlignmentResult):
         rows = [[f"⟨{', '.join(a.trace)}⟩", a.count, a.cost, f"{a.fitness:.3f}"] for a in value.alignments[:limit]]
-        return (f"Fitness {value.average_fitness:.4f}; {value.fitting_traces:,} of {value.trace_count:,} cases "
+        return (f"Fitness {'' if value.exact else 'at least '}{value.average_fitness:.4f}; "
+                f"{value.fitting_traces:,} of {value.trace_count:,} cases "
                 f"align without a deviation\n\n" + _md_table(["Variant", "Cases", "Cost", "Fitness"], rows))
     if isinstance(value, OCEL):
         return value.summary()

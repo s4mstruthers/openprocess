@@ -700,6 +700,9 @@ course).
 
 ## For developers
 
+Want to report a wrong result, add an algorithm or fix something? See
+[**CONTRIBUTING.md**](CONTRIBUTING.md).
+
 ```bash
 pytest -q                 # the whole suite, including GUI tests that run offscreen
 openprocess --help              # command line: check, simulate, state space, mining
@@ -1047,7 +1050,10 @@ Plainly stated:
    each use its own copy of the page. Subpages used once, at any depth,
    simulate.
 2. **No CPN monitors or simulation reports**, and **no fairness
-   properties** in the state space report (it says so).
+   properties** in the state space report (it says so). **Transition
+   priorities and code segments are kept but not run**: a model that uses
+   them simulates differently from CPN Tools, and the Problems tab and the
+   state space report list where.
 3. **CPN ML is a large subset, not all of Standard ML**: no `exception`
    declarations or `handle`, no `datatype` or `structure` declarations, and
    characters are one-letter strings. See

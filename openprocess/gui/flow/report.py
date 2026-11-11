@@ -293,8 +293,14 @@ class Section(QFrame):
         if result is not None and result.status == DONE:
             parts = key_figure(result.value)
             if parts is not None:
-                tile = StatTile("Key figure", *parts)
-                tile.setMaximumWidth(320)
+                figure, line = parts
+                if len(line) > 72:
+                    line = line[:71].rstrip() + "…"
+                tile = StatTile("Key figure", figure, line)
+                # One line each, the tile as wide as they need: a wrapped line in a
+                # tile of fixed height was drawn over the figure above it.
+                tile.value.setWordWrap(False)
+                tile.sub.setWordWrap(False)
                 self.body_layout.addWidget(tile, 0, Qt.AlignLeft)
         self.body_widget = page.result_view(node, result)
         self.body_layout.addWidget(self.body_widget)

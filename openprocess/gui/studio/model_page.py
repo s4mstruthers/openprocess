@@ -627,7 +627,9 @@ class ModelPage(ConcealsResults, QWidget):
                                f"log-level {alignments.log_fitness:.3f}")
             tiles["tbr"].set(f"{replay.fitness:.3f}",
                              f"m {replay.missing:,} · r {replay.remaining:,} · "
-                             f"c {replay.consumed:,} · p {replay.produced:,}")
+                             f"c {replay.consumed:,} · p {replay.produced:,}"
+                             + (f" · {replay.unknown_events:,} events not in the model"
+                                if replay.unknown_events else ""))
             tiles["precision"].set(f"{prec:.3f}", "escaping edges (ETC)")
             tiles["generalisation"].set(f"{gen:.3f}", "token-based")
             tiles["simplicity"].set(f"{simp:.3f}", "arc degree")

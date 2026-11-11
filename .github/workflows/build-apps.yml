@@ -93,7 +93,7 @@ jobs:
       matrix:
         include:
           - name: macOS (Apple silicon)
-            os: macos-14
+            os: macos-15
           - name: macOS (Intel)
             os: macos-15-intel
             # cryptography (for the connector's sign-in support) has no Intel

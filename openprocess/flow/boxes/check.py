@@ -48,6 +48,12 @@ def check_fit(model: PetriNet, log: EventLog,
     scores = Scores(model.name, {"fitness": fitness, "precision": precision(model, simple),
                                  "generalisation": generalisation(replay), "simplicity": simplicity(model)})
     scores.note = f"Checked against all {replay.trace_count} cases of {log.name} ({method.lower()})."
+    if replay.unknown_events:
+        missing = ", ".join(f"{a} ({n:,})" for a, n in replay.unknown_totals().most_common(5))
+        text = (f"{replay.unknown_events:,} events are of activities the model does not have: {missing}"
+                f"{', …' if len(replay.unknown_totals()) > 5 else ''}.")
+        flow.note(text + " In token replay each counts one missing and one remaining token.")
+        scores.note += " " + text
     if method == "Alignments" and alignments.incomplete:
         cases = sum(a.count for a in alignments.incomplete)
         scores.note += (f" No optimal alignment was found for {len(alignments.incomplete)} variants "

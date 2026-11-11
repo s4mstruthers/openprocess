@@ -49,7 +49,7 @@ def tile_parts(value) -> tuple[str, str] | None:
     if isinstance(value, ReplayResult):
         return f"{value.fitness:.2f} fitness", f"{value.fitting_traces:,} of {value.trace_count:,} cases fit"
     if isinstance(value, AlignmentResult):
-        return (f"{value.average_fitness:.2f} fitness",
+        return (f"{'' if value.exact else '≥ '}{value.average_fitness:.2f} fitness",
                 f"{value.fitting_traces:,} of {value.trace_count:,} cases align")
     if isinstance(value, Text):
         first = str(value).strip().splitlines()[0] if str(value).strip() else ""

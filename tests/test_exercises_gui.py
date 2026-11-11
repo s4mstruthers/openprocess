@@ -104,6 +104,62 @@ def test_learn_in_the_switcher_opens_the_folders_exercises(app, demo):
     window.close()
 
 
+def test_an_answer_given_after_show_answer_is_not_marked_correct(app, demo):
+    folder = demo / "2 Soundness" / "Exercise 2.1 Spot the flaw"
+    window = _window()
+    window.open_exercise(folder)
+    wf, sound, conditions, deadlock, _ = _cards(window)
+
+    # Right before the answer is shown: it stays Correct.
+    wf.editor.buttons["yes"].click()
+    wf.check_button.click()
+    assert wait_for(app, lambda: wf.status is not None)
+    assert wf.status == "correct"
+    wf.reveal_solution()
+    assert wf.status == "correct" and not wf.revealed
+
+    # Shown first, then given: Check still says it is right, but it does not count.
+    sound.reveal_solution()
+    sound.editor.buttons["no"].click()
+    sound.check_button.click()
+    assert wait_for(app, lambda: sound.status is not None)
+    assert sound.status == "shown" and sound.chip.text() == "Answer shown"
+    assert "does not count" in sound.feedback.text()
+    deadlock.reveal_solution()
+    deadlock.editor.edit.setText("register, call customer")
+    deadlock.editor._edited()
+    deadlock.check_button.click()
+    assert wait_for(app, lambda: deadlock.status is not None)
+    assert deadlock.status == "shown"
+    # A wrong answer after it is still wrong.
+    sound.editor.buttons["yes"].click()
+    sound.check_button.click()
+    assert wait_for(app, lambda: sound.status is not None)
+    assert sound.status == "incorrect"
+    sound.editor.buttons["no"].click()
+    sound.check_button.click()
+    assert wait_for(app, lambda: sound.status is not None)
+    assert "1 of 5 answers done" in window.learn_mode.view.summary_label.text()
+
+    # It is kept with the answers, earns nothing, and is still so after reopening.
+    window.learn_mode.close_view()
+    saved = json.loads((folder / "my answers.json").read_text())["tasks"]
+    assert saved["q1"] == {"answer": "yes", "status": "correct"}
+    assert saved["q2"] == {"answer": "no", "status": "shown", "shown": True}
+    from openprocess.learn.pack import load_pack
+    exercise = next(e for e in load_pack(demo).exercises if e.folder == folder)
+    assert exercise.summary().done == 1 and exercise.summary().earned == 1
+    window.learn_mode.open_index(1)
+    wf, sound, *_ = _cards(window)
+    assert sound.status == "shown" and sound.revealed
+    sound.editor.buttons["yes"].click()
+    sound.editor.buttons["no"].click()
+    sound.check_button.click()
+    assert wait_for(app, lambda: sound.status is not None)
+    assert sound.status == "shown"
+    window.close()
+
+
 def test_answers_are_checked_saved_and_restored(app, demo):
     folder = demo / "2 Soundness" / "Exercise 2.1 Spot the flaw"
     window = _window()

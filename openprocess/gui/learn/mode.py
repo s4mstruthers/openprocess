@@ -59,7 +59,7 @@ from ...learn.checks import check as check_answer
 from ...learn.checks import expected, footprint_of, model_answer_text
 from ...learn.exam import ExamState, marks_csv
 from ...learn.pack import Exercise, Pack, load_pack
-from .answer_boxes import TaskCard, debounce, make_editor
+from .answer_boxes import SHOWN, TaskCard, debounce, make_editor
 from .concealment import Concealment
 from ..studio.markdown_view import MarkdownLabel
 from ..studio.widgets import SegmentedControl, button, hbox, label, scroll
@@ -802,7 +802,7 @@ class ExerciseView(QWidget):
             self._workflow_timer = debounce(self, WORKFLOW_SAVE_DELAY, self._save_workflow)
         self._workflow_timer.start()
         card = self.cards.get(task.id)
-        if card is not None and card.status in (CORRECT, PARTIAL, INCORRECT):
+        if card is not None and card.status in (CORRECT, PARTIAL, INCORRECT, SHOWN):
             card.editor.changed.emit()             # the old verdict no longer applies
 
     def _workflow_saved(self, task) -> None:
@@ -839,7 +839,7 @@ class ExerciseView(QWidget):
             self._net_timers[task.id] = timer
         timer.start()
         card = self.cards.get(task.id)
-        if card is not None and card.status in (CORRECT, PARTIAL, INCORRECT):
+        if card is not None and card.status in (CORRECT, PARTIAL, INCORRECT, SHOWN):
             card.editor.changed.emit()             # the old verdict no longer applies
 
     def _save_net(self, page, target: Path) -> None:
@@ -1004,6 +1004,7 @@ class ExerciseView(QWidget):
         saved = self.progress.get(card.task.id, {})
         if card.task.type not in ("net", "workflow") and "answer" in saved:
             card.editor.set_value(saved["answer"])
+        card.revealed = bool(saved.get("shown"))
         status = saved.get("status")
         if status:
             card.set_status(status)
@@ -1018,6 +1019,10 @@ class ExerciseView(QWidget):
             entry["status"] = card.status
         else:
             entry.pop("status", None)
+        if card.revealed:
+            entry["shown"] = True
+        else:
+            entry.pop("shown", None)
         if card.status == PARTIAL and card.share:
             entry["share"] = round(card.share, 4)
         else:

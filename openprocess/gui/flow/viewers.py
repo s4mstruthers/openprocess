@@ -362,6 +362,10 @@ def result_widget(value, page=None, node=None) -> QWidget:
         add(label(f"Fitness {value.fitness:.4f}: p = {value.produced}, c = {value.consumed}, "
                   f"m = {value.missing}, r = {value.remaining}; {value.fitting_traces} of "
                   f"{value.trace_count} cases fit.", "muted", wrap=True))
+        if value.unknown_events:
+            add(label(f"{value.unknown_events:,} events are of activities the model does not have ("
+                      + ", ".join(f"{a}: {n:,}" for a, n in value.unknown_totals().most_common(8))
+                      + "). Each counts one missing and one remaining token.", "muted", wrap=True))
     elif isinstance(value, AlignmentResult):
         from ..studio.alignment_view import AlignmentList, legend_items, projection
         from ..studio.widgets import Legend, LegendSwatch

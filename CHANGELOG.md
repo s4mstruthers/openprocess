@@ -6,6 +6,40 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.16.2
+
+Five answers that were wrong without saying so. **A recorded Check fit result
+can differ after this update** if the log has activities its model does not
+have; the Versions view says so, and *Keep as version…* records the new
+numbers.
+
+- **Token replay counts events the model cannot do.** An event whose activity
+  is not in the model was skipped, so a model that knew fewer activities
+  could score a higher fitness. Each such event now counts one missing and
+  one remaining token, as alignments already count it as a log move, and the
+  result says how many such events there were and of which activities. This
+  is OpenProcess's own rule: the textbook definition assumes every activity
+  in the log is in the model.
+- **Deadlock-free is not claimed for an unbounded net.** When a net is
+  unbounded, or its state space was cut off, and no dead marking was found,
+  the verdict was *deadlock-free*. It is now *not decided*, because the
+  coverability graph can hide a deadlock.
+- **Alignment fitness says when it is a lower bound.** When a search gave up
+  at the state limit, the headline fitness still read as exact, and the
+  log's fitness disagreed with the average over traces. The figure now reads
+  *≥ 0.xx* and the two agree.
+- **Priorities and code segments in a CPN are flagged.** OpenProcess keeps a
+  transition's priority and code segment but does not run them, so a
+  simulation could differ from CPN Tools with no sign of it. The Problems
+  tab, the simulation's status line, the state space report and the Claude
+  connector now list each one as a warning.
+- **Learn: an answer given after *Show answer* does not count.** You could
+  press *Show answer*, type what it showed, and be marked correct. The task
+  now reads *Answer shown* and adds nothing to your score.
+- **The Report's key figure is readable.** In the *Key figure* tile of a
+  check, the small line under the figure wrapped and was drawn over it. The
+  tile is now as wide as its line needs.
+
 ## 0.16.1
 
 - **Changes Claude makes to an open analysis show up straight away.** When
