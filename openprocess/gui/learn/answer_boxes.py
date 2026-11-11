@@ -42,9 +42,13 @@ CAPTIONS = {
 }
 
 #: Status of a task -> (chip text, status colour key).
+#: The answer was shown before it was given: right now, but it does not count.
+SHOWN = "shown"
+
 STATUS = {
     CORRECT: ("Correct", "good"), PARTIAL: ("Almost", "warning"),
     INCORRECT: ("Not yet", "critical"), "done": ("Done", "good"),
+    SHOWN: ("Answer shown", "muted"),
 }
 
 
@@ -771,6 +775,9 @@ class TaskCard(QFrame):
         self.status: str | None = None
         #: The share of the block's points the last check gave (for partial answers).
         self.share: float = 0.0
+        #: *Show answer* was pressed before the answer was right: a right answer
+        #: after that is the shown one typed in, so it is not marked Correct.
+        self.revealed: bool = False
         #: In an exam there is no hint, no answer, and Check only says if it is right.
         self.exam = exam
         layout = QVBoxLayout(self)
@@ -838,7 +845,7 @@ class TaskCard(QFrame):
     # -- feedback ------------------------------------------------------------------------
     def _edited(self) -> None:
         # Feedback is about the answer as it was: it goes when you change it.
-        if self.status in (CORRECT, PARTIAL, INCORRECT) or not self.feedback.isHidden():
+        if self.status in (CORRECT, PARTIAL, INCORRECT, SHOWN) or not self.feedback.isHidden():
             self.set_status(None)
             self.feedback.setHidden(True)
             self._clear_detail()
@@ -876,8 +883,12 @@ class TaskCard(QFrame):
         status = result.status
         self.share = float(getattr(result, "share", 0.0) or 0.0)
         icon = {CORRECT: "✓", PARTIAL: "◐", INCORRECT: "✕"}.get(status, "")
-        self.feedback.setText(f"<b>{icon}</b>&nbsp; {escape(result.message)}" if icon
-                              else escape(result.message))
+        message = escape(result.message)
+        if self.revealed and status in (CORRECT, PARTIAL):
+            # Still told whether it is right, but it earns nothing and is not "done".
+            status, self.share = SHOWN, 0.0
+            message += " <i>The answer was shown first, so this does not count.</i>"
+        self.feedback.setText(f"<b>{icon}</b>&nbsp; {message}" if icon else message)
         self.feedback.setProperty("state", STATUS.get(status, ("", ""))[1])
         self._repolish(self.feedback)
         self.feedback.setHidden(False)
@@ -912,8 +923,17 @@ class TaskCard(QFrame):
         self.solution_label.body.set_markdown(text)
         self.solution_label.setHidden(False)
         self.answer_button.setHidden(True)
-        if self.task.type == "open" and self.status != "done":
-            self.assess_row.setHidden(False)
+        if self.task.type == "open":
+            if self.status != "done":
+                self.assess_row.setHidden(False)
+        elif self.status not in (CORRECT, "done") and not self.revealed:
+            # An answer that was already right stays right; anything else was not
+            # answered before the answer was seen.  (An open answer is judged by
+            # yourself against the model answer, so showing it is the point.)
+            self.revealed = True
+            if self.status == PARTIAL:
+                self.set_status(None)
+            self.changed.emit(self.task)
 
     def assess(self, had_it: bool) -> None:
         self.assess_row.setHidden(True)

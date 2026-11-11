@@ -119,6 +119,15 @@ class AlignmentResult:
     empty_trace_cost: int = 0
     #: What the reader should know: searches that were cut short, and why.
     notes: list[str] = field(default_factory=list)
+    #: False when the search for the model's shortest run gave up: the
+    #: empty-trace cost is then unknown (counted as 0), which makes every
+    #: fitness a lower bound.  (Named as a working value so that a result's
+    #: fingerprint is what it was; ``notes`` says so when it is False.)
+    _empty_trace_complete: bool = True
+
+    @property
+    def empty_trace_complete(self) -> bool:
+        return self._empty_trace_complete
 
     @property
     def trace_count(self) -> int:
@@ -130,15 +139,24 @@ class AlignmentResult:
         return [a for a in self.alignments if not a.complete]
 
     @property
+    def exact(self) -> bool:
+        """Was an optimal alignment found for every variant and for the empty
+        trace?  If not, the fitness values are lower bounds, not the fitness."""
+        return self.empty_trace_complete and not self.incomplete
+
+    @property
     def average_fitness(self) -> float:
-        """Mean of the per-trace fitness values (weighted by frequency)."""
+        """Mean of the per-trace fitness values (weighted by frequency).  A
+        variant whose search gave up counts as 0: a lower bound (see :attr:`exact`)."""
         total = self.trace_count
         return sum(a.fitness * a.count for a in self.alignments) / total if total else 1.0
 
     @property
     def log_fitness(self) -> float:
-        """1 − total cost / total worst-case cost."""
-        cost = sum(a.cost * a.count for a in self.alignments)
+        """1 − total cost / total worst-case cost.  A variant whose search gave
+        up counts its worst case, as it counts 0 in :attr:`average_fitness`."""
+        cost = sum((a.cost if a.complete else len(a.trace) + self.empty_trace_cost) * a.count
+                   for a in self.alignments)
         worst = sum((len(a.trace) + self.empty_trace_cost) * a.count for a in self.alignments)
         return 1 - cost / worst if worst else 1.0
 
@@ -307,7 +325,7 @@ def align_log(net: PetriNet, log: SimpleLog, max_states: int = MAX_STATES,
     from .. import parallel
     compiled = _CompiledNet(net)
     empty = align_trace(net, (), 1, max_states, compiled)
-    result = AlignmentResult(net, empty_trace_cost=empty.cost)
+    result = AlignmentResult(net, empty_trace_cost=empty.cost, _empty_trace_complete=empty.complete)
     variants = sorted(log.items(), key=lambda item: (-item[1], item[0]))
     count = parallel.workers() if workers is None else workers
     if parallel.worth_it(variants, count, "align"):
@@ -318,7 +336,9 @@ def align_log(net: PetriNet, log: SimpleLog, max_states: int = MAX_STATES,
         alignment = searched[number - 1] if searched is not None else align_trace(net, trace, count, max_states,
                                                                                    compiled)
         worst = len(trace) + empty.cost
-        alignment.fitness = 1 - alignment.cost / worst if worst else 1.0
+        # max: with the empty-trace cost unknown (counted as 0) the worst case is
+        # too small, and the value must stay a lower bound of the fitness.
+        alignment.fitness = max(0.0, 1 - alignment.cost / worst) if worst else 1.0
         if not alignment.complete:
             alignment.fitness = 0.0
         result.alignments.append(alignment)
@@ -340,7 +360,9 @@ def align_log(net: PetriNet, log: SimpleLog, max_states: int = MAX_STATES,
             f"variants ({cases:,} cases): the search stopped at {max_states:,} states. Their "
             f"cost is unknown and their fitness is counted as 0."
             if result.incomplete else
-            f"The search for the model's shortest run stopped at {max_states:,} states.")
+            f"The search for the model's shortest run stopped at {max_states:,} states, so the "
+            f"worst-case cost every fitness is measured against is too small: each fitness "
+            f"is a lower bound.")
         reason = _unbounded_reason(net)
         if reason:
             result.notes.append(reason)

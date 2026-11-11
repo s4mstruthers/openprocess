@@ -338,8 +338,18 @@ class PropertyReport:
         return self.bounded and self.bound <= 1
 
     @property
-    def deadlock_free(self) -> bool:
-        return not self.dead_markings
+    def deadlock_free(self) -> bool | None:
+        """False with a dead marking in hand (in a coverability graph too: a
+        dead node stands for reachable markings in which nothing is enabled).
+        None when no dead marking was found but the search cannot prove there
+        is none: a coverability graph's ω enables what a finite marking may
+        not, so it can hide a deadlock, and a truncated graph has unexplored
+        markings."""
+        if self.dead_markings:
+            return False
+        if self.graph.has_omega or self.graph.truncated:
+            return None
+        return True
 
     @property
     def terminating(self) -> bool | None:
@@ -375,8 +385,12 @@ class PropertyReport:
                      else "some run can go on forever"
                      + (" (the net is unbounded)" if self.graph.has_omega
                         else ": the reachability graph has a cycle")))
-        rows.append(("Deadlock-free", self.deadlock_free,
-                     "every reachable marking enables something" if self.deadlock_free
+        deadlock_free = self.deadlock_free
+        rows.append(("Deadlock-free", deadlock_free,
+                     "every reachable marking enables something" if deadlock_free
+                     else ("not decided: the net is unbounded, and the coverability graph can "
+                           "hide a deadlock" if self.graph.has_omega
+                           else "not decided (truncated state space)") if deadlock_free is None
                      else f"{len(self.dead_markings)} dead marking(s), e.g. "
                      + self.graph.states[self.dead_markings[0]].describe(net)
                      + " via " + self.graph.describe_path(self.dead_markings[0])))
@@ -672,7 +686,7 @@ class ShortCircuitReport:
         return self.properties.safe
 
     @property
-    def deadlock_free(self) -> bool:
+    def deadlock_free(self) -> bool | None:
         return self.properties.deadlock_free
 
     @property

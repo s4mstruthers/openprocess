@@ -316,6 +316,10 @@ class CPNet:
         #: declarations.  Recreated by :meth:`compile`.
         self.evaluator = Evaluator(seed=seed)
         self.errors: list[CompileIssue] = []
+        #: What the model says that OpenProcess does not do (a transition's
+        #: priority, its code segment): it still simulates, differently from
+        #: CPN Tools.  Filled by :meth:`compile`.
+        self.warnings: list[CompileIssue] = []
         #: place id -> the id under which its tokens are stored in a Marking.
         #: Identity for ordinary places; the group representative for places in
         #: a fusion set (see :meth:`marking_key`).
@@ -360,6 +364,7 @@ class CPNet:
         empty list means the model is ready to simulate.
         """
         self.errors = []
+        self.warnings = []
         self.evaluator = Evaluator(seed=self.seed)
         self._build_fusion_map()
 
@@ -396,6 +401,20 @@ class CPNet:
                     transition.guard_ast = parse_guard(guard)
                 except CPNMLError as error:
                     self._record(transition.id, transition.name, "guard", str(error))
+            priority = transition.priority_text.strip()
+            if priority and priority != "P_NORMAL":
+                self.warnings.append(CompileIssue(
+                    transition.id, transition.name, "priority",
+                    f"the priority {priority} is not used: priorities are not implemented, so "
+                    "this transition can fire whenever it is enabled, also when CPN Tools "
+                    "would let another one go first. Simulation and the state space can "
+                    "differ from CPN Tools."))
+            if transition.code_text.strip():
+                self.warnings.append(CompileIssue(
+                    transition.id, transition.name, "code segment",
+                    "the code segment is not run: code segments are not implemented, so its "
+                    "action does not happen and the variables it would set stay unbound or "
+                    "are bound freely. Simulation and the state space can differ from CPN Tools."))
             delay = transition.time_text.strip().lstrip("@+").strip()
             if delay:
                 try:

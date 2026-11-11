@@ -220,3 +220,89 @@ def test_imf_cuts_a_trace_at_the_best_split_points():
     assert a == Counter({("a",): 6})
     assert b == Counter({("b",): 5, (): 1})            # the late b of the odd trace is dropped
     assert c == Counter({("c",): 5, ("c", "c"): 1})
+
+
+# ---------------------------------------------------------------------------
+# Answers that were wrong without saying so (the 0.16.1 audit)
+# ---------------------------------------------------------------------------
+def test_token_replay_counts_an_event_the_model_cannot_do():
+    from collections import Counter
+    from openprocess.mining import align_log, inductive_miner, token_replay
+
+    net = inductive_miner(Counter({("a", "b"): 1})).net
+    fits = token_replay(net, Counter({("a", "b"): 3}))
+    assert fits.fitness == 1.0 and fits.unknown_events == 0
+    replay = token_replay(net, Counter({("a", "z", "b"): 2, ("a", "b"): 1}))
+    variant = next(t for t in replay.traces if "z" in t.trace)
+    assert (variant.produced, variant.consumed, variant.missing, variant.remaining) == (4, 4, 1, 1)
+    assert variant.fitness == 0.75 and not variant.fits
+    assert replay.fitness < 1.0 and replay.fitting_traces == 1
+    assert replay.unknown_events == 2 and replay.unknown_totals() == {"z": 2}
+    # Nothing but unknown activities used to score 1.
+    assert token_replay(net, Counter({("z", "z"): 1})).fitness < 0.5
+    assert align_log(net, Counter({("a", "z", "b"): 1})).average_fitness < 1.0
+
+
+def test_deadlock_freedom_is_not_claimed_for_an_unbounded_net():
+    """pump: p0 -> p0 + p1; stop: p0 + p1 -> p2; eat: 2 p1 -> p1.  [p2] is
+    reachable (pump, stop) and dead, but the coverability graph's ω in p1
+    keeps *eat* enabled in the node that covers it."""
+    from openprocess.mining import analyse, reachability_graph
+    from openprocess.mining.petrinet import Marking, PetriNet
+
+    net = PetriNet("pump")
+    for place in ("p0", "p1", "p2"):
+        net.add_place(place, id=place)
+    for transition in ("pump", "stop", "eat"):
+        net.add_transition(transition, transition, id=transition)
+    for source, target, weight in [("p0", "pump", 1), ("pump", "p0", 1), ("pump", "p1", 1),
+                                   ("p0", "stop", 1), ("p1", "stop", 1), ("stop", "p2", 1),
+                                   ("p1", "eat", 2), ("eat", "p1", 1)]:
+        net.add_arc(source, target, weight)
+    net.initial_marking = Marking({"p0": 1})
+    report = analyse(net)
+    assert not report.bounded
+    assert report.deadlock_free is None                   # it was True
+    row = next(r for r in report.lines() if r[0] == "Deadlock-free")
+    assert row[1] is None and "not decided" in row[2]
+    # A bounded net keeps its proof, and a truncated search claims nothing.
+    net.initial_marking = Marking({"p2": 1})
+    assert analyse(net).deadlock_free is False
+
+
+def test_an_alignment_that_gave_up_makes_the_fitness_a_lower_bound():
+    from collections import Counter
+    from openprocess.flow.figures import tile_parts as key_figure
+    from openprocess.mining import align_log, inductive_miner
+
+    log = Counter({("a", "b", "c", "d"): 5, ("a", "c", "b", "d"): 4, ("a", "e", "d"): 1})
+    net = inductive_miner(log).net
+    whole = align_log(net, log, workers=1)
+    assert whole.exact and whole.average_fitness == whole.log_fitness == 1.0
+    cut = align_log(net, log, max_states=3, workers=1)
+    assert not cut.exact and cut.notes
+    assert 0.0 <= cut.average_fitness <= whole.average_fitness
+    assert 0.0 <= cut.log_fitness <= whole.log_fitness
+    assert all(0.0 <= a.fitness <= 1.0 for a in cut.alignments)
+    if cut.incomplete and len(cut.incomplete) == len(cut.alignments):
+        assert cut.log_fitness == 0.0                     # as average_fitness counts them
+    assert key_figure(cut)[0].startswith("≥ ") and not key_figure(whole)[0].startswith("≥")
+
+
+def test_a_cpn_priority_or_code_segment_is_reported_as_not_used():
+    from pathlib import Path
+    from openprocess.io.cpn_reader import read_cpn
+
+    net = read_cpn(Path(__file__).parent.parent / "examples" / "simple_transfer.cpn")
+    net.compile()
+    assert not net.errors and not net.warnings            # P_NORMAL or nothing: as CPN Tools
+    transition = next(iter(net.all_transitions()))
+    transition.priority_text = "P_HIGH"
+    transition.code_text = "input (n); output (m); action n + 1"
+    net.compile()
+    assert not net.errors
+    assert sorted(w.field_name for w in net.warnings) == ["code segment", "priority"]
+    assert all(w.element_id == transition.id and "not" in w.message for w in net.warnings)
+    transition.priority_text = "P_NORMAL"
+    transition.code_text = ""
+    assert net.compile() == [] and not net.warnings

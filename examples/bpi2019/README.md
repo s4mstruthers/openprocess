@@ -59,7 +59,7 @@ One model per item category: a *Case attribute* filter whose value is
 | 3-way match, invoice before GR | 0.996 | 0.322 | 0.897 | 0.593 |
 | 3-way match, invoice after GR | 0.985 | 0.131 | 0.869 | 0.643 |
 | Consignment | 0.996 | 0.777 | 0.761 | 0.610 |
-| 2-way match | 0.984 | 0.805 | 0.878 | 0.714 |
+| 2-way match | 0.983 | 0.805 | 0.878 | 0.714 |
 
 The models fit (fitness 0.98 to 1.00) but the two 3-way categories are
 imprecise: they allow much more than happens. That is the price of a single

@@ -237,6 +237,8 @@ def properties(props: PropertyReport, key: str) -> list[str]:
             m = marking(net, graph.states[state])
             return [f"{m0} {firing(net, graph.path_to(state))} {m}",
                     f"\\forall t \\in T \\colon t \\text{{ is not enabled in }} {m}"]
+        if props.deadlock_free is None:
+            return ["\\text{not decided: the state space is unbounded or too large}"]
         return [f"\\forall M \\in {reach} \\; \\exists t \\in T \\colon t "
                 "\\text{ enabled in } M"]
     if key == "dead_transition":

@@ -34,6 +34,19 @@ through silent moves, then the one missing the fewest tokens.  These are
 heuristics -- token replay is fast but not always optimal, which is why
 alignments exist (see :mod:`alignments`).
 
+Activities the model does not have
+----------------------------------
+The book replays logs whose activities all occur in the model.  A real log
+often has more.  Skipping such an event would count it as if it fitted (a
+trace of nothing but unknown activities would score 1), so it is counted as
+what it is, something the log did that the model cannot do: the event is
+replayed as a transition of its own with one input and one output place that
+nothing else touches.  Its input token is missing and its output token
+remains, so each such event adds 1 to each of p, c, m and r.  This is
+OpenProcess's convention, not a published one; ``unknown_events`` on the
+result says how many events it applied to, and the tokens are counted under
+the activity (they belong to no place of the model).
+
 Diagnostics
 -----------
 Per place we keep the total missing and remaining tokens, and per transition
@@ -59,7 +72,9 @@ class TraceReplay:
     consumed: int
     missing: int
     remaining: int
-    #: activities that do not occur in the model at all
+    #: the activity of every event the model has no transition for, in trace
+    #: order; each counts one missing and one remaining token (see the module's
+    #: "Activities the model does not have")
     unknown_activities: list[str] = field(default_factory=list)
     #: indices of events whose transition was not enabled
     problem_events: list[int] = field(default_factory=list)
@@ -119,6 +134,19 @@ class ReplayResult:
     @property
     def trace_count(self) -> int:
         return sum(t.count for t in self.traces)
+
+    @property
+    def unknown_events(self) -> int:
+        """Events whose activity the model does not have, frequency-weighted."""
+        return sum(len(t.unknown_activities) * t.count for t in self.traces)
+
+    def unknown_totals(self) -> Counter:
+        """Those events per activity, frequency-weighted."""
+        totals: Counter = Counter()
+        for t in self.traces:
+            for activity in t.unknown_activities:
+                totals[activity] += t.count
+        return totals
 
     def place_totals(self) -> tuple[Counter, Counter]:
         """(missing, remaining) per place, frequency-weighted."""
@@ -368,11 +396,17 @@ def replay_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
         result.fired[transition] += 1
         return current - pre + post
 
+    unknown_remaining = 0
     for index, activity in enumerate(trace):
         candidates = by_label.get(activity)
         if not candidates:
+            # No transition for it: one token missing to do it, one left behind.
             result.unknown_activities.append(activity)
             result.problem_events.append(index)
+            result.produced += 1
+            result.consumed += 1
+            result.missing += 1
+            unknown_remaining += 1
             continue
         chosen: str | None = next((t for t in candidates if net.is_enabled(marking, t)), None)
         if chosen is None:
@@ -408,7 +442,7 @@ def replay_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
         marking = marking + short
     result.consumed += final.total
     leftover = marking - final
-    result.remaining = leftover.total
+    result.remaining = leftover.total + unknown_remaining
     result.remaining_by_place.update(dict(leftover.items()))
     return result
 

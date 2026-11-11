@@ -427,9 +427,1442 @@
       ]
     }
   ],
+  "versions": [
+    {
+      "number": 1,
+      "note": "Recorded before versions",
+      "taken": "2026-10-26T11:39:04",
+      "label": "First run",
+      "workflow": {
+        "name": "BPI Challenge 2019 · purchase to pay",
+        "boxes": [
+          {
+            "id": "n1",
+            "box": "openprocess.flow.boxes.input.open_log",
+            "settings": {
+              "file": "BPI_Challenge_2019.xes"
+            },
+            "position": [
+              0,
+              360
+            ],
+            "title": "BPI Challenge 2019"
+          },
+          {
+            "id": "n2",
+            "box": "openprocess.flow.boxes.filter.time_frame",
+            "settings": {
+              "start": "2017-01-01",
+              "end": "2019-12-31",
+              "mode": "contained"
+            },
+            "position": [
+              260,
+              360
+            ],
+            "title": "Cases dated 2017 to 2019"
+          },
+          {
+            "id": "n3",
+            "box": "openprocess.flow.boxes.discover.directly_follows",
+            "settings": {},
+            "position": [
+              520,
+              600
+            ],
+            "title": "Process map"
+          },
+          {
+            "id": "n4",
+            "box": "openprocess.flow.boxes.filter.case_attribute",
+            "settings": {
+              "attribute": "Item Category",
+              "values": {
+                "sweep": [
+                  "3-way match, invoice before GR",
+                  "3-way match, invoice after GR",
+                  "Consignment",
+                  "2-way match"
+                ]
+              },
+              "mode": "keep"
+            },
+            "position": [
+              520,
+              0
+            ],
+            "title": "One item category"
+          },
+          {
+            "id": "n5",
+            "box": "openprocess.flow.boxes.discover.inductive_miner",
+            "settings": {
+              "noise": 0.2
+            },
+            "position": [
+              780,
+              0
+            ],
+            "title": "Model of the category"
+          },
+          {
+            "id": "n6",
+            "box": "openprocess.flow.boxes.check.check_fit",
+            "settings": {
+              "method": "Token replay"
+            },
+            "position": [
+              1040,
+              0
+            ],
+            "title": "How well it fits"
+          },
+          {
+            "id": "n7",
+            "box": "openprocess.flow.boxes.sweeps.sweep_table",
+            "settings": {},
+            "position": [
+              1300,
+              0
+            ],
+            "title": "Models per category"
+          },
+          {
+            "id": "n9",
+            "box": "openprocess.flow.boxes.measure.time_between",
+            "settings": {
+              "start": "Record Invoice Receipt",
+              "end": "Clear Invoice",
+              "by": "Item Category",
+              "unit": "days"
+            },
+            "position": [
+              520,
+              180
+            ],
+            "title": "Invoice to clearing"
+          },
+          {
+            "id": "n11",
+            "box": "openprocess.flow.boxes.filter.case_attribute",
+            "settings": {
+              "attribute": "Item Category",
+              "values": "3-way match, invoice before GR",
+              "mode": "keep"
+            },
+            "position": [
+              520,
+              360
+            ],
+            "title": "Invoice before goods receipt"
+          },
+          {
+            "id": "n12",
+            "box": "openprocess.flow.boxes.discover.inductive_miner",
+            "settings": {
+              "noise": 0.2
+            },
+            "position": [
+              780,
+              300
+            ],
+            "title": "Its model"
+          },
+          {
+            "id": "n13",
+            "box": "openprocess.flow.boxes.check.alignments",
+            "settings": {
+              "variants": 200
+            },
+            "position": [
+              1040,
+              300
+            ],
+            "title": "Deviations, move by move"
+          },
+          {
+            "id": "n14",
+            "box": "openprocess.flow.boxes.measure.compliance_by",
+            "settings": {
+              "attribute": "Vendor",
+              "value": "Cumulative net worth (EUR)",
+              "colour": "Item Type"
+            },
+            "position": [
+              1040,
+              440
+            ],
+            "title": "Compliance per vendor"
+          },
+          {
+            "id": "n15",
+            "box": "openprocess.flow.boxes.science.bubble_chart",
+            "settings": {
+              "x": "cases",
+              "y": "compliance (%)",
+              "size": "Cumulative net worth (EUR)",
+              "colour": "Item Type",
+              "log_x": true
+            },
+            "position": [
+              1300,
+              440
+            ],
+            "title": "Vendors: cases, compliance, value"
+          },
+          {
+            "id": "n16",
+            "box": "openprocess.flow.boxes.measure.order_rule",
+            "settings": {
+              "first": "Remove Payment Block",
+              "then": "Record Goods Receipt",
+              "value": "Cumulative net worth (EUR)"
+            },
+            "position": [
+              780,
+              460
+            ],
+            "title": "Payment block lifted before goods receipt"
+          },
+          {
+            "id": "n18",
+            "box": "openprocess.flow.boxes.measure.order_rule",
+            "settings": {
+              "first": "Vendor creates debit memo",
+              "then": "Vendor creates invoice",
+              "value": "Cumulative net worth (EUR)"
+            },
+            "position": [
+              520,
+              740
+            ],
+            "title": "Debit memo before the invoice"
+          },
+          {
+            "id": "n19",
+            "box": "openprocess.flow.boxes.measure.order_rule",
+            "settings": {
+              "first": "Delete Purchase Order Item",
+              "then": "Reactivate Purchase Order Item",
+              "value": "Cumulative net worth (EUR)"
+            },
+            "position": [
+              520,
+              870
+            ],
+            "title": "Deleted, then reactivated"
+          },
+          {
+            "id": "n20",
+            "box": "openprocess.flow.boxes.measure.order_rule",
+            "settings": {
+              "first": "Vendor creates invoice",
+              "then": "Create Purchase Order Item",
+              "value": "Cumulative net worth (EUR)"
+            },
+            "position": [
+              520,
+              1000
+            ],
+            "title": "Invoice before the purchase order"
+          },
+          {
+            "id": "n21",
+            "box": "openprocess.flow.boxes.measure.segregation_of_duties",
+            "settings": {
+              "first": "Record Invoice Receipt",
+              "second": "Clear Invoice",
+              "by": "User",
+              "value": "Cumulative net worth (EUR)"
+            },
+            "position": [
+              520,
+              1130
+            ],
+            "title": "Same user records and clears"
+          }
+        ],
+        "connections": [
+          {
+            "from": "n1",
+            "output": "out",
+            "to": "n2",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n3",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n4",
+            "input": "log"
+          },
+          {
+            "from": "n4",
+            "output": "out",
+            "to": "n5",
+            "input": "log"
+          },
+          {
+            "from": "n5",
+            "output": "out",
+            "to": "n6",
+            "input": "model"
+          },
+          {
+            "from": "n4",
+            "output": "out",
+            "to": "n6",
+            "input": "log"
+          },
+          {
+            "from": "n6",
+            "output": "out",
+            "to": "n7",
+            "input": "scores"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n9",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n11",
+            "input": "log"
+          },
+          {
+            "from": "n11",
+            "output": "out",
+            "to": "n12",
+            "input": "log"
+          },
+          {
+            "from": "n12",
+            "output": "out",
+            "to": "n13",
+            "input": "model"
+          },
+          {
+            "from": "n11",
+            "output": "out",
+            "to": "n13",
+            "input": "log"
+          },
+          {
+            "from": "n12",
+            "output": "out",
+            "to": "n14",
+            "input": "model"
+          },
+          {
+            "from": "n11",
+            "output": "out",
+            "to": "n14",
+            "input": "log"
+          },
+          {
+            "from": "n14",
+            "output": "out",
+            "to": "n15",
+            "input": "table"
+          },
+          {
+            "from": "n11",
+            "output": "out",
+            "to": "n16",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n18",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n19",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n20",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n21",
+            "input": "log"
+          }
+        ],
+        "groups": [
+          {
+            "id": "g8",
+            "name": "1 · Models per category",
+            "boxes": [
+              "n4",
+              "n5",
+              "n6",
+              "n7"
+            ],
+            "position": [
+              520,
+              0
+            ]
+          },
+          {
+            "id": "g10",
+            "name": "2 · Invoicing time",
+            "boxes": [
+              "n9"
+            ],
+            "position": [
+              520,
+              180
+            ]
+          },
+          {
+            "id": "g17",
+            "name": "3 · Deviations",
+            "boxes": [
+              "n11",
+              "n12",
+              "n13",
+              "n14",
+              "n15",
+              "n16"
+            ],
+            "position": [
+              520,
+              300
+            ]
+          },
+          {
+            "id": "g22",
+            "name": "Findings to check",
+            "boxes": [
+              "n18",
+              "n19",
+              "n20",
+              "n21"
+            ],
+            "position": [
+              520,
+              740
+            ]
+          }
+        ]
+      },
+      "record": {
+        "versions": {
+          "openprocess": "0.13.2",
+          "python": "3.14.3",
+          "numpy": "2.4.4",
+          "pandas": "3.0.3",
+          "scipy": "1.17.1",
+          "matplotlib": "3.10.8"
+        },
+        "environment": {
+          "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+          "python": "3.14.3",
+          "packages": {
+            "appnope": "0.1.4",
+            "asttokens": "3.0.1",
+            "comm": "0.2.3",
+            "contourpy": "1.3.3",
+            "cycler": "0.12.1",
+            "debugpy": "1.8.20",
+            "decorator": "5.2.1",
+            "executing": "2.2.1",
+            "fonttools": "4.62.1",
+            "ipykernel": "7.2.0",
+            "ipython": "9.12.0",
+            "ipython_pygments_lexers": "1.1.1",
+            "ipywidgets": "8.1.8",
+            "jedi": "0.19.2",
+            "jupyter_client": "8.8.0",
+            "jupyter_core": "5.9.1",
+            "jupyterlab_widgets": "3.0.16",
+            "kiwisolver": "1.5.0",
+            "matplotlib": "3.10.8",
+            "matplotlib-inline": "0.2.1",
+            "nest_asyncio": "1.6.0",
+            "numpy": "2.4.4",
+            "packaging": "26.1",
+            "pandas": "3.0.3",
+            "parso": "0.8.6",
+            "pexpect": "4.9.0",
+            "pillow": "12.2.0",
+            "pip": "26.0.1",
+            "platformdirs": "4.9.6",
+            "prompt_toolkit": "3.0.52",
+            "psutil": "7.2.2",
+            "ptyprocess": "0.7.0",
+            "pure_eval": "0.2.3",
+            "pygments": "2.20.0",
+            "pyparsing": "3.3.2",
+            "python-dateutil": "2.9.0.post0",
+            "pyzmq": "27.1.0",
+            "scipy": "1.17.1",
+            "six": "1.17.0",
+            "stack_data": "0.6.3",
+            "tornado": "6.5.5",
+            "traitlets": "5.14.3",
+            "wcwidth": "0.6.0",
+            "widgetsnbextension": "4.0.15"
+          }
+        },
+        "inputs": [
+          {
+            "node": "n1",
+            "setting": "file",
+            "file": "BPI_Challenge_2019.xes",
+            "sha256": "af63bc687fc4152f2123b05c3af7772b37ef3fce2d3f67f812666c9e356baae7"
+          }
+        ],
+        "custom_boxes": [],
+        "seeds": {},
+        "results": {
+          "n1": "23d79fa454d6a47222605695b7bd2dcfe0e6bb871a4522f204d2e714751846c6",
+          "n2": "f9bf3423589a5fa65fe57ba3edd6c7f3a6a6859b01157090ffc2b1b43f44bb46",
+          "n4": "108bc445db86f2684e004aae787e10e790dc2bc536fbf5d17e9879e163a296c4",
+          "n9": "e7cd72124db8a81bbd06acfd9410a345f3c201aaaf5de40c390491fc0fcdb2e0",
+          "n11": "108bc445db86f2684e004aae787e10e790dc2bc536fbf5d17e9879e163a296c4",
+          "n3": "fdbcaac11db5615bcdc57a4f1ea7b26de4ec7b3cf758e73a82ce181e9fbcbc88",
+          "n18": "962f79469f90816098f41931f563e8a390bd271f9366a99cefea9f8e168db301",
+          "n19": "c8ae641e1e413dfbcdf80c5876fef955372cec0ca4553e53b416bdb2783d3327",
+          "n20": "74b4a13a76bc1b7207b539fcbbbdc9e05a706dcab7271f85245f05ffc3ff3521",
+          "n21": "965dcb47b631573511c2ea0f66a7799321a484093d1fd007d5f483b07307260a",
+          "n5": "63b24b05ee0aca8e7cf3a21f473e96b50ac401056d26561fc0b046e9afadf63e",
+          "n12": "63b24b05ee0aca8e7cf3a21f473e96b50ac401056d26561fc0b046e9afadf63e",
+          "n16": "79be87c761e8fa27aa35061e59385396d44a3727f767a6f0462ff42f5827536a",
+          "n6": "c765c732847e2b7658d8206276acfb8e9148d4eed6a7bd6c3958cd72861c9e16",
+          "n13": "91e03b3444004a51074465749f7f76af2f84963284859454c46827bdbb0e72b8",
+          "n14": "59f3ca1fd8903f5d6f7d63e9be14cdc2500514fe7a6039a7163181d63c8841be",
+          "n15": "d4266f15f1727050c49429d20f2f1c2ad56d445cd0d49e47639c2a1933d037fd",
+          "n7": "e3f5a4cd6ddd396a177529999bdc3c5316ca15f802efa32fd0fd71e8574cdceb"
+        },
+        "fingerprint": 2,
+        "saved": "2026-10-26T11:39:04+00:00"
+      },
+      "snapshot": {
+        "taken": "2026-10-26T11:39:04",
+        "label": "First run",
+        "settings": {
+          "n1": {
+            "file": "BPI_Challenge_2019.xes"
+          },
+          "n2": {
+            "start": "2017-01-01",
+            "end": "2019-12-31",
+            "mode": "contained"
+          },
+          "n3": {},
+          "n4": {
+            "attribute": "Item Category",
+            "values": {
+              "sweep": [
+                "3-way match, invoice before GR",
+                "3-way match, invoice after GR",
+                "Consignment",
+                "2-way match"
+              ]
+            },
+            "mode": "keep"
+          },
+          "n5": {
+            "noise": 0.2
+          },
+          "n6": {
+            "method": "Token replay"
+          },
+          "n7": {},
+          "n9": {
+            "start": "Record Invoice Receipt",
+            "end": "Clear Invoice",
+            "by": "Item Category",
+            "unit": "days"
+          },
+          "n11": {
+            "attribute": "Item Category",
+            "values": "3-way match, invoice before GR",
+            "mode": "keep"
+          },
+          "n12": {
+            "noise": 0.2
+          },
+          "n13": {
+            "variants": 200
+          },
+          "n14": {
+            "attribute": "Vendor",
+            "value": "Cumulative net worth (EUR)",
+            "colour": "Item Type"
+          },
+          "n15": {
+            "x": "cases",
+            "y": "compliance (%)",
+            "size": "Cumulative net worth (EUR)",
+            "colour": "Item Type",
+            "log_x": true
+          },
+          "n16": {
+            "first": "Remove Payment Block",
+            "then": "Record Goods Receipt",
+            "value": "Cumulative net worth (EUR)"
+          },
+          "n18": {
+            "first": "Vendor creates debit memo",
+            "then": "Vendor creates invoice",
+            "value": "Cumulative net worth (EUR)"
+          },
+          "n19": {
+            "first": "Delete Purchase Order Item",
+            "then": "Reactivate Purchase Order Item",
+            "value": "Cumulative net worth (EUR)"
+          },
+          "n20": {
+            "first": "Vendor creates invoice",
+            "then": "Create Purchase Order Item",
+            "value": "Cumulative net worth (EUR)"
+          },
+          "n21": {
+            "first": "Record Invoice Receipt",
+            "second": "Clear Invoice",
+            "by": "User",
+            "value": "Cumulative net worth (EUR)"
+          }
+        },
+        "titles": {
+          "n1": "BPI Challenge 2019",
+          "n2": "Cases dated 2017 to 2019",
+          "n3": "Process map",
+          "n4": "One item category",
+          "n5": "Model of the category",
+          "n6": "How well it fits",
+          "n7": "Models per category",
+          "n9": "Invoice to clearing",
+          "n11": "Invoice before goods receipt",
+          "n12": "Its model",
+          "n13": "Deviations, move by move",
+          "n14": "Compliance per vendor",
+          "n15": "Vendors: cases, compliance, value",
+          "n16": "Payment block lifted before goods receipt",
+          "n18": "Debit memo before the invoice",
+          "n19": "Deleted, then reactivated",
+          "n20": "Invoice before the purchase order",
+          "n21": "Same user records and clears"
+        },
+        "statuses": {
+          "n1": "done",
+          "n2": "done",
+          "n3": "done",
+          "n4": "done",
+          "n5": "done",
+          "n6": "done",
+          "n7": "done",
+          "n9": "done",
+          "n11": "done",
+          "n12": "done",
+          "n13": "done",
+          "n14": "done",
+          "n15": "done",
+          "n16": "done",
+          "n18": "done",
+          "n19": "done",
+          "n20": "done",
+          "n21": "done"
+        },
+        "figures": {},
+        "fingerprints": {
+          "n1": "23d79fa454d6a47222605695b7bd2dcfe0e6bb871a4522f204d2e714751846c6",
+          "n2": "f9bf3423589a5fa65fe57ba3edd6c7f3a6a6859b01157090ffc2b1b43f44bb46",
+          "n4": "108bc445db86f2684e004aae787e10e790dc2bc536fbf5d17e9879e163a296c4",
+          "n9": "e7cd72124db8a81bbd06acfd9410a345f3c201aaaf5de40c390491fc0fcdb2e0",
+          "n11": "108bc445db86f2684e004aae787e10e790dc2bc536fbf5d17e9879e163a296c4",
+          "n3": "fdbcaac11db5615bcdc57a4f1ea7b26de4ec7b3cf758e73a82ce181e9fbcbc88",
+          "n18": "962f79469f90816098f41931f563e8a390bd271f9366a99cefea9f8e168db301",
+          "n19": "c8ae641e1e413dfbcdf80c5876fef955372cec0ca4553e53b416bdb2783d3327",
+          "n20": "74b4a13a76bc1b7207b539fcbbbdc9e05a706dcab7271f85245f05ffc3ff3521",
+          "n21": "965dcb47b631573511c2ea0f66a7799321a484093d1fd007d5f483b07307260a",
+          "n5": "63b24b05ee0aca8e7cf3a21f473e96b50ac401056d26561fc0b046e9afadf63e",
+          "n12": "63b24b05ee0aca8e7cf3a21f473e96b50ac401056d26561fc0b046e9afadf63e",
+          "n16": "79be87c761e8fa27aa35061e59385396d44a3727f767a6f0462ff42f5827536a",
+          "n6": "c765c732847e2b7658d8206276acfb8e9148d4eed6a7bd6c3958cd72861c9e16",
+          "n13": "91e03b3444004a51074465749f7f76af2f84963284859454c46827bdbb0e72b8",
+          "n14": "59f3ca1fd8903f5d6f7d63e9be14cdc2500514fe7a6039a7163181d63c8841be",
+          "n15": "d4266f15f1727050c49429d20f2f1c2ad56d445cd0d49e47639c2a1933d037fd",
+          "n7": "e3f5a4cd6ddd396a177529999bdc3c5316ca15f802efa32fd0fd71e8574cdceb"
+        },
+        "scheme": 2
+      }
+    },
+    {
+      "number": 2,
+      "note": "Token replay counts events of activities the model does not have (128 events in two categories)",
+      "taken": "2026-11-11T13:54:51",
+      "label": "Run again",
+      "workflow": {
+        "name": "BPI Challenge 2019 · purchase to pay",
+        "boxes": [
+          {
+            "id": "n1",
+            "box": "openprocess.flow.boxes.input.open_log",
+            "settings": {
+              "file": "BPI_Challenge_2019.xes"
+            },
+            "position": [
+              0,
+              360
+            ],
+            "title": "BPI Challenge 2019"
+          },
+          {
+            "id": "n2",
+            "box": "openprocess.flow.boxes.filter.time_frame",
+            "settings": {
+              "start": "2017-01-01",
+              "end": "2019-12-31",
+              "mode": "contained"
+            },
+            "position": [
+              260,
+              360
+            ],
+            "title": "Cases dated 2017 to 2019"
+          },
+          {
+            "id": "n3",
+            "box": "openprocess.flow.boxes.discover.directly_follows",
+            "settings": {},
+            "position": [
+              520,
+              600
+            ],
+            "title": "Process map"
+          },
+          {
+            "id": "n4",
+            "box": "openprocess.flow.boxes.filter.case_attribute",
+            "settings": {
+              "attribute": "Item Category",
+              "values": {
+                "sweep": [
+                  "3-way match, invoice before GR",
+                  "3-way match, invoice after GR",
+                  "Consignment",
+                  "2-way match"
+                ]
+              },
+              "mode": "keep"
+            },
+            "position": [
+              520,
+              0
+            ],
+            "title": "One item category"
+          },
+          {
+            "id": "n5",
+            "box": "openprocess.flow.boxes.discover.inductive_miner",
+            "settings": {
+              "noise": 0.2
+            },
+            "position": [
+              780,
+              0
+            ],
+            "title": "Model of the category"
+          },
+          {
+            "id": "n6",
+            "box": "openprocess.flow.boxes.check.check_fit",
+            "settings": {
+              "method": "Token replay"
+            },
+            "position": [
+              1040,
+              0
+            ],
+            "title": "How well it fits"
+          },
+          {
+            "id": "n7",
+            "box": "openprocess.flow.boxes.sweeps.sweep_table",
+            "settings": {},
+            "position": [
+              1300,
+              0
+            ],
+            "title": "Models per category"
+          },
+          {
+            "id": "n9",
+            "box": "openprocess.flow.boxes.measure.time_between",
+            "settings": {
+              "start": "Record Invoice Receipt",
+              "end": "Clear Invoice",
+              "by": "Item Category",
+              "unit": "days"
+            },
+            "position": [
+              520,
+              180
+            ],
+            "title": "Invoice to clearing"
+          },
+          {
+            "id": "n11",
+            "box": "openprocess.flow.boxes.filter.case_attribute",
+            "settings": {
+              "attribute": "Item Category",
+              "values": "3-way match, invoice before GR",
+              "mode": "keep"
+            },
+            "position": [
+              520,
+              360
+            ],
+            "title": "Invoice before goods receipt"
+          },
+          {
+            "id": "n12",
+            "box": "openprocess.flow.boxes.discover.inductive_miner",
+            "settings": {
+              "noise": 0.2
+            },
+            "position": [
+              780,
+              300
+            ],
+            "title": "Its model"
+          },
+          {
+            "id": "n13",
+            "box": "openprocess.flow.boxes.check.alignments",
+            "settings": {
+              "variants": 200
+            },
+            "position": [
+              1040,
+              300
+            ],
+            "title": "Deviations, move by move"
+          },
+          {
+            "id": "n14",
+            "box": "openprocess.flow.boxes.measure.compliance_by",
+            "settings": {
+              "attribute": "Vendor",
+              "value": "Cumulative net worth (EUR)",
+              "colour": "Item Type"
+            },
+            "position": [
+              1040,
+              440
+            ],
+            "title": "Compliance per vendor"
+          },
+          {
+            "id": "n15",
+            "box": "openprocess.flow.boxes.science.bubble_chart",
+            "settings": {
+              "x": "cases",
+              "y": "compliance (%)",
+              "size": "Cumulative net worth (EUR)",
+              "colour": "Item Type",
+              "log_x": true
+            },
+            "position": [
+              1300,
+              440
+            ],
+            "title": "Vendors: cases, compliance, value"
+          },
+          {
+            "id": "n16",
+            "box": "openprocess.flow.boxes.measure.order_rule",
+            "settings": {
+              "first": "Remove Payment Block",
+              "then": "Record Goods Receipt",
+              "value": "Cumulative net worth (EUR)"
+            },
+            "position": [
+              780,
+              460
+            ],
+            "title": "Payment block lifted before goods receipt"
+          },
+          {
+            "id": "n18",
+            "box": "openprocess.flow.boxes.measure.order_rule",
+            "settings": {
+              "first": "Vendor creates debit memo",
+              "then": "Vendor creates invoice",
+              "value": "Cumulative net worth (EUR)"
+            },
+            "position": [
+              520,
+              740
+            ],
+            "title": "Debit memo before the invoice"
+          },
+          {
+            "id": "n19",
+            "box": "openprocess.flow.boxes.measure.order_rule",
+            "settings": {
+              "first": "Delete Purchase Order Item",
+              "then": "Reactivate Purchase Order Item",
+              "value": "Cumulative net worth (EUR)"
+            },
+            "position": [
+              520,
+              870
+            ],
+            "title": "Deleted, then reactivated"
+          },
+          {
+            "id": "n20",
+            "box": "openprocess.flow.boxes.measure.order_rule",
+            "settings": {
+              "first": "Vendor creates invoice",
+              "then": "Create Purchase Order Item",
+              "value": "Cumulative net worth (EUR)"
+            },
+            "position": [
+              520,
+              1000
+            ],
+            "title": "Invoice before the purchase order"
+          },
+          {
+            "id": "n21",
+            "box": "openprocess.flow.boxes.measure.segregation_of_duties",
+            "settings": {
+              "first": "Record Invoice Receipt",
+              "second": "Clear Invoice",
+              "by": "User",
+              "value": "Cumulative net worth (EUR)"
+            },
+            "position": [
+              520,
+              1130
+            ],
+            "title": "Same user records and clears"
+          }
+        ],
+        "connections": [
+          {
+            "from": "n1",
+            "output": "out",
+            "to": "n2",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n3",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n4",
+            "input": "log"
+          },
+          {
+            "from": "n4",
+            "output": "out",
+            "to": "n5",
+            "input": "log"
+          },
+          {
+            "from": "n5",
+            "output": "out",
+            "to": "n6",
+            "input": "model"
+          },
+          {
+            "from": "n4",
+            "output": "out",
+            "to": "n6",
+            "input": "log"
+          },
+          {
+            "from": "n6",
+            "output": "out",
+            "to": "n7",
+            "input": "scores"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n9",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n11",
+            "input": "log"
+          },
+          {
+            "from": "n11",
+            "output": "out",
+            "to": "n12",
+            "input": "log"
+          },
+          {
+            "from": "n12",
+            "output": "out",
+            "to": "n13",
+            "input": "model"
+          },
+          {
+            "from": "n11",
+            "output": "out",
+            "to": "n13",
+            "input": "log"
+          },
+          {
+            "from": "n12",
+            "output": "out",
+            "to": "n14",
+            "input": "model"
+          },
+          {
+            "from": "n11",
+            "output": "out",
+            "to": "n14",
+            "input": "log"
+          },
+          {
+            "from": "n14",
+            "output": "out",
+            "to": "n15",
+            "input": "table"
+          },
+          {
+            "from": "n11",
+            "output": "out",
+            "to": "n16",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n18",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n19",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n20",
+            "input": "log"
+          },
+          {
+            "from": "n2",
+            "output": "out",
+            "to": "n21",
+            "input": "log"
+          }
+        ],
+        "groups": [
+          {
+            "id": "g8",
+            "name": "1 · Models per category",
+            "boxes": [
+              "n4",
+              "n5",
+              "n6",
+              "n7"
+            ],
+            "position": [
+              520,
+              0
+            ]
+          },
+          {
+            "id": "g10",
+            "name": "2 · Invoicing time",
+            "boxes": [
+              "n9"
+            ],
+            "position": [
+              520,
+              180
+            ]
+          },
+          {
+            "id": "g17",
+            "name": "3 · Deviations",
+            "boxes": [
+              "n11",
+              "n12",
+              "n13",
+              "n14",
+              "n15",
+              "n16"
+            ],
+            "position": [
+              520,
+              300
+            ]
+          },
+          {
+            "id": "g22",
+            "name": "Findings to check",
+            "boxes": [
+              "n18",
+              "n19",
+              "n20",
+              "n21"
+            ],
+            "position": [
+              520,
+              740
+            ]
+          }
+        ]
+      },
+      "record": {
+        "versions": {
+          "openprocess": "0.16.1",
+          "python": "3.14.3",
+          "numpy": "2.4.4",
+          "pandas": "3.0.3",
+          "scipy": "1.17.1",
+          "matplotlib": "3.10.8"
+        },
+        "environment": {
+          "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+          "python": "3.14.3",
+          "packages": {
+            "appnope": "0.1.4",
+            "asttokens": "3.0.1",
+            "comm": "0.2.3",
+            "contourpy": "1.3.3",
+            "cpnpy": "0.2.0",
+            "cycler": "0.12.1",
+            "debugpy": "1.8.20",
+            "decorator": "5.2.1",
+            "executing": "2.2.1",
+            "fonttools": "4.62.1",
+            "ipykernel": "7.2.0",
+            "ipython": "9.12.0",
+            "ipython_pygments_lexers": "1.1.1",
+            "ipywidgets": "8.1.8",
+            "jedi": "0.19.2",
+            "jupyter_client": "8.8.0",
+            "jupyter_core": "5.9.1",
+            "jupyterlab_widgets": "3.0.16",
+            "kiwisolver": "1.5.0",
+            "matplotlib": "3.10.8",
+            "matplotlib-inline": "0.2.1",
+            "nest_asyncio": "1.6.0",
+            "numpy": "2.4.4",
+            "openprocess": "0.16.1",
+            "packaging": "26.1",
+            "pandas": "3.0.3",
+            "parso": "0.8.6",
+            "pexpect": "4.9.0",
+            "pillow": "12.2.0",
+            "pip": "26.0.1",
+            "platformdirs": "4.9.6",
+            "prompt_toolkit": "3.0.52",
+            "psutil": "7.2.2",
+            "ptyprocess": "0.7.0",
+            "pure_eval": "0.2.3",
+            "pygments": "2.20.0",
+            "pyparsing": "3.3.2",
+            "python-dateutil": "2.9.0.post0",
+            "pyzmq": "27.1.0",
+            "scipy": "1.17.1",
+            "six": "1.17.0",
+            "stack_data": "0.6.3",
+            "tornado": "6.5.5",
+            "traitlets": "5.14.3",
+            "wcwidth": "0.6.0",
+            "widgetsnbextension": "4.0.15"
+          }
+        },
+        "inputs": [
+          {
+            "node": "n1",
+            "setting": "file",
+            "file": "BPI_Challenge_2019.xes",
+            "sha256": "af63bc687fc4152f2123b05c3af7772b37ef3fce2d3f67f812666c9e356baae7"
+          }
+        ],
+        "custom_boxes": [],
+        "seeds": {},
+        "results": {
+          "n1": "23d79fa454d6a47222605695b7bd2dcfe0e6bb871a4522f204d2e714751846c6",
+          "n2": "f9bf3423589a5fa65fe57ba3edd6c7f3a6a6859b01157090ffc2b1b43f44bb46",
+          "n4": "108bc445db86f2684e004aae787e10e790dc2bc536fbf5d17e9879e163a296c4",
+          "n9": "e7cd72124db8a81bbd06acfd9410a345f3c201aaaf5de40c390491fc0fcdb2e0",
+          "n11": "108bc445db86f2684e004aae787e10e790dc2bc536fbf5d17e9879e163a296c4",
+          "n3": "fdbcaac11db5615bcdc57a4f1ea7b26de4ec7b3cf758e73a82ce181e9fbcbc88",
+          "n18": "962f79469f90816098f41931f563e8a390bd271f9366a99cefea9f8e168db301",
+          "n19": "c8ae641e1e413dfbcdf80c5876fef955372cec0ca4553e53b416bdb2783d3327",
+          "n20": "74b4a13a76bc1b7207b539fcbbbdc9e05a706dcab7271f85245f05ffc3ff3521",
+          "n21": "965dcb47b631573511c2ea0f66a7799321a484093d1fd007d5f483b07307260a",
+          "n5": "63b24b05ee0aca8e7cf3a21f473e96b50ac401056d26561fc0b046e9afadf63e",
+          "n12": "63b24b05ee0aca8e7cf3a21f473e96b50ac401056d26561fc0b046e9afadf63e",
+          "n16": "79be87c761e8fa27aa35061e59385396d44a3727f767a6f0462ff42f5827536a",
+          "n6": "c765c732847e2b7658d8206276acfb8e9148d4eed6a7bd6c3958cd72861c9e16",
+          "n13": "91e03b3444004a51074465749f7f76af2f84963284859454c46827bdbb0e72b8",
+          "n14": "59f3ca1fd8903f5d6f7d63e9be14cdc2500514fe7a6039a7163181d63c8841be",
+          "n15": "d4266f15f1727050c49429d20f2f1c2ad56d445cd0d49e47639c2a1933d037fd",
+          "n7": "2822b302c25d1050419f206945dbad5c461b2f3edb10860aa13d635bf4380930"
+        },
+        "fingerprint": 2,
+        "saved": "2026-11-11T12:54:37+00:00"
+      },
+      "snapshot": {
+        "taken": "2026-11-11T13:54:51",
+        "label": "Run again",
+        "settings": {
+          "n1": {
+            "file": "BPI_Challenge_2019.xes"
+          },
+          "n2": {
+            "start": "2017-01-01",
+            "end": "2019-12-31",
+            "mode": "contained"
+          },
+          "n3": {},
+          "n4": {
+            "attribute": "Item Category",
+            "values": {
+              "sweep": [
+                "3-way match, invoice before GR",
+                "3-way match, invoice after GR",
+                "Consignment",
+                "2-way match"
+              ]
+            },
+            "mode": "keep"
+          },
+          "n5": {
+            "noise": 0.2
+          },
+          "n6": {
+            "method": "Token replay"
+          },
+          "n7": {},
+          "n9": {
+            "start": "Record Invoice Receipt",
+            "end": "Clear Invoice",
+            "by": "Item Category",
+            "unit": "days"
+          },
+          "n11": {
+            "attribute": "Item Category",
+            "values": "3-way match, invoice before GR",
+            "mode": "keep"
+          },
+          "n12": {
+            "noise": 0.2
+          },
+          "n13": {
+            "variants": 200
+          },
+          "n14": {
+            "attribute": "Vendor",
+            "value": "Cumulative net worth (EUR)",
+            "colour": "Item Type"
+          },
+          "n15": {
+            "x": "cases",
+            "y": "compliance (%)",
+            "size": "Cumulative net worth (EUR)",
+            "colour": "Item Type",
+            "log_x": true
+          },
+          "n16": {
+            "first": "Remove Payment Block",
+            "then": "Record Goods Receipt",
+            "value": "Cumulative net worth (EUR)"
+          },
+          "n18": {
+            "first": "Vendor creates debit memo",
+            "then": "Vendor creates invoice",
+            "value": "Cumulative net worth (EUR)"
+          },
+          "n19": {
+            "first": "Delete Purchase Order Item",
+            "then": "Reactivate Purchase Order Item",
+            "value": "Cumulative net worth (EUR)"
+          },
+          "n20": {
+            "first": "Vendor creates invoice",
+            "then": "Create Purchase Order Item",
+            "value": "Cumulative net worth (EUR)"
+          },
+          "n21": {
+            "first": "Record Invoice Receipt",
+            "second": "Clear Invoice",
+            "by": "User",
+            "value": "Cumulative net worth (EUR)"
+          }
+        },
+        "titles": {
+          "n1": "BPI Challenge 2019",
+          "n2": "Cases dated 2017 to 2019",
+          "n3": "Process map",
+          "n4": "One item category",
+          "n5": "Model of the category",
+          "n6": "How well it fits",
+          "n7": "Models per category",
+          "n9": "Invoice to clearing",
+          "n11": "Invoice before goods receipt",
+          "n12": "Its model",
+          "n13": "Deviations, move by move",
+          "n14": "Compliance per vendor",
+          "n15": "Vendors: cases, compliance, value",
+          "n16": "Payment block lifted before goods receipt",
+          "n18": "Debit memo before the invoice",
+          "n19": "Deleted, then reactivated",
+          "n20": "Invoice before the purchase order",
+          "n21": "Same user records and clears"
+        },
+        "statuses": {
+          "n1": "done",
+          "n2": "done",
+          "n3": "done",
+          "n4": "done",
+          "n5": "done",
+          "n6": "done",
+          "n7": "done",
+          "n9": "done",
+          "n11": "done",
+          "n12": "done",
+          "n13": "done",
+          "n14": "done",
+          "n15": "done",
+          "n16": "done",
+          "n18": "done",
+          "n19": "done",
+          "n20": "done",
+          "n21": "done"
+        },
+        "figures": {
+          "n1": [
+            "251,734 cases",
+            "1,595,923 events"
+          ],
+          "n2": [
+            "251,652 cases",
+            "1,593,335 events"
+          ],
+          "n3": [
+            "42 · 538",
+            "activities · paths"
+          ],
+          "n4": [
+            "220,948 cases",
+            "1,234,237 events"
+          ],
+          "n5": [
+            "57 · 89",
+            "places · transitions"
+          ],
+          "n6": [
+            "1.00 fitness",
+            "precision 0.32 · generalisation 0.90 · simplicity 0.59"
+          ],
+          "n7": [
+            "4 × 6",
+            "rows × columns · Sweep"
+          ],
+          "n9": [
+            "3 × 6",
+            "rows × columns · Record Invoice Receipt → Clear Invoice"
+          ],
+          "n11": [
+            "220,948 cases",
+            "1,234,237 events"
+          ],
+          "n12": [
+            "57 · 89",
+            "places · transitions"
+          ],
+          "n13": [
+            "1.00 fitness",
+            "196,683 of 201,949 cases align"
+          ],
+          "n14": [
+            "1,374 × 5",
+            "rows × columns · Compliance by Vendor"
+          ],
+          "n15": [
+            "figure",
+            "compliance (%) against cases, area by Cumulative net worth (EUR), colour by Item Type"
+          ],
+          "n16": [
+            "557 cases",
+            "cases · 4,029 events"
+          ],
+          "n18": [
+            "2,364 cases",
+            "cases · 22,519 events"
+          ],
+          "n19": [
+            "8,835 cases",
+            "cases · 24,380 events"
+          ],
+          "n20": [
+            "3,620 cases",
+            "cases · 36,494 events"
+          ],
+          "n21": [
+            "15 × 3",
+            "rows × columns · Same User: Record Invoice Receipt and Clear Invoice"
+          ]
+        },
+        "fingerprints": {
+          "n1": "23d79fa454d6a47222605695b7bd2dcfe0e6bb871a4522f204d2e714751846c6",
+          "n2": "f9bf3423589a5fa65fe57ba3edd6c7f3a6a6859b01157090ffc2b1b43f44bb46",
+          "n3": "fdbcaac11db5615bcdc57a4f1ea7b26de4ec7b3cf758e73a82ce181e9fbcbc88",
+          "n4": "108bc445db86f2684e004aae787e10e790dc2bc536fbf5d17e9879e163a296c4",
+          "n5": "63b24b05ee0aca8e7cf3a21f473e96b50ac401056d26561fc0b046e9afadf63e",
+          "n6": "c765c732847e2b7658d8206276acfb8e9148d4eed6a7bd6c3958cd72861c9e16",
+          "n7": "2822b302c25d1050419f206945dbad5c461b2f3edb10860aa13d635bf4380930",
+          "n9": "e7cd72124db8a81bbd06acfd9410a345f3c201aaaf5de40c390491fc0fcdb2e0",
+          "n11": "108bc445db86f2684e004aae787e10e790dc2bc536fbf5d17e9879e163a296c4",
+          "n12": "63b24b05ee0aca8e7cf3a21f473e96b50ac401056d26561fc0b046e9afadf63e",
+          "n13": "91e03b3444004a51074465749f7f76af2f84963284859454c46827bdbb0e72b8",
+          "n14": "59f3ca1fd8903f5d6f7d63e9be14cdc2500514fe7a6039a7163181d63c8841be",
+          "n15": "d4266f15f1727050c49429d20f2f1c2ad56d445cd0d49e47639c2a1933d037fd",
+          "n16": "79be87c761e8fa27aa35061e59385396d44a3727f767a6f0462ff42f5827536a",
+          "n18": "962f79469f90816098f41931f563e8a390bd271f9366a99cefea9f8e168db301",
+          "n19": "c8ae641e1e413dfbcdf80c5876fef955372cec0ca4553e53b416bdb2783d3327",
+          "n20": "74b4a13a76bc1b7207b539fcbbbdc9e05a706dcab7271f85245f05ffc3ff3521",
+          "n21": "965dcb47b631573511c2ea0f66a7799321a484093d1fd007d5f483b07307260a"
+        },
+        "scheme": 2
+      }
+    }
+  ],
   "record": {
     "versions": {
-      "openprocess": "0.13.2",
+      "openprocess": "0.16.1",
       "python": "3.14.3",
       "numpy": "2.4.4",
       "pandas": "3.0.3",
@@ -444,6 +1877,7 @@
         "asttokens": "3.0.1",
         "comm": "0.2.3",
         "contourpy": "1.3.3",
+        "cpnpy": "0.2.0",
         "cycler": "0.12.1",
         "debugpy": "1.8.20",
         "decorator": "5.2.1",
@@ -462,6 +1896,7 @@
         "matplotlib-inline": "0.2.1",
         "nest_asyncio": "1.6.0",
         "numpy": "2.4.4",
+        "openprocess": "0.16.1",
         "packaging": "26.1",
         "pandas": "3.0.3",
         "parso": "0.8.6",
@@ -514,10 +1949,10 @@
       "n13": "91e03b3444004a51074465749f7f76af2f84963284859454c46827bdbb0e72b8",
       "n14": "59f3ca1fd8903f5d6f7d63e9be14cdc2500514fe7a6039a7163181d63c8841be",
       "n15": "d4266f15f1727050c49429d20f2f1c2ad56d445cd0d49e47639c2a1933d037fd",
-      "n7": "e3f5a4cd6ddd396a177529999bdc3c5316ca15f802efa32fd0fd71e8574cdceb"
+      "n7": "2822b302c25d1050419f206945dbad5c461b2f3edb10860aa13d635bf4380930"
     },
     "fingerprint": 2,
-    "saved": "2026-10-26T11:39:04+00:00",
+    "saved": "2026-11-11T12:54:37+00:00",
     "history": []
   }
 }

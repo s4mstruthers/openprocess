@@ -451,6 +451,13 @@ class StateSpace:
         if self.partial:
             add("  WARNING: the properties below describe only the explored")
             add("           fragment and are not proofs about the whole model.")
+        ignored = getattr(self.net, "warnings", [])
+        if ignored:
+            add(f"  WARNING: {len(ignored)} transition priorities or code segments are not")
+            add("           implemented and were not used: this state space can differ")
+            add("           from the one CPN Tools computes.")
+            for issue in ignored[:max_listed]:
+                add(f"             {issue.element_name or issue.element_id} ({issue.field_name})")
         add("")
 
         add("Boundedness Properties")
