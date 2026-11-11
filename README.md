@@ -700,6 +700,9 @@ course).
 
 ## For developers
 
+Want to report a wrong result, add an algorithm or fix something? See
+[**CONTRIBUTING.md**](CONTRIBUTING.md).
+
 ```bash
 pytest -q                 # the whole suite, including GUI tests that run offscreen
 openprocess --help              # command line: check, simulate, state space, mining
