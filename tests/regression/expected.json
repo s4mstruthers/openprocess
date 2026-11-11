@@ -1,0 +1,1283 @@
+{
+ "textbook-l1": {
+  "inductive_miner": "→(a, ×(e, ∧(b, c)), d)",
+  "inductive_miner_noise_0.2": "→(a, ×(e, ∧(b, c)), d)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "d"
+   ],
+   "places": [
+    "{a} → {b, e}",
+    "{a} → {c, e}",
+    "{b, e} → {d}",
+    "{c, e} → {d}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → c",
+   "a → e",
+   "b → d",
+   "c → d",
+   "e → d"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 44,
+    "c": 44,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 6,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "textbook-l2-redo": {
+  "inductive_miner": "→(a, ↺(∧(b, c), →(e, f)), d)",
+  "inductive_miner_noise_0.2": "→(a, ↺(∧(b, c), →(e, f)), d)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "d"
+   ],
+   "places": [
+    "{a, f} → {b}",
+    "{a, f} → {c}",
+    "{b} → {d, e}",
+    "{c} → {d, e}",
+    "{e} → {f}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → c",
+   "b → d",
+   "b → e",
+   "c → d",
+   "c → e",
+   "e → f",
+   "f → b",
+   "f → c"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 179,
+    "c": 179,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 13,
+    "exact": true
+   },
+   "precision": 0.933333
+  }
+ },
+ "two-choices-in-a-row": {
+  "inductive_miner": "→(×(a, b), c, ×(d, e))",
+  "inductive_miner_noise_0.2": "→(×(a, b), c, ×(d, e))",
+  "alpha": {
+   "start": [
+    "a",
+    "b"
+   ],
+   "end": [
+    "d",
+    "e"
+   ],
+   "places": [
+    "{a, b} → {c}",
+    "{c} → {d, e}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → c",
+   "b → c",
+   "c → d",
+   "c → e"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 588,
+    "c": 588,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 147,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "long-distance-dependency": {
+  "inductive_miner": "→(×(a, b), c, ×(d, e))",
+  "inductive_miner_noise_0.2": "→(×(a, b), c, ×(d, e))",
+  "alpha": {
+   "start": [
+    "a",
+    "b"
+   ],
+   "end": [
+    "d",
+    "e"
+   ],
+   "places": [
+    "{a, b} → {c}",
+    "{c} → {d, e}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → c",
+   "b → c",
+   "c → d",
+   "c → e"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 80,
+    "c": 80,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 20,
+    "exact": true
+   },
+   "precision": 0.8
+  }
+ },
+ "loop-of-length-one": {
+  "inductive_miner": "→(a, ×(τ, ↺(b, τ)), c)",
+  "inductive_miner_noise_0.2": "→(a, ×(τ, ↺(b, τ)), c)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "c"
+   ],
+   "places": [
+    "{a} → {c}"
+   ],
+   "warnings": 1
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → c",
+   "b → b",
+   "b → c"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 54,
+    "c": 54,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 8,
+    "exact": true
+   },
+   "precision": 0.956522
+  }
+ },
+ "loop-of-length-two": {
+  "inductive_miner": "→(a, ↺(b, d), c)",
+  "inductive_miner_noise_0.2": "→(a, ↺(b, d), c)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "c"
+   ],
+   "places": [
+    "{a} → {b}",
+    "{b} → {c}"
+   ],
+   "warnings": 1
+  },
+  "heuristics_miner": [
+   "a → b",
+   "b → c",
+   "b → d",
+   "d → b"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 50,
+    "c": 50,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 7,
+    "exact": true
+   },
+   "precision": 0.975
+  }
+ },
+ "loops-of-length-one-and-two": {
+  "inductive_miner": "→(a, ↺(↺(b, τ), d), c)",
+  "inductive_miner_noise_0.2": "→(a, ↺(↺(b, τ), d), c)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "c"
+   ],
+   "places": [],
+   "warnings": 2
+  },
+  "heuristics_miner": [
+   "a → b",
+   "b → b",
+   "b → c",
+   "b → d",
+   "d → b"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 120,
+    "c": 120,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 12,
+    "exact": true
+   },
+   "precision": 0.863636
+  }
+ },
+ "optional-repeating-start": {
+  "inductive_miner": "→(×(τ, ↺(a, τ)), b)",
+  "inductive_miner_noise_0.2": "→(×(τ, ↺(a, τ)), b)",
+  "alpha": {
+   "start": [
+    "a",
+    "b"
+   ],
+   "end": [
+    "b"
+   ],
+   "places": [],
+   "warnings": 1
+  },
+  "heuristics_miner": [
+   "a → a",
+   "a → b"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 15,
+    "c": 15,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 3,
+    "exact": true
+   },
+   "precision": 0.916667
+  }
+ },
+ "skipped-together": {
+  "inductive_miner": "→(↺(b, τ), ×(τ, →(a, c)))",
+  "inductive_miner_noise_0.2": "→(↺(b, τ), ×(τ, →(a, c)))",
+  "alpha": {
+   "start": [
+    "b"
+   ],
+   "end": [
+    "b",
+    "c"
+   ],
+   "places": [
+    "{a} → {c}"
+   ],
+   "warnings": 1
+  },
+  "heuristics_miner": [
+   "a → c",
+   "b → a",
+   "b → b"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 28,
+    "c": 28,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 5,
+    "exact": true
+   },
+   "precision": 0.8
+  }
+ },
+ "sequence-cut-every-pair": {
+  "inductive_miner": "→(↺(b, τ), ×(→(a, ↺(d, τ)), ↺(c, τ)))",
+  "inductive_miner_noise_0.2": "→(↺(b, τ), ×(→(a, ↺(d, τ)), ↺(c, τ)))",
+  "alpha": {
+   "start": [
+    "b"
+   ],
+   "end": [
+    "c",
+    "d"
+   ],
+   "places": [],
+   "warnings": 1
+  },
+  "heuristics_miner": [
+   "a → d",
+   "b → a",
+   "b → b",
+   "b → c",
+   "c → c",
+   "d → d"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 60,
+    "c": 60,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 5,
+    "exact": true
+   },
+   "precision": 0.763158
+  }
+ },
+ "empty-trace": {
+  "inductive_miner": "×(τ, →(a, ×(b, τ)))",
+  "inductive_miner_noise_0.2": "×(τ, →(a, b))",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "a",
+    "b"
+   ],
+   "places": [
+    "{a} → {b}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 21,
+    "c": 21,
+    "m": 1,
+    "r": 1,
+    "fitness": 0.952381
+   },
+   "alignments": {
+    "fitness": 0.875,
+    "log_fitness": 0.909091,
+    "fitting_cases": 7,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "empty-trace-at-the-noise-threshold": {
+  "inductive_miner": "×(τ, →(a, b))",
+  "inductive_miner_noise_0.2": "×(τ, →(a, b))",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "b"
+   ],
+   "places": [
+    "{a} → {b}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 28,
+    "c": 28,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 10,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "rare-swap": {
+  "inductive_miner": "→(a, ∧(b, c), d)",
+  "inductive_miner_noise_0.2": "→(a, ∧(b, c), d)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "d"
+   ],
+   "places": [
+    "{a} → {b}",
+    "{a} → {c}",
+    "{b} → {d}",
+    "{c} → {d}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → c",
+   "b → c",
+   "b → d",
+   "c → d"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 408,
+    "c": 408,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 51,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "swap-at-the-noise-threshold": {
+  "inductive_miner": "→(a, ∧(b, c))",
+  "inductive_miner_noise_0.2": "→(a, ∧(b, c))",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "b",
+    "c"
+   ],
+   "places": [
+    "{a} → {b}",
+    "{a} → {c}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → c",
+   "b → c"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 84,
+    "c": 84,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 12,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "rare-late-activity": {
+  "inductive_miner": "→(a, ∧(b, c, d))",
+  "inductive_miner_noise_0.2": "→(a, ∧(b, c), d)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "c",
+    "d"
+   ],
+   "places": [
+    "{a} → {b}",
+    "{a} → {c}",
+    "{a} → {d}",
+    "{c} → {d}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → c",
+   "a → d",
+   "b → d",
+   "c → d"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 647,
+    "c": 646,
+    "m": 1,
+    "r": 2,
+    "fitness": 0.99768
+   },
+   "alignments": {
+    "fitness": 0.996914,
+    "log_fitness": 0.996914,
+    "fitting_cases": 80,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "rare-restart": {
+  "inductive_miner": "∧(a, →(×(τ, →(×(b, τ), c)), d))",
+  "inductive_miner_noise_0.2": "→(a, b, c, d)",
+  "alpha": {
+   "start": [
+    "a",
+    "d"
+   ],
+   "end": [
+    "a",
+    "d"
+   ],
+   "places": [
+    "{a} → {b}",
+    "{a} → {c}",
+    "{b} → {c}",
+    "{c} → {d}",
+    "{d} → {a}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → c",
+   "b → c",
+   "c → d",
+   "d → a"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 261,
+    "c": 261,
+    "m": 3,
+    "r": 3,
+    "fitness": 0.988506
+   },
+   "alignments": {
+    "fitness": 0.982031,
+    "log_fitness": 0.985714,
+    "fitting_cases": 50,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "rare-restart-with-two-options": {
+  "inductive_miner": "∧(a, →(×(b, τ), ×(c, τ), d))",
+  "inductive_miner_noise_0.2": "→(a, ×(b, τ), ×(c, τ), d)",
+  "alpha": {
+   "start": [
+    "a",
+    "d"
+   ],
+   "end": [
+    "a",
+    "d"
+   ],
+   "places": [
+    "{a} → {b}",
+    "{a} → {c}",
+    "{b} → {c}",
+    "{b} → {d}",
+    "{c} → {d}",
+    "{d} → {a}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → c",
+   "b → c",
+   "b → d",
+   "c → d",
+   "d → a"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 308,
+    "c": 308,
+    "m": 1,
+    "r": 1,
+    "fitness": 0.996753
+   },
+   "alignments": {
+    "fitness": 0.991935,
+    "log_fitness": 0.993548,
+    "fitting_cases": 61,
+    "exact": true
+   },
+   "precision": 0.819527
+  }
+ },
+ "interleaved-with-a-short-case": {
+  "inductive_miner": "→(a, ∧(b, ×(c, τ)))",
+  "inductive_miner_noise_0.2": "→(a, ∧(b, ×(c, τ)))",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "b",
+    "c"
+   ],
+   "places": [
+    "{a} → {b}",
+    "{a} → {c}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → c"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 21,
+    "c": 21,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 3,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "no-cut": {
+  "inductive_miner": "∧(b, ×(τ, ∧(a, c)))",
+  "inductive_miner_noise_0.2": "∧(b, ×(τ, ∧(a, c)))",
+  "alpha": {
+   "start": [
+    "a",
+    "b",
+    "c"
+   ],
+   "end": [
+    "a",
+    "b",
+    "c"
+   ],
+   "places": [
+    "{a} → {c}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → c"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 46,
+    "c": 46,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 5,
+    "exact": true
+   },
+   "precision": 0.925926
+  }
+ },
+ "repeat-then-continue": {
+  "inductive_miner": "→(↺(→(a, b), τ), c)",
+  "inductive_miner_noise_0.2": "→(↺(→(a, b), τ), c)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "c"
+   ],
+   "places": [
+    "{b} → {c}"
+   ],
+   "warnings": 1
+  },
+  "heuristics_miner": [
+   "a → b",
+   "b → a",
+   "b → c"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 15,
+    "c": 15,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 2,
+    "exact": true
+   },
+   "precision": 0.909091
+  }
+ },
+ "starts-and-ends-with-the-same-activity": {
+  "inductive_miner": "↺(a, b)",
+  "inductive_miner_noise_0.2": "↺(a, b)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "a"
+   ],
+   "places": [],
+   "warnings": 1
+  },
+  "heuristics_miner": [
+   "a → b",
+   "b → a"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 30,
+    "c": 30,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 5,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "one-activity": {
+  "inductive_miner": "a",
+  "inductive_miner_noise_0.2": "a",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "a"
+   ],
+   "places": [],
+   "warnings": 0
+  },
+  "heuristics_miner": [],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 6,
+    "c": 6,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 3,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "one-activity-repeating": {
+  "inductive_miner": "↺(a, τ)",
+  "inductive_miner_noise_0.2": "↺(a, τ)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "a"
+   ],
+   "places": [],
+   "warnings": 1
+  },
+  "heuristics_miner": [
+   "a → a"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 18,
+    "c": 18,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 3,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "three-in-parallel": {
+  "inductive_miner": "→(a, ∧(b, c, d), e)",
+  "inductive_miner_noise_0.2": "→(a, ∧(b, c, d), e)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "e"
+   ],
+   "places": [
+    "{a} → {b}",
+    "{a} → {c}",
+    "{a} → {d}",
+    "{b} → {e}",
+    "{c} → {e}",
+    "{d} → {e}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → c",
+   "a → d",
+   "b → e",
+   "c → e",
+   "d → e"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 60,
+    "c": 60,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 6,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "parallel-inside-a-loop": {
+  "inductive_miner": "→(a, ∧(↺(b, τ), ↺(c, τ)), d)",
+  "inductive_miner_noise_0.2": "→(a, ∧(↺(b, τ), ↺(c, τ)), d)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "d"
+   ],
+   "places": [
+    "{a} → {b}",
+    "{a} → {c}",
+    "{b} → {d}",
+    "{c} → {d}"
+   ],
+   "warnings": 1
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → c",
+   "b → c",
+   "b → d",
+   "c → b",
+   "c → d"
+  ],
+  "conformance": {
+   "model": "IMf 0.2 of the log",
+   "replay": {
+    "p": 80,
+    "c": 80,
+    "m": 0,
+    "r": 0,
+    "fitness": 1.0
+   },
+   "alignments": {
+    "fitness": 1.0,
+    "log_fitness": 1.0,
+    "fitting_cases": 6,
+    "exact": true
+   },
+   "precision": 0.666667
+  }
+ },
+ "unknown-activity": {
+  "inductive_miner": "→(a, ×(z, τ), b)",
+  "inductive_miner_noise_0.2": "→(a, ×(z, τ), b)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "b"
+   ],
+   "places": [
+    "{a} → {b}",
+    "{a} → {z}",
+    "{z} → {b}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → z",
+   "z → b"
+  ],
+  "conformance": {
+   "model": "IM of [<a,b>]",
+   "replay": {
+    "p": 18,
+    "c": 18,
+    "m": 3,
+    "r": 3,
+    "fitness": 0.833333
+   },
+   "alignments": {
+    "fitness": 0.88,
+    "log_fitness": 0.869565,
+    "fitting_cases": 2,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "only-unknown-activities": {
+  "inductive_miner": "→(x, y)",
+  "inductive_miner_noise_0.2": "→(x, y)",
+  "alpha": {
+   "start": [
+    "x"
+   ],
+   "end": [
+    "y"
+   ],
+   "places": [
+    "{x} → {y}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "x → y"
+  ],
+  "conformance": {
+   "model": "IM of [<a,b>]",
+   "replay": {
+    "p": 3,
+    "c": 3,
+    "m": 3,
+    "r": 3,
+    "fitness": 0.0
+   },
+   "alignments": {
+    "fitness": 0.0,
+    "log_fitness": 0.0,
+    "fitting_cases": 0,
+    "exact": true
+   },
+   "precision": 0.0
+  }
+ },
+ "skipped-activity": {
+  "inductive_miner": "→(a, ×(b, τ), c)",
+  "inductive_miner_noise_0.2": "→(a, ×(b, τ), c)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "c"
+   ],
+   "places": [
+    "{a} → {b}",
+    "{a} → {c}",
+    "{b} → {c}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → c",
+   "b → c"
+  ],
+  "conformance": {
+   "model": "IM of [<a,b,c>]",
+   "replay": {
+    "p": 18,
+    "c": 18,
+    "m": 2,
+    "r": 2,
+    "fitness": 0.888889
+   },
+   "alignments": {
+    "fitness": 0.92,
+    "log_fitness": 0.928571,
+    "fitting_cases": 3,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "swapped-order": {
+  "inductive_miner": "→(a, ∧(b, c), d)",
+  "inductive_miner_noise_0.2": "→(a, ∧(b, c), d)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "d"
+   ],
+   "places": [
+    "{a} → {b}",
+    "{a} → {c}",
+    "{b} → {d}",
+    "{c} → {d}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b",
+   "a → c",
+   "b → d",
+   "c → d"
+  ],
+  "conformance": {
+   "model": "IM of [<a,b,c,d>]",
+   "replay": {
+    "p": 15,
+    "c": 15,
+    "m": 2,
+    "r": 2,
+    "fitness": 0.866667
+   },
+   "alignments": {
+    "fitness": 0.833333,
+    "log_fitness": 0.833333,
+    "fitting_cases": 1,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "repeated-activity": {
+  "inductive_miner": "→(a, ↺(b, τ), c)",
+  "inductive_miner_noise_0.2": "→(a, ↺(b, τ), c)",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "c"
+   ],
+   "places": [],
+   "warnings": 1
+  },
+  "heuristics_miner": [
+   "a → b",
+   "b → b",
+   "b → c"
+  ],
+  "conformance": {
+   "model": "IM of [<a,b,c>]",
+   "replay": {
+    "p": 9,
+    "c": 9,
+    "m": 1,
+    "r": 1,
+    "fitness": 0.888889
+   },
+   "alignments": {
+    "fitness": 0.928571,
+    "log_fitness": 0.923077,
+    "fitting_cases": 1,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "case-that-stops-early": {
+  "inductive_miner": "→(a, b, ×(τ, →(c, d)))",
+  "inductive_miner_noise_0.2": "→(a, b, ×(τ, →(c, d)))",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "b",
+    "d"
+   ],
+   "places": [
+    "{a} → {b}",
+    "{b} → {c}",
+    "{c} → {d}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b",
+   "b → c",
+   "c → d"
+  ],
+  "conformance": {
+   "model": "IM of [<a,b,c,d>]",
+   "replay": {
+    "p": 11,
+    "c": 11,
+    "m": 2,
+    "r": 2,
+    "fitness": 0.818182
+   },
+   "alignments": {
+    "fitness": 0.777778,
+    "log_fitness": 0.8,
+    "fitting_cases": 1,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ },
+ "empty-trace-against-a-model": {
+  "inductive_miner": "×(τ, →(a, b))",
+  "inductive_miner_noise_0.2": "×(τ, →(a, b))",
+  "alpha": {
+   "start": [
+    "a"
+   ],
+   "end": [
+    "b"
+   ],
+   "places": [
+    "{a} → {b}"
+   ],
+   "warnings": 0
+  },
+  "heuristics_miner": [
+   "a → b"
+  ],
+  "conformance": {
+   "model": "IM of [<a,b>]",
+   "replay": {
+    "p": 4,
+    "c": 4,
+    "m": 1,
+    "r": 1,
+    "fitness": 0.75
+   },
+   "alignments": {
+    "fitness": 0.5,
+    "log_fitness": 0.666667,
+    "fitting_cases": 1,
+    "exact": true
+   },
+   "precision": 1.0
+  }
+ }
+}

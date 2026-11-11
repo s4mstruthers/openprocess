@@ -62,6 +62,14 @@ one.
 - **A test.** A fix comes with a test that fails without it. A new algorithm
   comes with tests on small logs or nets whose answer can be checked by hand,
   and where a textbook or paper gives a worked example, that example.
+- **The regression set, when an algorithm changes.**
+  [tests/regression/](tests/regression/) holds 32 small tricky logs (short
+  loops, empty traces, noise at the threshold, events a model does not know)
+  with the results OpenProcess gives for them, frozen. A test fails when any
+  of them moves. If your change is meant to move one, run
+  `python tests/regression/freeze.py` and explain the diff of
+  `expected.json` in the pull request. A log that caught a bug, or would
+  have, belongs in `logs.json`.
 - **An honest result.** If an algorithm cannot decide something (a state
   space that was cut off, a search that gave up), the result must say so. A
   confident wrong answer is the worst bug this project can have.
