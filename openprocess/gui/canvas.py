@@ -1192,6 +1192,7 @@ class NetView(CanvasPanning, QGraphicsView):
 
     def __init__(self, scene: NetScene, zoom_controls: bool = True) -> None:
         super().__init__(scene)
+        self.setAccessibleName("Net editor canvas")
         self.setRenderHints(
             QPainter.Antialiasing
             | QPainter.TextAntialiasing

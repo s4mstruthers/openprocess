@@ -28,13 +28,23 @@ class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
             return None
         return importlib.machinery.ModuleSpec(name, self)
 
+    def __init__(self):
+        self._specs = {}
+
     def create_module(self, spec):
         module = importlib.import_module(_new.__name__ + spec.name[len(__name__):])
         sys.modules[spec.name] = module
+        # The import system is about to write the cpnpy spec onto the module;
+        # exec_module puts its own back, so its relative imports keep
+        # resolving against openprocess (and Python does not warn about it).
+        self._specs[spec.name] = module.__spec__
         return module
 
     def exec_module(self, module):
-        pass
+        spec = getattr(module, "__spec__", None)
+        own = self._specs.pop(getattr(spec, "name", ""), None)
+        if own is not None:
+            module.__spec__ = own
 
 
 sys.meta_path.insert(0, _Alias())

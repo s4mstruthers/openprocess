@@ -86,6 +86,34 @@ jobs:
         # A test still running after two minutes prints where it is stuck.
         run: python -m pytest -q -o faulthandler_timeout=120
 
+  # The engines and the workflow framework need no Qt, and must run on every
+  # Python the package says it supports: the oldest (3.10), and the newest.
+  # Without PySide6 installed the GUI tests skip themselves.
+  engines:
+    name: Engines on Python ${{ matrix.python }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install OpenProcess with the test tools, without the app
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[dev]"
+
+      - name: Run the tests that need no window
+        run: python -m pytest -q -o faulthandler_timeout=120
+
   build:
     name: ${{ matrix.name }}
     needs: tests              # no point building apps from code that fails its tests

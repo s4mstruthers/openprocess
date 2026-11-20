@@ -130,6 +130,7 @@ class DottedChart(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self.setAccessibleName("Dotted chart")
         self.data: DotData | None = None
         self.hidden_colours: set[int] = set()
         self.selected_case = -1

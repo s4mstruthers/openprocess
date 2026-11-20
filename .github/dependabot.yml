@@ -1,0 +1,12 @@
+# Dependabot opens a pull request when an action used by the build has a new
+# version.  Python packages are not pinned (pyproject.toml gives lower bounds
+# only), so there is nothing for it to update there.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

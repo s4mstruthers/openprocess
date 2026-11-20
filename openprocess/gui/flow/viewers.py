@@ -124,6 +124,10 @@ def _table(columns: list[str], rows: list[list], max_rows: int = 500) -> QTableW
             table.setItem(r, c, item)
     # Sorting is switched on once the cells are in (switched on before, Qt would
     # move the rows about while they are filled); a header click sorts.
+    # No column to start with: switching sorting on sorts at once by the
+    # header's current column (the first, largest first), and the rows would
+    # lose the order their box gave them ("the most waiting first").
+    table.horizontalHeader().setSortIndicator(-1, Qt.AscendingOrder)
     table.setSortingEnabled(True)
     table.horizontalHeader().setSortIndicatorShown(True)
     table.horizontalHeader().setToolTip("Click a column to sort by it; again for the other way")

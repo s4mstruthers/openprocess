@@ -86,6 +86,13 @@ REFERENCES: tuple[Reference, ...] = (
     Reference("munoz2010", "J. Muñoz-Gama and J. Carmona. *A Fresh Look at Precision in "
               "Process Conformance*. Business Process Management (BPM 2010), LNCS 6336, "
               "pp. 211–226. Springer, 2010.", "10.1007/978-3-642-15618-2_16"),
+    Reference("aalst2005", "W.M.P. van der Aalst, H.A. Reijers and M. Song. *Discovering Social "
+              "Networks from Event Logs*. Computer Supported Cooperative Work 14(6):549–593, 2005.",
+              "10.1007/s10606-005-9005-9"),
+    Reference("pesic2007", "M. Pesic, H. Schonenberg and W.M.P. van der Aalst. *DECLARE: Full "
+              "Support for Loosely-Structured Processes*. 11th IEEE International Enterprise "
+              "Distributed Object Computing Conference (EDOC 2007). IEEE, 2007.",
+              "10.1109/EDOC.2007.14"),
     Reference("berti2019", "A. Berti, S.J. van Zelst and W.M.P. van der Aalst. *Process "
               "Mining for Python (PM4Py): Bridging the Gap Between Process- and Data "
               "Science*. ICPM Demo Track 2019, CEUR-WS 2374, pp. 13–16, 2019.",
@@ -217,6 +224,19 @@ TOPICS: tuple[tuple[str, tuple[Topic, ...]], ...] = (
         Topic("Generalisation and simplicity", "Token-based generalisation and simplicity, "
               "computed as in PM4Py.", ("berti2019", "aalst2016"),
               "openprocess.mining.conformance.quality"),
+        Topic("Declare rules", "The Declare templates (response, precedence, succession and "
+              "their alternate, chain and negative forms), checked on a log and discovered "
+              "from one. Reporting the cases a rule applies to beside the cases it holds in "
+              "is OpenProcess's own convention.", ("pesic2007",), "openprocess.mining.declare"),
+    )),
+    ("People and time", (
+        Topic("Handover of work and working together", "Social networks from the resources "
+              "of a log: who hands work to whom (direct succession), and who shares cases "
+              "with whom.", ("aalst2005", "aalst2016"), "openprocess.mining.organisation"),
+        Topic("Waiting times on a model", "Token replay with timestamps (§9.4 of the book): "
+              "the time each token stays in a place. First-in-first-out among the tokens of "
+              "one place, and the times given to silent steps, are OpenProcess's own "
+              "conventions.", ("aalst2016",), "openprocess.mining.conformance.waiting"),
     )),
     ("Petri net analysis", (
         Topic("Soundness of WF-nets", "Option to complete, proper completion, no dead "

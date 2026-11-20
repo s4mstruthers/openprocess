@@ -186,3 +186,63 @@ def test_a_log_without_times_says_so_instead_of_an_empty_mean(app):
     assert "the log has no timestamps" in texts
     assert not any(text.startswith("mean") for text in texts)
     window.close()
+
+
+def test_a_button_that_shows_only_a_sign_has_a_name_for_a_screen_reader(app):
+    from PySide6.QtWidgets import QAbstractButton, QLineEdit, QPushButton
+
+    from openprocess.gui.studio.app import StudioWindow
+    from openprocess.gui.studio.widgets import spoken_name
+
+    button = QPushButton("−")
+    button.setToolTip("Zoom out (Ctrl+-)\nHold to keep zooming")
+    assert spoken_name(button) == "Zoom out"
+    assert spoken_name(QPushButton("Save As…")) == ""                  # its text is read
+    assert spoken_name(QPushButton("✕")) == "Close"
+    field = QLineEdit()
+    field.setPlaceholderText("Filter…")
+    assert spoken_name(field) == "Filter"
+
+    window = StudioWindow()
+    window.show()
+    window.add_document(_log("named"))
+    app.processEvents()
+    nameless = [found for found in window.findChildren(QAbstractButton)
+                if found.isVisible() and not found.accessibleName()
+                and sum(c.isalnum() for c in found.text()) < 2]
+    assert not nameless, [(found.objectName(), found.text(), found.toolTip()) for found in nameless]
+    assert window.sidebar_toggle.accessibleName().startswith("Hide the sidebar") \
+        if hasattr(window, "sidebar_toggle") else True
+    window.close()
+
+
+def test_a_result_table_keeps_the_order_its_box_gave_it(app):
+    from openprocess.gui.flow.viewers import _table
+    table = _table(["place", "total"], [["p5", 9.0], ["source", 0.0], ["p1", 4.0]])
+    assert [table.item(row, 0).text() for row in range(3)] == ["p5", "source", "p1"]
+    assert table.isSortingEnabled()                                    # a header click still sorts
+    table.sortByColumn(0, Qt.AscendingOrder)
+    assert [table.item(row, 0).text() for row in range(3)] == ["p1", "p5", "source"]
+
+
+def test_the_rules_template_runs_on_a_typed_log(app):
+    import time
+
+    from openprocess.gui.flow.templates import TEMPLATES
+    from openprocess.gui.studio.app import StudioWindow
+    window = StudioWindow()
+    window.show()
+    builder = next(build for name, build, _about in TEMPLATES if name == "Rules and exceptions")
+    window.action_new_workflow(builder)
+    page = window.current_page()
+    end = time.time() + 30
+    while time.time() < end and (page.run is None or page._running):
+        app.processEvents()
+        time.sleep(0.02)
+    assert page.run is not None and page.run.ok, [(r.node, r.error) for r in page.run.failed()]
+    check = next(n for n in page.workflow.nodes.values() if n.box.endswith("check_rules"))
+    result = page.run.value(check)
+    assert sum(result.breaking.simple_log().values()) == 1            # <a,e,d>: no b, no c
+    for document in window.documents:
+        document.dirty = False
+    window.close()

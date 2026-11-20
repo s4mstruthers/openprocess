@@ -8,7 +8,9 @@ themselves, to analyse further), and works on a large log without building
 its events (:func:`openprocess.mining.cases.cases`).  The dotted chart and
 *Who does what* are the first look at a log: when things happen, and who
 does them.  The BPI Challenge 2019
-analysis in ``examples/bpi2019`` is built from them.
+analysis in ``examples/bpi2019`` is built from them.  *Handover of work*
+shows how work moves between people, and *Waiting times* where, on a model,
+the cases spend their time.
 """
 
 from __future__ import annotations
@@ -20,8 +22,10 @@ from typing import Literal
 
 from ... import flow
 from ...mining.cases import case_value, cases
+from ...mining.conformance.waiting import waiting_times as _waiting_times
 from ...mining.dotted import SORT_MODES, X_MODES, DotSettings, Dots, how_to_read, svg
 from ...mining.log import EventLog
+from ...mining.organisation import social_network
 from ...mining.petrinet import PetriNet
 from ..box import box
 from ..types import Figure, Table
@@ -260,5 +264,80 @@ def who_does_what(log: EventLog, by: str = "org:resource") -> Table:
     return Table(f"Who does what ({by})", ["activity", *values, "events"], rows)
 
 
-__all__ = ["RuleResult", "compliance_by", "dotted_chart", "order_rule", "segregation_of_duties",
-           "time_between", "who_does_what"]
+@box(name="Handover of work", group="Measure")
+def handover_of_work(log: EventLog, by: str = "org:resource",
+                     show: Literal["Handovers", "Working together"] = "Handovers") -> Table:
+    """How work moves between people (van der Aalst, Reijers & Song 2005).
+    *Handovers*: how often an event by one resource is directly followed, in
+    the same case, by an event of another: the process map with people in
+    place of activities. *Working together*: for every two resources, the
+    number of cases both did something in.
+
+    by: the event attribute that says who (org:resource, or a role or department)
+    show: handovers from one to the next, or who shares cases with whom
+    """
+    network = social_network(log, by)
+    if not network.events:
+        raise ValueError(f"No event of {log.name} has the attribute {by!r}")
+    if network.unknown_events:
+        flow.note(f"{network.unknown_events:,} events have no {by}: they are skipped, and the events "
+                  "around them are not joined into a handover")
+    flow.note(f"{len(network.events):,} resources in {network.case_count:,} cases; "
+              f"{network.handover_count:,} handovers to someone else, "
+              f"{network.kept_count:,} steps followed by a step of the same resource")
+    if show == "Working together":
+        rows = [[a, b, count, round(100 * share, 2)] for a, b, count, share in network.together_rows()]
+        return Table(f"Working together ({by})", ["one", "the other", "cases together", "% of cases"], rows,
+                     note="Two resources work together in a case when both did something in it.")
+    rows = [[giver, taker, count, round(100 * share, 2)] for giver, taker, count, share in network.handover_rows()]
+    if rows:
+        giver, taker, count, _share = network.handover_rows()[0]
+        flow.note(f"Most often: {giver} hands over to {taker} ({count:,} times)")
+    return Table(f"Handover of work ({by})", ["from", "to", "times", "% of what 'from' hands over"], rows,
+                 note="A handover: an event by 'from' directly followed, in the same case, by an event "
+                      "by 'to'.")
+
+
+@box(name="Waiting times", group="Measure")
+def waiting_times(model: PetriNet, log: EventLog, unit: Literal["hours", "days", "minutes"] = "hours") -> Table:
+    """Where the cases wait (van der Aalst 2016, §9.4): the log is replayed on
+    the model with its timestamps, and for every place the time each token
+    stayed there is measured. The place with the most waiting comes first: a
+    bottleneck, or a join waiting for its slower branch. A place is described
+    by the activities before and after it.
+
+    unit: minutes, hours or days
+    """
+    scale = {"minutes": 60.0, **UNITS}[unit]
+    result = _waiting_times(model, log)
+    if not result.cases:
+        raise ValueError(f"No case of {log.name} has a timestamp on every event, in order: "
+                         "waiting times need them")
+    if result.skipped:
+        flow.note(f"{result.skipped:,} cases have an event without a timestamp, or out of order: not measured")
+    unmeasured = sum(p.missing + p.remaining for p in result.places)
+    if unmeasured:
+        flow.note(f"The log does not fit the model everywhere: {unmeasured:,} tokens were missing or left "
+                  "behind and have no waiting time (see the last two columns)")
+    def name(place) -> str:
+        return model.places[place.place].name or place.place
+    rows = [[name(p), ", ".join(p.after) or "(start)", ", ".join(p.before) or "(end)", p.tokens,
+             round(p.total / scale, 2), round(p.mean / scale, 2), round(p.median / scale, 2),
+             round(p.percentile(0.9) / scale, 2), round(p.longest / scale, 2), p.missing, p.remaining]
+            for p in result.places]
+    busiest = next((p for p in result.places if p.total > 0), None)
+    if busiest is not None:
+        flow.note(f"Most waiting: place {name(busiest)}, after {', '.join(busiest.after) or 'the start'} and "
+                  f"before {', '.join(busiest.before) or 'the end'}: {busiest.mean / scale:.2f} {unit} on "
+                  f"average, {100 * busiest.total / result.total:.0f} % of all waiting")
+    return Table(f"Waiting times on {model.name}", ["place", "after", "before", "tokens", f"total ({unit})",
+                                                    f"mean ({unit})", f"median ({unit})",
+                                                    f"90 % within ({unit})", f"longest ({unit})",
+                                                    "missing", "left behind"], rows,
+                 samples=[stay / scale for p in result.places for stay in p.stays],
+                 note=f"Time tokens stay in each place, in {unit}, over {result.cases:,} cases. With one "
+                      "timestamp per activity, the stay before an activity includes the activity's own time.")
+
+
+__all__ = ["RuleResult", "compliance_by", "dotted_chart", "handover_of_work", "order_rule",
+           "segregation_of_duties", "time_between", "waiting_times", "who_does_what"]

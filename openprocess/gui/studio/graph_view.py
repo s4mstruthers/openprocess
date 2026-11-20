@@ -594,6 +594,7 @@ class GraphView(CanvasPanning, QGraphicsView):
         # temporary GraphScene() would be garbage-collected immediately.
         self._scene = scene or GraphScene()
         super().__init__(self._scene, parent)
+        self.setAccessibleName("Diagram")                  # a page that knows better says so
         self.setRenderHints(QPainter.Antialiasing | QPainter.TextAntialiasing)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)

@@ -29,7 +29,7 @@ from .box import Box, BoxError, BoxSpec
 
 #: The modules of the standard library, in the order *+ Add box* shows their groups
 #: (the core groups first).
-STANDARD_MODULES = ("input", "filter", "discover", "check", "measure", "compare", "output",
+STANDARD_MODULES = ("input", "filter", "discover", "check", "rules", "measure", "compare", "output",
                     "science", "predict", "cpn", "sweeps")
 GROUP_ORDER = ("Input", "Filter", "Discover", "Check", "Measure", "Compare", "Output", "Science",
                "Predict", "Coloured nets", "Sweep", "Yours")

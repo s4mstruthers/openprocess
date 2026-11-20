@@ -364,11 +364,18 @@ class _SilentSearch:
 # Replay
 # ---------------------------------------------------------------------------
 def replay_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
-                 paths: dict | None = None, searcher: _SilentSearch | None = None) -> TraceReplay:
+                 paths: dict | None = None, searcher: _SilentSearch | None = None,
+                 steps: list[tuple[int, str]] | None = None) -> TraceReplay:
     """Replay one trace.  ``paths`` remembers the silent paths found, keyed
     by the marking and what was looked for, so the many variants of a large
     log (which pass through the same markings again and again) search each
-    one once; the answers are the same as searching every time."""
+    one once; the answers are the same as searching every time.
+
+    ``steps``, when given, is filled with what fired, in order: ``(i, t)`` for
+    transition ``t`` fired for event ``i`` of the trace (the silent steps that
+    enable an event's transition carry that event's number; those that
+    finish the case carry ``len(trace)``).  :mod:`.waiting` puts the events'
+    timestamps on them."""
     marking = net.initial_marking
     result = TraceReplay(trace, count, produced=marking.total, consumed=0, missing=0,
                          remaining=0)
@@ -406,10 +413,14 @@ def replay_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
         result.consumed += pre.total
         result.produced += post.total
         result.fired[transition] += 1
+        if steps is not None:
+            steps.append((moment, transition))
         return current - pre + post
 
     unknown_remaining = 0
+    moment = 0
     for index, activity in enumerate(trace):
+        moment = index
         candidates = by_label.get(activity)
         if not candidates:
             # No transition for it: one token missing to do it, one left behind.
@@ -442,6 +453,7 @@ def replay_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
     # Finish: move silently to the final marking if possible, then let the
     # environment consume it.
     final = net.final_marking
+    moment = len(trace)
     path = search(marking, ("final", "="))
     if path is None:
         path = search(marking, ("final", "≥")) or []

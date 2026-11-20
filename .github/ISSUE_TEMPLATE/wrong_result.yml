@@ -42,6 +42,6 @@ body:
     attributes:
       label: OpenProcess version
       description: "Help ▸ About OpenProcess Studio, or `openprocess --version`."
-      placeholder: "0.16.3"
+      placeholder: "0.17.0"
     validations:
       required: true

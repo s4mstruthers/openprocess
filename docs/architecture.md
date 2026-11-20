@@ -224,6 +224,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`mining/columns.py`](../openprocess/mining/columns.py) | A columnar store for large logs: one array per attribute, no objects. |
 | [`mining/compare_nets.py`](../openprocess/mining/compare_nets.py) | Compare two Petri nets on behaviour, not on how they are drawn. |
 | [`mining/csv_import.py`](../openprocess/mining/csv_import.py) | Importing event logs from CSV files. |
+| [`mining/declare.py`](../openprocess/mining/declare.py) | Rules a process should keep: Declare constraints, checked and discovered (Pesic, Schonenberg & van der Aalst 2007). |
 | [`mining/definitions.py`](../openprocess/mining/definitions.py) | Mathematical definitions of every property the analyses report. |
 | [`mining/dfg.py`](../openprocess/mining/dfg.py) | Directly-follows graphs (DFGs) -- the "process map" of tools like Disco. |
 | [`mining/dotted.py`](../openprocess/mining/dotted.py) | The dots of a dotted chart, worked out without drawing them. |
@@ -234,6 +235,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`mining/layout.py`](../openprocess/mining/layout.py) | Automatic left-to-right layout of process graphs (Sugiyama's method). |
 | [`mining/log.py`](../openprocess/mining/log.py) | Event logs: the data every process mining technique starts from. |
 | [`mining/ocel.py`](../openprocess/mining/ocel.py) | Object-centric event logs (OCEL): events that touch several objects at once. |
+| [`mining/organisation.py`](../openprocess/mining/organisation.py) | Who works with whom: social networks from an event log (van der Aalst, Reijers & Song 2005; van der Aalst, *Process Mining*, §9.3). |
 | [`mining/parallel.py`](../openprocess/mining/parallel.py) | Alignments and token replay, variant by variant, on several processes (exactly). |
 | [`mining/petrinet.py`](../openprocess/mining/petrinet.py) | Place/Transition nets, the model class that discovery produces. |
 | [`mining/playout.py`](../openprocess/mining/playout.py) | Play-out: generate an event log by simulating a Petri net. |
@@ -264,6 +266,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`mining/conformance/alignments.py`](../openprocess/mining/conformance/alignments.py) | Alignments (Carmona, van Dongen, Solti & Weidlich, ch. 7; course reading 5). |
 | [`mining/conformance/quality.py`](../openprocess/mining/conformance/quality.py) | Precision, generalisation and simplicity -- the other three quality dimensions. |
 | [`mining/conformance/token_replay.py`](../openprocess/mining/conformance/token_replay.py) | Token-based replay (van der Aalst, *Process Mining*, §8.2). |
+| [`mining/conformance/waiting.py`](../openprocess/mining/conformance/waiting.py) | Where a case waits: time in the places of a model (van der Aalst, *Process Mining*, §9.4, "Time and Probabilities"). |
 
 ### `ml` · CPN ML language
 
@@ -370,6 +373,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`flow/boxes/measure.py`](../openprocess/flow/boxes/measure.py) | Measure boxes: the questions an audit or a business asks of a real log. |
 | [`flow/boxes/output.py`](../openprocess/flow/boxes/output.py) | Output boxes: save a result into the folder, next to the workflow. |
 | [`flow/boxes/predict.py`](../openprocess/flow/boxes/predict.py) | Predict boxes: the prediction pipeline of predictive process monitoring. |
+| [`flow/boxes/rules.py`](../openprocess/flow/boxes/rules.py) | Rule boxes: Declare constraints, discovered from a log and checked on one. |
 | [`flow/boxes/science.py`](../openprocess/flow/boxes/science.py) | Science boxes: how any Python library plugs in. |
 | [`flow/boxes/sweeps.py`](../openprocess/flow/boxes/sweeps.py) | Sweep table: the scores of every swept value, stacked. |
 
@@ -497,5 +501,5 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`mcp/install.py`](../openprocess/mcp/install.py) | Connecting an assistant: one click in the app, or ``openprocess mcp install <client>``. |
 | [`mcp/server.py`](../openprocess/mcp/server.py) | The MCP server: OpenProcess's tools for Claude and other AI assistants. |
 
-189 modules.
+193 modules.
 <!-- /generated -->

@@ -6,6 +6,45 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.17.0
+
+Rules, people and waiting: three new ways to look at a log. Nothing that an
+earlier version computed has changed.
+
+- **Declare rules.** A net says what may happen; a rule says one thing that
+  must. The new **Discover rules** box reads the rules a log keeps: *every
+  register is followed by pay*, *the case starts with register*, *ship
+  never comes before check* (17 Declare templates, each tried on every
+  activity and pair). For each rule it gives the cases it applies to and
+  the cases it holds in, and it lists only the strictest rule of a family.
+  **Check rules** takes those rules, or rules typed by hand in **Typed
+  rules**, to a log and gives the cases that break one as a log to look
+  into. *New analysis ▸ Rules and exceptions* puts the three together.
+- **Handover of work.** How often work passes from one person to the next,
+  or which people share cases: the process map with resources in place of
+  activities. A role or a department works as well as `org:resource`.
+- **Waiting times.** The log replayed on a model with its timestamps: how
+  long tokens stay in each place, the most waiting first. It shows where
+  cases queue up and where a join waits for its slower branch, and says how
+  many tokens could not be timed because the log did not fit there.
+- **A result table keeps the order its box gave it.** Every table in a
+  result panel and in the Report was re-sorted by its first column,
+  largest first, the moment it was shown, so "most frequent first" was
+  lost. It now stays as computed until you click a column.
+- **Buttons that show only a sign have a name for screen readers.** The
+  sidebar's toggle, a ✕ or a zoom − was announced as just "button"; it is
+  now named by what its tooltip says, and the canvases and the dotted chart
+  have names too.
+- **`import cpnpy` no longer makes Python warn** about every module it
+  imports under the old name.
+- **On Python 3.11 and older, PySide6 6.12.0 is not installed** by
+  `pip install openprocess[app]`: that release stops the interpreter after
+  some thousands of `processEvents()` calls there. Other releases, and
+  Python 3.12 and newer, are not affected.
+- For contributors: the engines and the framework are tested on Python
+  3.10, 3.11 and 3.13 as well (without Qt); `openprocess` ships `py.typed`;
+  Dependabot watches the GitHub Actions.
+
 ## 0.16.3
 
 Faster conformance checking with the same answers, and a window that is

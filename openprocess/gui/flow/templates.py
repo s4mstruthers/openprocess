@@ -110,6 +110,18 @@ def noise_sweep(library: Library, log_file: str | None = None) -> Workflow:
     return wf
 
 
+def rules_and_exceptions(library: Library, log_file: str | None = None) -> Workflow:
+    """The Declare rules most cases keep, and the cases that break one."""
+    wf = Workflow("Rules and exceptions", library)
+    log = _log(wf, log_file, (0.0, 120.0))
+    rules = wf.add("discover_rules", {"holds": 0.8}, (240.0, 40.0))
+    check = wf.add("check_rules", {}, (480.0, 100.0))
+    wf.connect(log, rules)
+    wf.connect(log, check, "log")
+    wf.connect(rules, check, "rules")
+    return wf
+
+
 #: (menu text, builder, one line about it)
 TEMPLATES = [
     ("Discover and check", discover_and_check, "a log, the Inductive Miner and a fitness check"),
@@ -117,6 +129,7 @@ TEMPLATES = [
     ("Noise sweep", noise_sweep, "one setting swept over a range, the scores stacked"),
     ("Fitness with confidence", fitness_with_confidence, "bootstrap intervals, their difference and a plot (NumPy, matplotlib)"),
     ("Predict the next activity", predict_next_activity, "the prediction pipeline with a baseline model"),
+    ("Rules and exceptions", rules_and_exceptions, "the rules most cases keep, and the cases that break one"),
 ]
 
 

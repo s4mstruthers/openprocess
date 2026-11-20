@@ -352,6 +352,7 @@ def test_boxes_open_convert_and_save(tmp_path):
 
 
 def test_bpmn_files_are_listed_in_model():
+    pytest.importorskip("PySide6")
     from openprocess.gui.studio.spaces import FILE_KINDS, MODEL, space_of_kind
     from openprocess.gui.studio.workspace import file_kind
     assert file_kind(Path("order.bpmn")) == "bpmn" and file_kind(Path("ORDER.BPMN")) == "bpmn"

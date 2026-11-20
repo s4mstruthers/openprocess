@@ -29,7 +29,7 @@ tools (and, until version 0.7, went by the name CPNpy):
 | | What you can do | Instead of |
 |---|---|---|
 | **Petri nets & WF-nets** | Draw nets the way the lectures do. Get a soundness verdict with a counterexample for every violation, and replay it in the token game. Also: behavioural properties, P- and T-invariants, the footprint matrix, the reachability graph, PNML import and export. | WoPeD, ProM, pen and paper |
-| **Process mining** | Import XES or CSV logs, OCEL 2.0 object-centric logs, or type textbook logs like `[<a,b,c>^3, <a,c>^2]`. Filter them, explore variants, the dotted chart and the process map. Discover models (α-algorithm, Inductive Miner, Heuristics Miner, state-based regions). Check conformance (token replay, alignments, precision…) and compare logs. | ProM, Disco |
+| **Process mining** | Import XES or CSV logs, OCEL 2.0 object-centric logs, or type textbook logs like `[<a,b,c>^3, <a,c>^2]`. Filter them, explore variants, the dotted chart and the process map. Discover models (α-algorithm, Inductive Miner, Heuristics Miner, state-based regions) or the Declare rules a log keeps. Check conformance (token replay, alignments, precision…), measure waiting times on a model and handovers between people, and compare logs. | ProM, Disco |
 | **Coloured Petri nets** | Open, edit and save CPN Tools models (`.cpn`), hierarchical ones included. Step through or simulate them, compute the state space, and export a simulation as an event log to mine. | CPN Tools / CPN IDE |
 | **Workflows** | Boxes on a canvas: a log, a miner, a fitness check, a comparison, a sweep over a setting, a prediction pipeline. Click a box to see its result, *how* it got there (the α-algorithm's eight steps, the replay per variant), its code and its settings. Change a setting and only what follows runs again. Saved as a `.analysis` file with everything needed to get the same numbers back. Your own algorithm is one Python function in a `boxes/` folder. | RapidProM |
 | **Learn** | A mode of its own for worksheets, built on the app: answer in boxes on the sheet (sets, markings, matrices, cuts and trees, alignments, a net in the editor or a workflow on the canvas beside it) and press **Check**. Most answers are checked automatically, often against answers worked out from the given log or net. Packs are plain Markdown, can be exams with a clock and points, and a past exam imports as a skeleton pack. Demo exercises included. | Answer sheets, a notes app and guesswork |
@@ -863,6 +863,22 @@ extra) and *Predict the next activity*. Or start empty.
   counts each activity per resource;
   [examples/energy_contracts](examples/energy_contracts/README.md) uses them
   with the course's miners and checks on the 2AMI10 exam log.
+- **Rules** are the other way to describe a process: not a net of what may
+  happen, but the few things that must hold. *Discover rules* reads the
+  Declare rules a log keeps ("every *register* is followed by *pay*", "the
+  case starts with *register*", "*ship* never comes before *check*"), with
+  the cases each rule applies to and holds in. *Check rules* takes those
+  rules (or ones written by hand in *Typed rules*) to another log and gives
+  the cases that break one as a log of their own: discover last year's
+  rules, check this year's cases. *New analysis ▸ Rules and exceptions*
+  starts from the rules most cases keep and shows the cases that do not.
+- **People and time.** *Handover of work* counts how often work passes from
+  one resource to the next (the process map with people in place of
+  activities), or which resources share cases; any event attribute can
+  stand in for the resource (a role, a department). *Waiting times* replays
+  the log on a model with its timestamps and measures how long tokens stay
+  in each place, the most waiting first: where cases queue up, and where a
+  join waits for its slower branch.
 - **Connections** (at the bottom of the sidebar, or *View ▸ Connections*)
   draws what flows in, OpenProcess and its boxes, what flows out, and the
   optional tools (pandas, scipy, matplotlib, …) with whether each is
@@ -1063,9 +1079,19 @@ Plainly stated:
    characters are one-letter strings. See
    [docs/how-it-works.md](docs/how-it-works.md#the-cpn-ml-subset).
 4. **Alignments are exact but unoptimised**: they can take seconds on
-   heavily concurrent models. They run in the background.
+   heavily concurrent models, and on a model where most activities sit in
+   loops with silent steps the search can stop at its state limit (the
+   result says so and counts the variant's fitness as 0). They run in the
+   background. A search guided by the marking equation was tried for 0.17:
+   it visits far fewer states, but solving its equations in Python made it
+   about ten times slower on ordinary models, so it was not kept.
 5. **Plain Petri nets live on one page.**
-6. **Regions are found exhaustively**, so only for transition systems of up
+6. **PySide6 6.12.0 on Python 3.11 or older** stops the interpreter after
+   some thousands of `processEvents()` calls (a fault in that release;
+   OpenProcess does not make the call, but its test suite does), so
+   `pip install openprocess[app]` leaves that release out there. The
+   downloaded app carries Python 3.12 and is not affected.
+7. **Regions are found exhaustively**, so only for transition systems of up
    to 26 states (the result says when this limit is hit), and label
    splitting for transition systems that are not elementary is not
    suggested yet. Transition systems are typed, not drawn.

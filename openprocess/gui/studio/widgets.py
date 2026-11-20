@@ -7,12 +7,13 @@ stays in :mod:`style`.
 
 from __future__ import annotations
 
+import re
 import sys
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
-    QButtonGroup, QComboBox, QFrame, QMenu, QHBoxLayout, QLabel, QLayout, QPushButton, QScrollArea, QSizePolicy, QStyle,
+    QAbstractButton, QAbstractSlider, QAbstractSpinBox, QButtonGroup, QComboBox, QFrame, QLineEdit, QMenu, QHBoxLayout, QLabel, QLayout, QPushButton, QScrollArea, QSizePolicy, QStyle,
     QStyledItemDelegate, QTableWidget, QVBoxLayout, QWidget,
 )
 
@@ -715,6 +716,11 @@ class _RoundedMenus(QObject):
                 and watched.metaObject().className() == "QComboBoxPrivateContainer" \
                 and sys.platform != "darwin":
             self._fit_list(watched)
+        if kind == QEvent.Show and isinstance(watched, _NAMED_FOR_SCREEN_READERS) \
+                and not watched.accessibleName():
+            name = spoken_name(watched)
+            if name:
+                watched.setAccessibleName(name)
         if kind == QEvent.Polish and isinstance(watched, QWidget) \
                 and (isinstance(watched, QMenu) or watched.metaObject().className()
                      in self.POPUPS) \
@@ -754,6 +760,34 @@ class _RoundedMenus(QObject):
         if needed > container.width():
             container.resize(needed, container.height())
 
+
+#: What a screen reader says for a button that shows only a sign.
+_SIGNS = {"✕": "Close", "×": "Close", "⋯": "More", "…": "More", "···": "More"}
+_SHORTCUT = re.compile(r"\s*\([^()]*\)\s*$")
+
+
+def spoken_name(widget: QWidget) -> str:
+    """The name a screen reader should say for ``widget``, when it has none.
+
+    Qt reads a button's text and nothing else, so a button that shows only an
+    icon or a sign (the sidebar's toggle, a ✕, a zoom −) is announced as just
+    "button".  Its tooltip already says what it does: the first line of it,
+    without the shortcut in brackets, is the name.  A field with no tooltip
+    is named by its placeholder.  "" when the widget's own text will do.
+    """
+    text = widget.text() if isinstance(widget, QAbstractButton) else ""
+    if sum(character.isalnum() for character in text) >= 2:
+        return ""                                   # Qt reads the text
+    tip = widget.toolTip().strip()
+    if tip and not tip.startswith("<"):
+        first = tip.splitlines()[0].split(". ")[0].rstrip(".")
+        return _SHORTCUT.sub("", first)
+    if isinstance(widget, QLineEdit) and widget.placeholderText():
+        return widget.placeholderText().rstrip("….")
+    return _SIGNS.get(text.strip(), "")
+
+
+_NAMED_FOR_SCREEN_READERS = (QAbstractButton, QLineEdit, QComboBox, QAbstractSlider, QAbstractSpinBox)
 
 _rounded_menus: _RoundedMenus | None = None
 

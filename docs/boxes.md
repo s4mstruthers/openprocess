@@ -7,7 +7,7 @@ How to write your own: [workflows.md](workflows.md#writing-a-box); what a box *i
 
 [Input](#input) · [Filter](#filter) · [Discover](#discover) · [Check](#check) · [Measure](#measure) · [Compare](#compare) · [Output](#output) · [Science](#science) · [Predict](#predict) · [Coloured nets](#coloured-nets) · [Sweep](#sweep)
 
-64 boxes.
+69 boxes.
 
 ## Input
 
@@ -23,6 +23,7 @@ How to write your own: [workflows.md](workflows.md#writing-a-box); what a box *i
 | **[Open transition system](../openprocess/flow/boxes/input.py#L125)**<br/>Opens a transition system typed as ``s0 -a-> s1, s0 -b-> s2`` (a ``ts.txt`` file). | – | Transition system | `file` = None | – |
 | **[Open dataset](../openprocess/flow/boxes/input.py#L135)**<br/>A standard public log by name, fetched once into a shared cache and checked against its fingerprint, so the same name means the same bytes in every workflow… | – | Log | `name` ∈ {BPI Challenge 2012, BPI Challenge 2013 incidents, BPI Challenge 2017, BPI Challenge 2019, BPI Challenge 2020 domestic declarations, Sepsis cases, Road traffic fine management, Hospital billing} | – |
 | **[Simulate log](../openprocess/flow/boxes/input.py#L151)**<br/>Plays the net out into a log, then adds noise: with probability *noise* a case loses one event or has two neighbouring events swapped. The seed makes it repe… | net: Petri net | Log | `cases` = 200, `noise` = 0.0, `seed` = 0, `max_length` = 200 | – |
+| **[Typed rules](../openprocess/flow/boxes/rules.py#L61)**<br/>Declare rules written by hand, to check a log against: template(a) or template(a, b), separated by semicolons. The templates: existence, init, end, responded… | – | Table | `rules` = 'response(a, b); precedence(a, d)' | – |
 
 ## Filter
 
@@ -54,6 +55,7 @@ How to write your own: [workflows.md](workflows.md#writing-a-box); what a box *i
 | **[Object-centric map](../openprocess/flow/boxes/discover.py#L149)**<br/>The object-centric directly-follows graph: every object followed through its events, so each object type gets its own directly-follows counts, drawn in its o… | ocel: Object-centric log | Object-centric map | – | – |
 | **[Directly-follows graph](../openprocess/flow/boxes/discover.py#L163)**<br/>The process map: which activity directly follows which, how often. | log: Log | Directly-follows graph | – | – |
 | **[Footprint](../openprocess/flow/boxes/discover.py#L171)**<br/>The → ← ‖ # matrix of the log's ordering relations. | log: Log | Footprint | – | – |
+| **[Discover rules](../openprocess/flow/boxes/rules.py#L34)**<br/>The Declare rules a log keeps (Pesic, Schonenberg & van der Aalst 2007): "every a is followed by b", "b never comes before a", "the case starts with a". Ever… | log: Log | Table | `holds` = 1.0, `applies` = 0.1, `negative` = False, `every_rule` = False | – |
 
 ## Check
 
@@ -65,17 +67,20 @@ How to write your own: [workflows.md](workflows.md#writing-a-box); what a box *i
 | **[Soundness](../openprocess/flow/boxes/check.py#L100)**<br/>Is the net a sound WF-net? The three conditions, with each violation's counterexample in the notes. | model: Petri net | Scores | – | – |
 | **[Compare to true net](../openprocess/flow/boxes/check.py#L119)**<br/>Model to model, on behaviour: of the true net's complete traces of up to *max_length* activities, the share the model allows (recall); of the model's, the sh… | model: Petri net, true_net: Petri net | Scores | `max_length` = 12 | – |
 | **[Footprint conformance](../openprocess/flow/boxes/check.py#L153)**<br/>Compares the footprint of the log with the footprint of the net. | log: Log, model: Petri net | Scores | – | – |
+| **[Check rules](../openprocess/flow/boxes/rules.py#L84)**<br/>Does the log keep the rules? For every rule (from Discover rules or Typed rules): the cases it applies to, the cases it holds in and the cases that break it.… | log: Log, rules: Table | breaking: Log, table: Table | – | – |
 
 ## Measure
 
 | Box | Takes | Gives | Settings | Needs |
 |---|---|---|---|---|
-| **[Time between](../openprocess/flow/boxes/measure.py#L43)**<br/>Throughput: per case, the time from the first *start* to the first *end* after it, summarised (cases, mean, median, 90th percentile, longest), for all cases… | log: Log | Table | `start` = 'Record Invoice Receipt', `end` = 'Clear Invoice', `by` = '', `unit` ∈ {days, hours} | – |
-| **[Order rule](../openprocess/flow/boxes/measure.py#L86)**<br/>Does *first* happen before *then*? Every case falls in one row: *first* before any *then* (and whether *then* follows at all), *then* first, only one of them… | log: Log | cases: Log, table: Table | `first` = 'Remove Payment Block', `then` = 'Record Goods Receipt', `value` = 'Cumulative net worth (EUR)' | – |
-| **[Segregation of duties](../openprocess/flow/boxes/measure.py#L130)**<br/>Four eyes: the cases where the same person (the event attribute *by*) did both *first* and *second*, per person, with the cases' total value, most value firs… | log: Log | Table | `first` = 'Record Invoice Receipt', `second` = 'Clear Invoice', `by` = 'User', `value` = 'Cumulative net worth (EUR)' | – |
-| **[Compliance by attribute](../openprocess/flow/boxes/measure.py#L161)**<br/>For every value of a case attribute (each vendor, say): how many cases, the share that fit the model (replay with no missing or remaining tokens), and their… | model: Petri net, log: Log | Table | `attribute` = 'Vendor', `value` = 'Cumulative net worth (EUR)', `colour` = 'Item Type' | – |
-| **[Dotted chart](../openprocess/flow/boxes/measure.py#L198)**<br/>Every event as a dot (Song & van der Aalst, 2007): *x* says when, the row what it belongs to, the colour one more attribute; the same dots as the dotted char… | log: Log | Figure | `x` ∈ {Actual time, Time since case start, Relative to case duration (%), Logical: order in log, Logical: position in case}, `rows` = 'Case', `colour` = 'Activity', `sort` ∈ {First event, Last event, Duration, Number of events, Name}, `unit` ∈ {Auto, Seconds, Minutes, Hours, Days, Weeks} | – |
-| **[Who does what](../openprocess/flow/boxes/measure.py#L235)**<br/>How often each activity is done by each value of the event attribute *by* (each resource, say): one row per activity, one column per value, most frequent fir… | log: Log | Table | `by` = 'org:resource' | – |
+| **[Time between](../openprocess/flow/boxes/measure.py#L47)**<br/>Throughput: per case, the time from the first *start* to the first *end* after it, summarised (cases, mean, median, 90th percentile, longest), for all cases… | log: Log | Table | `start` = 'Record Invoice Receipt', `end` = 'Clear Invoice', `by` = '', `unit` ∈ {days, hours} | – |
+| **[Order rule](../openprocess/flow/boxes/measure.py#L90)**<br/>Does *first* happen before *then*? Every case falls in one row: *first* before any *then* (and whether *then* follows at all), *then* first, only one of them… | log: Log | cases: Log, table: Table | `first` = 'Remove Payment Block', `then` = 'Record Goods Receipt', `value` = 'Cumulative net worth (EUR)' | – |
+| **[Segregation of duties](../openprocess/flow/boxes/measure.py#L134)**<br/>Four eyes: the cases where the same person (the event attribute *by*) did both *first* and *second*, per person, with the cases' total value, most value firs… | log: Log | Table | `first` = 'Record Invoice Receipt', `second` = 'Clear Invoice', `by` = 'User', `value` = 'Cumulative net worth (EUR)' | – |
+| **[Compliance by attribute](../openprocess/flow/boxes/measure.py#L165)**<br/>For every value of a case attribute (each vendor, say): how many cases, the share that fit the model (replay with no missing or remaining tokens), and their… | model: Petri net, log: Log | Table | `attribute` = 'Vendor', `value` = 'Cumulative net worth (EUR)', `colour` = 'Item Type' | – |
+| **[Dotted chart](../openprocess/flow/boxes/measure.py#L202)**<br/>Every event as a dot (Song & van der Aalst, 2007): *x* says when, the row what it belongs to, the colour one more attribute; the same dots as the dotted char… | log: Log | Figure | `x` ∈ {Actual time, Time since case start, Relative to case duration (%), Logical: order in log, Logical: position in case}, `rows` = 'Case', `colour` = 'Activity', `sort` ∈ {First event, Last event, Duration, Number of events, Name}, `unit` ∈ {Auto, Seconds, Minutes, Hours, Days, Weeks} | – |
+| **[Who does what](../openprocess/flow/boxes/measure.py#L239)**<br/>How often each activity is done by each value of the event attribute *by* (each resource, say): one row per activity, one column per value, most frequent fir… | log: Log | Table | `by` = 'org:resource' | – |
+| **[Handover of work](../openprocess/flow/boxes/measure.py#L267)**<br/>How work moves between people (van der Aalst, Reijers & Song 2005). *Handovers*: how often an event by one resource is directly followed, in the same case, b… | log: Log | Table | `by` = 'org:resource', `show` ∈ {Handovers, Working together} | – |
+| **[Waiting times](../openprocess/flow/boxes/measure.py#L301)**<br/>Where the cases wait (van der Aalst 2016, §9.4): the log is replayed on the model with its timestamps, and for every place the time each token stayed there i… | model: Petri net, log: Log | Table | `unit` ∈ {hours, days, minutes} | – |
 
 ## Compare
 

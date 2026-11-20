@@ -32,6 +32,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
+    "Typing :: Typed",
     "Topic :: Scientific/Engineering",
     "Topic :: Education",
 ]
@@ -50,8 +51,12 @@ dependencies = ["numpy>=1.24"]
 # your own (PySide6 is ~150 MB).  `gui` is the same extra under its old name.
 # certifi: the certificates the standalone app trusts when it checks GitHub for
 # updates (its bundled Python cannot find the system's own).
-app = ["PySide6>=6.6", "certifi"]
-gui = ["PySide6>=6.6", "certifi"]
+# PySide6 6.12.0 is left out on Python 3.11 and older: there, each call of
+# QApplication.processEvents() gives away a reference to None that it does not
+# hold, and the interpreter stops ("none_dealloc") after some thousands of
+# calls.  6.11 and earlier do not; Python 3.12 and newer are not affected.
+app = ["PySide6>=6.6; python_version >= '3.12'", "PySide6>=6.6,!=6.12.0; python_version < '3.12'", "certifi"]
+gui = ["PySide6>=6.6; python_version >= '3.12'", "PySide6>=6.6,!=6.12.0; python_version < '3.12'", "certifi"]
 dev = ["pytest>=8.0", "mcp>=2.3", "ruff>=0.6"]
 # The Science boxes (Describe log, Bootstrap fitness, Compare samples, Correlate,
 # Plot) and the converters to pandas and matplotlib.  Each box says which of
@@ -96,7 +101,8 @@ include = ["openprocess*", "cpnpy"]
 [tool.setuptools.package-data]
 "openprocess.gui" = ["resources/*.png"]
 # The demo exercises (File ▸ Open Demo Exercises).
-"openprocess" = ["exercises/*.md", "exercises/*/*/*"]
+# py.typed: the code is annotated throughout; a type checker may use that in a box of your own.
+"openprocess" = ["exercises/*.md", "exercises/*/*/*", "py.typed"]
 # The guide shown by Help ▸ Writing Exercise Packs.
 "openprocess.learn" = ["*.md"]
 # The guide shown by Help ▸ Connect an AI Assistant, and served to assistants.
