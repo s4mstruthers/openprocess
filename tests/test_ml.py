@@ -10,7 +10,7 @@ from openprocess.ml.parser import (
     expression_to_pattern, parse_arc_expression, parse_declarations,
     parse_expression,
 )
-from openprocess.ml.values import Constructor, MLList, Record, UNIT, format_value
+from openprocess.ml.values import Constructor, MLList
 
 
 @pytest.fixture

@@ -199,7 +199,7 @@ def pnml_string(net: PetriNet, positions: dict[str, tuple[float, float]] | None 
         return f"<name><text>{escape(node.name)}</text>{where}</name>"
 
     lines = ['<?xml version="1.0" encoding="UTF-8"?>', "<pnml>",
-             f'  <net id="net1" type="http://www.pnml.org/version-2009/grammar/pnmlcoremodel">',
+             '  <net id="net1" type="http://www.pnml.org/version-2009/grammar/pnmlcoremodel">',
              f"    <name><text>{escape(net.name)}</text></name>"]
     if net.info.get("names_outside") == "true":
         # OpenProcess's drawing option: names next to the nodes, not inside.

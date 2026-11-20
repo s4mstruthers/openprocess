@@ -7,7 +7,7 @@ from models import (
 )
 
 from openprocess.ml.multiset import Multiset
-from openprocess.model.net import Arc, CPNet, Page, Place, Transition
+from openprocess.model.net import Arc, CPNet, Place, Transition
 from openprocess.sim.simulator import DeadMarkingError, Simulator
 
 

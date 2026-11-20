@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Iterator
 
-from .log import KEY_NAME, KEY_RESOURCE, KEY_TIME, EventLog
+from .log import KEY_NAME, KEY_RESOURCE, EventLog
 
 
 @dataclass

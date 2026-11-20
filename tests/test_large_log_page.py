@@ -275,7 +275,6 @@ def test_the_filter_dialog_opens_without_building_events_and_previews_in_the_bac
 def test_the_editor_opens_a_large_log_without_copying_it_and_marks_its_edits(app):
     from openprocess.gui.studio.documents import LogDocument
     from openprocess.gui.studio.log_editor import LogEditorDialog
-    from openprocess.mining.log import KEY_TIME
 
     log = columnar()
     log.precomputed_summaries = {"stale": object()}

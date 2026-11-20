@@ -75,6 +75,15 @@ class Marking(Mapping[str, int]):
         self._counts = data
         self._hash: int | None = None
 
+    @classmethod
+    def _of(cls, counts: dict[str, int]) -> "Marking":
+        """A marking around ``counts`` as it is: the caller made the dict for
+        this marking alone and left no zero in it."""
+        marking = cls.__new__(cls)
+        marking._counts = counts
+        marking._hash = None
+        return marking
+
     # Mapping protocol -------------------------------------------------------
     def __getitem__(self, place: str) -> int:
         return self._counts.get(place, 0)
@@ -116,7 +125,12 @@ class Marking(Mapping[str, int]):
 
     def __ge__(self, other: Mapping[str, int]) -> bool:  # type: ignore[override]
         """``self ≥ other`` pointwise: every place has at least as many tokens."""
-        return all(self._counts.get(place, 0) >= n for place, n in other.items())
+        # The test a state space asks millions of times: a plain loop, no generator.
+        get = self._counts.get
+        for place, n in other.items():
+            if get(place, 0) < n:
+                return False
+        return True
 
     def __le__(self, other: Mapping[str, int]) -> bool:  # type: ignore[override]
         return all(other.get(place, 0) >= n for place, n in self._counts.items())
@@ -309,7 +323,8 @@ class PetriNet:
 
     def enabled(self, marking: Marking) -> list[str]:
         """Ids of all transitions enabled in ``marking``, in a stable order."""
-        return [t for t in self.transitions if marking >= self.pre(t)]
+        pre = self._structure()["pre"]
+        return [t for t in self.transitions if marking >= pre[t]]
 
     def fire(self, marking: Marking, transition_id: str) -> Marking:
         """``M' = M - •t + t•``.  Raises if ``t`` is not enabled."""
@@ -317,7 +332,21 @@ class PetriNet:
         if not marking >= pre:
             raise ValueError(f"Transition {self.transitions[transition_id].name!r} "
                              f"is not enabled in {marking.describe(self)}.")
-        return marking - pre + self.post(transition_id)
+        return self._fired(marking, pre, self.post(transition_id))
+
+    @staticmethod
+    def _fired(marking: Marking, pre: Marking, post: Marking) -> Marking:
+        """``marking - pre + post`` in one pass, for a ``pre`` the marking covers."""
+        counts = dict(marking._counts)
+        for place, n in pre._counts.items():
+            left = counts[place] - n
+            if left:
+                counts[place] = left
+            else:
+                del counts[place]
+        for place, n in post._counts.items():
+            counts[place] = counts.get(place, 0) + n
+        return Marking._of(counts)
 
     # -- queries ----------------------------------------------------------
     def labels(self) -> set[str]:

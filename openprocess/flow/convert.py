@@ -19,7 +19,7 @@ import importlib.util
 from typing import Any, Callable
 
 from ..mining.bpmn import BPMN, bpmn_to_petri_net, petri_net_to_bpmn, tree_to_bpmn
-from ..mining.log import KEY_NAME, KEY_RESOURCE, KEY_TIME, EventLog, SimpleLog
+from ..mining.log import KEY_NAME, KEY_TIME, EventLog, SimpleLog
 from ..mining.petrinet import PetriNet
 from ..mining.processtree import ProcessTree
 from .types import Figure, Table

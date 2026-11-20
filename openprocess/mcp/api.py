@@ -20,10 +20,7 @@ the tests run without the SDK.  Three things hold for every answer:
 
 from __future__ import annotations
 
-import json
-import os
 import re
-import time
 from pathlib import Path
 from typing import Any
 
@@ -310,7 +307,7 @@ def discover(source: str, algorithm: str = "inductive", *, noise: float = 0.0, d
     """Discover a model from a log with one of the course's algorithms, save it
     as PNML beside the log, and return the model, its derivation (how), a
     soundness check, a quick fitness, the sources and how to reproduce it."""
-    from ..flow.explain import collect_result, explaining
+    from ..flow.explain import explaining
     from ..mining.pnml import pnml_string
     name = ALGORITHMS.get(algorithm.strip().lower())
     if name is None:

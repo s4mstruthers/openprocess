@@ -26,7 +26,6 @@ from dataclasses import dataclass, field
 from typing import Any
 from xml.sax.saxutils import escape
 
-from ..palette import CATEGORICAL_LIGHT
 from .dfg import END, START, DFG
 from .layout import layered_layout
 from .petrinet import Marking, PetriNet

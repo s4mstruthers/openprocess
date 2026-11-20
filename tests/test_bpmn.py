@@ -20,7 +20,7 @@ from openprocess.mining import (
     token_replay,
 )
 from openprocess.mining.bpmn import (
-    BPMN, END, EXCLUSIVE, PARALLEL, START, TASK, bpmn_string, bpmn_to_petri_net, parse_bpmn,
+    BPMN, END, EXCLUSIVE, PARALLEL, START, bpmn_string, bpmn_to_petri_net, parse_bpmn,
     petri_net_to_bpmn, read_bpmn, tree_to_bpmn, write_bpmn,
 )
 from openprocess.mining.processtree import Operator, ProcessTree

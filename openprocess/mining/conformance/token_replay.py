@@ -307,7 +307,13 @@ class _SilentSearch:
         short = [i for i, n in need if start[i] < n]
         if not short:
             return []
-        return self._search(start, lambda v: all(v[i] >= n for i, n in need), self.relevant(short))
+        def covered(vector: tuple) -> bool:
+            for i, n in need:
+                if vector[i] < n:
+                    return False
+            return True
+
+        return self._search(start, covered, self.relevant(short))
 
     def path(self, marking: Marking, goal, places=None) -> list[str] | None:
         """``goal(vector)`` decides; see :func:`silent_path`.  ``places``: the
@@ -320,31 +326,37 @@ class _SilentSearch:
         return self._search(start, goal, moves)
 
     def _search(self, start: tuple, goal, moves: list) -> list[str] | None:
+        # The inner loop of a replay on a model with many silent steps: plain
+        # loops and one list copy per successor, no generator per test.  The
+        # markings are visited in the same order whichever way it is written,
+        # so the path found is the same.
         if not moves:
             return None
         parent: dict[tuple, tuple | None] = {start: None}
         queue = deque([start])
-        while queue and len(parent) < self.max_states:
-            current = queue.popleft()
+        pop, push, limit = queue.popleft, queue.append, self.max_states
+        while queue and len(parent) < limit:
+            current = pop()
             for transition, need, change in moves:
-                if any(current[i] < n for i, n in need):
-                    continue
-                following = list(current)
-                for i, d in change:
-                    following[i] += d
-                successor = tuple(following)
-                if successor in parent:
-                    continue
-                parent[successor] = (current, transition)
-                if goal(successor):
-                    path = []
-                    node = successor
-                    while parent[node] is not None:
-                        previous, step = parent[node]
-                        path.append(step)
-                        node = previous
-                    return path[::-1]
-                queue.append(successor)
+                for i, n in need:
+                    if current[i] < n:
+                        break
+                else:
+                    following = list(current)
+                    for i, d in change:
+                        following[i] += d
+                    successor = tuple(following)
+                    if successor in parent:
+                        continue
+                    parent[successor] = (current, transition)
+                    if goal(successor):
+                        path = []
+                        node = successor
+                        while parent[node] is not None:
+                            node, step = parent[node]
+                            path.append(step)
+                        return path[::-1]
+                    push(successor)
         return None
 
 

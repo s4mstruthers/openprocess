@@ -1,0 +1,22 @@
+name: An idea
+description: An algorithm, a view, a kind of exercise or anything else OpenProcess could do.
+labels: ["idea"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you are trying to do
+      description: The analysis, the lecture or the exercise this would help with. The need matters more than the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: A source
+      description: For an algorithm or a definition - the paper or book it comes from. OpenProcess cites what it implements.

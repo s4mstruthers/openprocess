@@ -88,7 +88,6 @@ def test_studio_end_to_end(app):
     assert alignments.average_fitness == pytest.approx(1.0)
 
     # Step through: a real mouse click on an enabled transition fires it.
-    from PySide6.QtCore import QPoint
     from PySide6.QtTest import QTest
     model_page.mode_switch.set_index(1)
     _pump(app, 0.2)
@@ -2071,8 +2070,10 @@ def test_autosave_that_cannot_write_says_so_once(app, tmp_path, monkeypatch):
     """Regression: when autosave could not write (a read-only folder, a full
     disk), every attempt popped up an error dialog, a second after each edit.
     Now a bar says so once, and the net keeps its "edited" dot until saved."""
-    import os
     import stat
+
+    if getattr(os, "geteuid", lambda: 1)() == 0:
+        pytest.skip("root writes to a read-only folder all the same (a container, say)")
 
     from openprocess.gui.studio import cpn_page
     from openprocess.gui.studio.app import AUTOSAVE_DELAY, StudioWindow
@@ -2755,7 +2756,6 @@ def test_a_slow_file_shows_the_loading_page_and_a_fast_one_does_not(app, tmp_pat
     """0.12.1: opening a large log shows what is happening (name, size, share read, Cancel)
     instead of a window that seems stuck; it goes when the log is open."""
     import time as _time
-    from openprocess.gui.studio import app as studio_app
     from openprocess.gui.studio.app import StudioWindow
     from openprocess.gui.studio.loading import LoadingPage
     from openprocess.mining import xes

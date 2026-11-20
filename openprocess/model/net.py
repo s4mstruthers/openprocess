@@ -42,7 +42,7 @@ from typing import Any, Iterable, Iterator
 from ..ml.ast_nodes import Expr
 from ..ml.colorsets import ColourSet
 from ..ml.errors import CPNMLError
-from ..ml.evaluator import Environment, Evaluator
+from ..ml.evaluator import Evaluator
 from ..ml.multiset import Multiset, TimedMultiset
 from ..ml.parser import parse_arc_expression, parse_expression
 from .declarations import DeclarationBlock

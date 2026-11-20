@@ -60,7 +60,7 @@ Entry points
 
 from __future__ import annotations
 
-from typing import Any, Callable, Sequence
+from typing import Callable, Sequence
 
 from .ast_nodes import (
     App, BinOp, CaseExpr, Coefficient, Decl, Delay, EmptyMultiset, Expr,

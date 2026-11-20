@@ -188,7 +188,7 @@ def stylesheet() -> str:
     /* ---- sidebar -------------------------------------------------------- */
     #sidebar {{ background: {t.sidebar}; border-right: 1px solid {t.border}; }}
     #sidebar QTreeWidget {{ background: transparent; border: none; outline: none; }}
-    #sidebar QTreeWidget::item {{ padding: 5px 28px 5px 6px; border-radius: 7px; margin: 1px 6px; }}
+    #sidebar QTreeWidget::item {{ padding: 5px 8px 5px 6px; border-radius: 7px; margin: 1px 6px; }}
     #sidebar QTreeWidget::item:hover {{ background: {qc(t.text, 0.06).name(QColor.HexArgb)}; }}
     #sidebar QTreeWidget::item:selected {{ background: {t.accent}; color: {t.accent_text}; }}
     #sidebarTitle {{ color: {t.text}; font-weight: 700; font-size: 15px; padding: 0 2px; }}
@@ -478,6 +478,7 @@ def stylesheet() -> str:
     QTableView, QTreeView, QListView {{ background: {t.surface}; border: none;
         alternate-background-color: {t.surface_alt}; gridline-color: {t.border};
         selection-background-color: {t.accent_soft}; selection-color: {t.text}; outline: none; }}
+    QHeaderView {{ background: {t.surface}; border: none; }}
     QHeaderView::section {{ background: {t.surface}; color: {t.text_muted}; border: none;
         border-bottom: 1px solid {t.border}; padding: 6px 8px; font-weight: 600;
         font-size: 11px; }}

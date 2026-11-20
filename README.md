@@ -123,7 +123,7 @@ Prompt or PowerShell on Windows):
 
 ```bash
 git clone https://github.com/s4mstruthers/openprocess.git
-cd OpenProcess
+cd openprocess
 conda env create -f environment.yml       # Python 3.12, PySide6, pytest, OpenProcess itself
 conda activate openprocess
 ```
@@ -705,7 +705,8 @@ Want to report a wrong result, add an algorithm or fix something? See
 
 ```bash
 pytest -q                 # the whole suite, including GUI tests that run offscreen
-openprocess --help              # command line: check, simulate, state space, mining
+ruff check .              # lint: unused imports, names that do not exist
+openprocess --help        # command line: check, simulate, state space, mining
 ```
 
 The same commands work on macOS, Windows and Linux. `openprocess mine` covers the

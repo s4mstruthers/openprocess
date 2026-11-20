@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPlainTextEdit,
+from PySide6.QtWidgets import (QDialog, QLabel, QListWidget, QListWidgetItem, QPlainTextEdit,
                                QSplitter, QVBoxLayout, QWidget)
 
 from ...flow import changes as journal

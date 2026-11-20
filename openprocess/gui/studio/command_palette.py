@@ -15,7 +15,7 @@ from typing import Callable
 
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtWidgets import (QFrame, QGraphicsDropShadowEffect, QLineEdit, QListWidget, QListWidgetItem,
-                               QVBoxLayout, QWidget)
+                               QWidget)
 from PySide6.QtGui import QColor
 
 from .. import theme

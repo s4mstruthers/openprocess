@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from openprocess import flow
-from openprocess.flow import BoxError, Runner, Sweep, Table, Workflow, box, load, save, to_python
+from openprocess.flow import BoxError, Runner, Sweep, Table, Workflow, box, save, to_python
 from openprocess.flow.box import Setting, _doc_hints
 from openprocess.flow.record import FINGERPRINT, Record, check, export_experiment, fingerprint
 from openprocess.flow.types import EventLog, PetriNet, Scores

@@ -36,7 +36,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QInputDialog, QLineEdit,
-    QMessageBox, QSizePolicy, QSpinBox, QVBoxLayout, QWidget,
+    QSizePolicy, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from ...mining.analysis import analyse, check_soundness, check_workflow_net, short_circuit

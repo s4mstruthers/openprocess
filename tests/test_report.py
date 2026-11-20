@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 
 from openprocess.flow import Runner, Workflow, standard_library
 from openprocess.flow.boxes.check import check_fit

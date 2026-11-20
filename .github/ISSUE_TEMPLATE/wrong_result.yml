@@ -1,0 +1,47 @@
+name: A wrong or unclear result
+description: OpenProcess gave an answer you think is wrong, or one you could not make sense of.
+labels: ["result"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most useful kind of report. A result that differs from ProM, PM4Py,
+        CPN Tools or the textbook is worth reporting even when you are not sure which is right.
+  - type: textarea
+    id: input
+    attributes:
+      label: The log or net
+      description: >
+        The smallest one that shows it. A log in the notation the app reads
+        (`[<a,b,c>^3, <a,c>^2]`) is ideal; otherwise attach the file (zip a .xes, .pnml,
+        .cpn or .analysis file so GitHub accepts it).
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did
+      description: The box or tab, and its settings (a miner's threshold, the classifier, a filter).
+    validations:
+      required: true
+  - type: textarea
+    id: got
+    attributes:
+      label: What OpenProcess said
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and why
+      description: A source helps a lot - the page of the book, the paper, or what another tool gives.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: OpenProcess version
+      description: "Help ▸ About OpenProcess Studio, or `openprocess --version`."
+      placeholder: "0.16.3"
+    validations:
+      required: true

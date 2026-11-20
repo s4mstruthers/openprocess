@@ -41,7 +41,7 @@ from ...flow import record as records
 from ...flow import reproducibility, snapshots
 from ...flow.versions import Version, Versions
 from ...flow.library import Library
-from ...flow.runner import (BLOCKED, DONE, FAILED, IDLE, RUNNING, WAITING, Cache, Result, Run, Runner,
+from ...flow.runner import (BLOCKED, DONE, FAILED, RUNNING, WAITING, Cache, Result, Run, Runner,
                             columns_connected)
 from ...flow.types import EventLog, Figure, PetriNet, Scores, Table
 from ...flow.history import History as EditHistory
@@ -606,7 +606,7 @@ class WorkflowPage(QWidget):
         self._running = True
         self._stop = threading.Event()
         previous = self.run
-        library, workflow, relay, stop, allowed = self.library, self.workflow, self._relay, self._stop, self.custom_allowed
+        workflow, relay, stop, allowed = self.workflow, self._relay, self._stop, self.custom_allowed
         blocked = set() if allowed else customs
         for node in workflow.order():
             if changed is None or node.id in workflow.descendants(changed):

@@ -64,9 +64,13 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from ..dfg import DFG, dfg_from_simple_log
 from ..log import SimpleLog
+
+if TYPE_CHECKING:                       # only named in annotations
+    from ..petrinet import PetriNet
 
 
 @dataclass

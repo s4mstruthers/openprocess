@@ -64,11 +64,11 @@ from __future__ import annotations
 
 from collections import deque
 
-from dataclasses import dataclass, field
-from typing import Any, Iterable, Iterator
+from dataclasses import dataclass
+from typing import Any, Iterator
 
 from ..ml.multiset import Multiset, TimedMultiset
-from ..model.net import CPNet, Marking, Place, Transition
+from ..model.net import CPNet, Marking, Transition
 from ..sim.binding import BindingElement
 from ..sim.simulator import Simulator
 
@@ -349,7 +349,6 @@ class StateSpace:
 
         terminal: list[list[int]] = []
         for number, component in enumerate(components):
-            members = set(component)
             if all(
                 component_of[arc.target] == number
                 for node in component

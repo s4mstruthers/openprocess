@@ -19,13 +19,13 @@ import pytest
 import openprocess.flow as flow
 from openprocess.flow import (Box, BoxError, Runner, Sweep, Workflow, WorkflowError, box, check, differences,
                         load, save, to_python, workflow)
-from openprocess.flow.boxes.check import check_fit, soundness, token_replay
+from openprocess.flow.boxes.check import check_fit, soundness
 from openprocess.flow.boxes.compare import compare
 from openprocess.flow.boxes.discover import alpha_miner, classical_states, heuristics_miner, inductive_miner, regions_to_net
 from openprocess.flow.boxes.input import open_log, simulate_log, typed_log
 from openprocess.flow.boxes.predict import evaluate_predictions, frequency_model, predict, prefixes, split_by_time
 from openprocess.flow.boxes.sweeps import sweep_table
-from openprocess.flow.library import Library, standard_library
+from openprocess.flow.library import standard_library
 from openprocess.flow.record import fingerprint, make_record
 from openprocess.flow.types import EventLog, PetriNet, Scores, Table, TransitionSystem
 
@@ -82,7 +82,7 @@ def test_box_mistakes_are_plain_errors():
         def no_default(log: EventLog, k: int) -> PetriNet: ...
     with pytest.raises(BoxError, match="neither an OpenProcess type"):
         @box
-        def odd_type(log: EventLog, k: dict = {}) -> PetriNet: ...
+        def odd_type(log: EventLog, k: dict = {}) -> PetriNet: ...  # noqa: B006  (the odd type is the test)
     with pytest.raises(BoxError, match="return type"):
         @box
         def no_return(log: EventLog): ...
@@ -362,7 +362,7 @@ def test_simulate_log_is_repeatable_and_noise_is_recorded():
     net = order_handling_sound()
     wf = Workflow("sim")
     sim = wf.add(simulate_log, {"cases": 50, "noise": 0.2, "seed": 3})
-    wf.nodes[sim.id].settings  # settled
+    wf.nodes[sim.id].settings  # noqa: B018  (settled)
     src = wf.add("open_net")
     # The Open net box needs a file; feed the net through a typed-free path: a box of our own.
     @box

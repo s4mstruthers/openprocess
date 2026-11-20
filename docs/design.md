@@ -60,9 +60,11 @@ not by the discipline of the person using it.
 
 ## Decisions, and the reasons
 
-- **Pure Python, no runtime dependencies for the engine.** The miners, the
-  conformance checks, the Petri net analysis, the CPN ML interpreter and the
-  simulator are standard library. *Reason:* the same code must run in a
+- **Pure Python, and numpy as the engine's only dependency.** The miners,
+  the conformance checks, the Petri net analysis, the CPN ML interpreter and
+  the simulator are standard library; numpy (since 0.14) holds the columns
+  of a large log, so that a million events can be summarised, filtered and
+  drawn without a pause. *Reason:* the same code must run in a
   notebook, in CI, in a student's exercise checker and in the app; a
   150 MB GUI toolkit or an AGPL library in the import path would rule out
   the first three. Qt is an extra (`openprocess[app]`); PM4Py is an extra

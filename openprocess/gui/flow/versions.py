@@ -13,13 +13,12 @@ from __future__ import annotations
 
 import datetime as _dt
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QSizePolicy, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
 from ...flow.snapshots import Snapshot, compare, take
 from ...flow.versions import Version
 from ..studio import style
-from ..studio.widgets import Card, button, hbox, label, vbox
+from ..studio.widgets import Card, button, hbox, label
 
 #: How many changes the status card lists before "and n more".
 SHOWN = 6

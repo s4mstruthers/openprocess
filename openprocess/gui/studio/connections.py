@@ -11,7 +11,6 @@ declared twice: the cards are read from the box library.
 
 from __future__ import annotations
 
-import sys
 from importlib.util import find_spec
 
 from PySide6.QtCore import Signal

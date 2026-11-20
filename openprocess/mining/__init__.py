@@ -1,7 +1,8 @@
 """Process mining: event logs, discovery, conformance checking.
 
 This package is the "ProM half" of the application.  Like the CPN engine it
-is pure standard-library Python: every algorithm is implemented here, with
+is plain Python (numpy holds the columns of a large log; nothing else is
+needed): every algorithm is implemented here, with
 the textbook definitions in the docstrings, so the code doubles as a study
 companion for the course.
 

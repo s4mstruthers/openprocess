@@ -65,7 +65,7 @@ def script_text(workflow: Workflow, file_name: str = "analysis.py") -> str:
     today = _dt.date.today().isoformat()
     lines = [f'"""{name}: an OpenProcess analysis as a script.', "",
              f"Written by OpenProcess {__version__} on {today}: the same boxes, settings and connections",
-             f"as the analysis in the app.  Run it with", "", f"    python {file_name}", "",
+             "as the analysis in the app.  Run it with", "", f"    python {file_name}", "",
              "with OpenProcess installed (pip install openprocess).  It prints what each box gives and",
              "writes every result worth a file into results/ beside this script.  Each box is a plain",
              "Python function: change a setting here, or open the function to see its code."]

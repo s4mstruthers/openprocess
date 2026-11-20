@@ -21,8 +21,8 @@ Right: an inspector with three tabs --
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QPainter, QStandardItemModel
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFileDialog, QSlider, QGridLayout, QHeaderView, QStackedWidget, QToolButton, QVBoxLayout,
     QWidget, QSplitter,
@@ -35,7 +35,6 @@ from ...mining.conformance.quality import generalisation, precision, simplicity
 from ...mining.conformance.token_replay import token_replay
 from ...mining.petrinet import Marking
 from ...mining.pnml import write_pnml
-from .. import theme
 from . import instances, style
 from ..learn.concealment import ConcealsResults
 from .alignment_view import AlignmentStrip, projection
@@ -46,8 +45,8 @@ from .log_page import _item, _table, derivation_widget
 from .provenance import add_code
 from .widgets import (
     suggested_path,
-    Card, ElidedLabel, PageHeader, SegmentedControl, StatTile, Verdict, button, fitness_status, flow, hbox, label,
-    paint_chips, property_status, scroll, status_for, vbox,
+    Card, ElidedLabel, PageHeader, SegmentedControl, StatTile, Verdict, button, flow, hbox, label,
+    property_status, scroll, status_for, vbox,
 )
 from .workers import run_in_background
 

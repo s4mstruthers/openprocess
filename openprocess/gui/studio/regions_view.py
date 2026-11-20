@@ -29,10 +29,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QFileDialog, QHeaderView, QLineEdit, QPlainTextEdit,
-    QSizePolicy, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ...mining.discovery.state_regions import RegionResult, region_result

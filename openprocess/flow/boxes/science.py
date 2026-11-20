@@ -8,7 +8,6 @@ is listed greyed out with "needs pandas" (the ``needs=`` of ``@box``).
 
 from __future__ import annotations
 
-import random
 from typing import Literal
 
 from ... import flow

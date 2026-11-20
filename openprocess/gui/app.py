@@ -15,10 +15,9 @@ import sys
 from pathlib import Path
 
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtWidgets import QMainWindow
 
 from ..model.net import CPNet
-from . import theme
 
 APPLICATION_NAME = "OpenProcess"
 

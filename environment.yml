@@ -16,6 +16,7 @@ dependencies:
   - pyside6>=6.6
   - certifi                  # certificates for the update check
   - pytest>=8.0
+  - ruff>=0.6                # lint (ruff check .)
   - pip
   - pip:
       - -e .

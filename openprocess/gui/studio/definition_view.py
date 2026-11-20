@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from html import escape
 
-from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QUrl
+from PySide6.QtCore import QEvent, QObject, QPoint, Qt
 from PySide6.QtGui import QCursor, QGuiApplication
 from PySide6.QtWidgets import (
     QDialog, QFrame, QHBoxLayout, QPushButton, QTextBrowser, QVBoxLayout, QWidget,

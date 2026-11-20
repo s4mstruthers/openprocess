@@ -338,6 +338,9 @@ class ComparePage(QWidget):
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         for column in range(1, len(self.logs) + 1):
             header.setSectionResizeMode(column, QHeaderView.Stretch)
+        # The note is what the eye is looking for ("not in ..."): never cut it short.
+        for column in range(len(self.logs) + 1, model.columnCount()):
+            header.setSectionResizeMode(column, QHeaderView.ResizeToContents)
         card.add(table, 1)
         return card
 

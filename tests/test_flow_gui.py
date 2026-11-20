@@ -639,7 +639,6 @@ def test_files_flow_into_the_canvas(app, tmp_path, monkeypatch):
 
     from openprocess.gui.studio import app as studio_app
     from openprocess.gui.studio.app import StudioWindow
-    from openprocess.gui.studio.documents import WorkflowDocument
 
     week = tmp_path / "Week 2"
     (week / "logs").mkdir(parents=True)

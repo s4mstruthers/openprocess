@@ -62,7 +62,6 @@ shortest run of model moves.
 from __future__ import annotations
 
 import heapq
-import itertools
 from dataclasses import dataclass, field
 
 from ..log import SimpleLog
@@ -211,10 +210,14 @@ class _CompiledNet:
         consumed = {i for pre in self.pre for i, _n in pre}
         self.dead_ends = tuple((i, self.final[i]) for i in range(len(self.places))
                                if i not in consumed)
+        self._steps: dict[tuple[int, ...], list[tuple[int, tuple[int, ...]]]] = {}
 
     def dead_end(self, marking: tuple[int, ...]) -> bool:
         """Can ``marking`` never reach the final marking?  (A sufficient test.)"""
-        return any(marking[i] > cap for i, cap in self.dead_ends)
+        for i, cap in self.dead_ends:
+            if marking[i] > cap:
+                return True
+        return False
 
     def encode(self, marking: Marking, index: dict[str, int]) -> tuple[int, ...]:
         vector = [0] * len(self.places)
@@ -223,8 +226,14 @@ class _CompiledNet:
         return tuple(vector)
 
     def enabled(self, marking: tuple[int, ...]) -> list[int]:
-        return [k for k, pre in enumerate(self.pre)
-                if all(marking[i] >= n for i, n in pre)]
+        found = []
+        for k, pre in enumerate(self.pre):
+            for i, n in pre:
+                if marking[i] < n:
+                    break
+            else:
+                found.append(k)
+        return found
 
     def fire(self, marking: tuple[int, ...], k: int) -> tuple[int, ...]:
         vector = list(marking)
@@ -232,6 +241,28 @@ class _CompiledNet:
             vector[i] += d
         return tuple(vector)
 
+    def steps(self, marking: tuple[int, ...]) -> list[tuple[int, tuple[int, ...]]]:
+        """Every enabled transition with the marking it leads to.
+
+        A search meets the same marking at many positions of the trace, and
+        the variants of a log meet the same markings again, so the answers
+        are remembered: the first :data:`_REMEMBERED` markings met (those
+        near the initial marking, which every search passes through).  Past
+        that the answer is worked out each time; nothing is thrown away, so
+        a large search does not keep rebuilding what it just forgot.
+        """
+        found = self._steps.get(marking)
+        if found is None:
+            found = [(k, self.fire(marking, k)) for k in self.enabled(marking)]
+            if len(self._steps) < _REMEMBERED:
+                self._steps[marking] = found
+        return found
+
+
+#: How many markings a compiled net remembers the enabled transitions of.
+_REMEMBERED = 50_000
+
+_LOG, _SYNC, _MODEL = 0, 1, 2
 
 #: How many states one trace's search may discover before it gives up.  A
 #: state costs a few hundred bytes (its marking, its cost, its parent), so
@@ -254,16 +285,35 @@ def align_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
     for i in range(len(trace) - 1, -1, -1):
         unavoidable[i] = unavoidable[i + 1] + (DEVIATION if trace[i] not in labels else 0)
 
+    # A successor is kept as (kind, transition number) and only turned into a
+    # Move for the alignment that is returned: most successors are never on it.
+    transitions = c.transitions
+    silent = [t.label is None for t in transitions]
+    label_of = [t.label for t in transitions]
+    model_cost = [TAU_COST if t.label is None else DEVIATION for t in transitions]
+    dead_end = c.dead_end if c.dead_ends else None
+    length = len(trace)
+
+    def as_move(position: int, step: tuple[int, int]) -> Move:
+        kind, k = step
+        if kind == _LOG:
+            return Move(trace[position], SKIP, None)
+        if kind == _SYNC:
+            return Move(trace[position], trace[position], transitions[k].id)
+        return Move(SKIP, "τ" if silent[k] else label_of[k], transitions[k].id)
+
     start = (c.initial, 0)
-    tie = itertools.count()
-    frontier: list = [(unavoidable[0], 0, next(tie), start)]
+    counter = 0
+    frontier: list = [(unavoidable[0], 0, counter, start)]
     best_cost: dict = {start: 0}
     parent: dict = {start: None}
     closed: set = set()
-    goal = (c.final, len(trace))
+    goal = (c.final, length)
+    pop, push = heapq.heappop, heapq.heappush
+    huge = 1 << 62
 
     while frontier:
-        _, cost, _, state = heapq.heappop(frontier)
+        _, cost, _, state = pop(frontier)
         if state in closed:
             continue
         closed.add(state)
@@ -271,39 +321,34 @@ def align_trace(net: PetriNet, trace: tuple[str, ...], count: int = 1,
             moves = []
             node = state
             while parent[node] is not None:
-                previous, move = parent[node]
-                moves.append(move)
-                node = previous
+                node, step = parent[node]
+                moves.append(as_move(node[1], step))
             return Alignment(trace, count, moves[::-1], cost // DEVIATION, 0.0, len(closed))
         if len(best_cost) > max_states:
             break
 
         marking, position = state
-        enabled = c.enabled(marking)
+        steps = c.steps(marking)
+        # In this order: the log move, the synchronous moves, the model moves.
         successors = []
-        if position < len(trace):
+        if position < length:
             activity = trace[position]
-            successors.append(((marking, position + 1), DEVIATION, Move(activity, SKIP, None)))
-            for k in enabled:
-                t = c.transitions[k]
-                if t.label == activity:
-                    successors.append(((c.fire(marking, k), position + 1), 0,
-                                       Move(activity, activity, t.id)))
-        for k in enabled:
-            t = c.transitions[k]
-            step_cost = TAU_COST if t.label is None else DEVIATION
-            successors.append(((c.fire(marking, k), position), step_cost,
-                               Move(SKIP, "τ" if t.label is None else t.label, t.id)))
+            successors.append(((marking, position + 1), DEVIATION, (_LOG, -1)))
+            for k, following in steps:
+                if label_of[k] == activity:
+                    successors.append(((following, position + 1), 0, (_SYNC, k)))
+        for k, following in steps:
+            successors.append(((following, position), model_cost[k], (_MODEL, k)))
 
-        for successor, step_cost, move in successors:
-            if successor in closed or c.dead_end(successor[0]):
+        for successor, step_cost, step in successors:
+            if successor in closed or (dead_end is not None and dead_end(successor[0])):
                 continue
             new_cost = cost + step_cost
-            if new_cost < best_cost.get(successor, 1 << 62):
+            if new_cost < best_cost.get(successor, huge):
                 best_cost[successor] = new_cost
-                parent[successor] = (state, move)
-                heapq.heappush(frontier, (new_cost + unavoidable[successor[1]], new_cost,
-                                          next(tie), successor))
+                parent[successor] = (state, step)
+                counter += 1
+                push(frontier, (new_cost + unavoidable[successor[1]], new_cost, counter, successor))
 
     return Alignment(trace, count, [], len(trace), 0.0, len(closed), complete=False,
                      unreachable=len(best_cost) <= max_states)

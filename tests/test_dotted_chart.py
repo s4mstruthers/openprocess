@@ -73,7 +73,6 @@ def test_a_dense_picture_is_rasterised_from_arrays_and_hidden_colours_stay_out(a
 
 
 def test_a_slow_picture_is_previewed_during_a_gesture_then_drawn_for_real(app, monkeypatch):
-    from PySide6.QtGui import QPainter, QPixmap
     chart = _chart(app, monkeypatch, batch_from=10)
     chart.show()
     app.processEvents()

@@ -24,7 +24,7 @@ draws :class:`~openprocess.mining.conformance.alignments.AlignmentResult`.
 from __future__ import annotations
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFontMetricsF, QPainter, QPainterPath, QPolygonF
+from PySide6.QtGui import QColor, QFontMetricsF, QPainter, QPolygonF
 from PySide6.QtWidgets import QAbstractItemView, QListView, QStyledItemDelegate, QWidget
 
 from ...mining.conformance.alignments import SKIP

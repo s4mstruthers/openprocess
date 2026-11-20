@@ -77,6 +77,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install ".[app,dev]"
 
+      - name: Lint (the rules are in pyproject.toml)
+        run: python -m ruff check .
+
       - name: Run the test suite (the windows are drawn offscreen)
         env:
           QT_QPA_PLATFORM: offscreen

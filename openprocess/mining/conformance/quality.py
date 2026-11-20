@@ -50,7 +50,6 @@ visible when comparing models discovered from the same log.
 from __future__ import annotations
 
 import math
-from collections import Counter, defaultdict, deque
 
 from ..log import SimpleLog
 from ..petrinet import Marking, PetriNet

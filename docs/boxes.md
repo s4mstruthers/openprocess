@@ -97,12 +97,12 @@ How to write your own: [workflows.md](workflows.md#writing-a-box); what a box *i
 
 | Box | Takes | Gives | Settings | Needs |
 |---|---|---|---|---|
-| **[Describe log](../openprocess/flow/boxes/science.py#L23)**<br/>pandas' ``describe()`` of the events per case and, when the log has timestamps, of the case durations in hours. The log goes in as a DataFrame through the co… | log: Log | Table | – | pandas |
-| **[Bootstrap fitness](../openprocess/flow/boxes/science.py#L42)**<br/>Fitness with a 95 % bootstrap interval: resample the cases with replacement *samples* times and replay each sample, so a number comes with its uncertainty. | model: Petri net, log: Log | Table | `samples` = 200, `seed` = 0 | numpy |
-| **[Compare samples](../openprocess/flow/boxes/science.py#L76)**<br/>Do two models score differently? *Bootstrap difference* (the default, for two Bootstrap fitness tables): the 95 % interval of A − B. When both tables were re… | a: Table, b: Table | Table | `test` ∈ {Bootstrap difference, Mann–Whitney U, t-test} | – |
-| **[Correlate](../openprocess/flow/boxes/science.py#L146)**<br/>Correlations between the numeric columns of a table (pandas), e.g. a swept noise level against fitness. | table: Table | Table | – | pandas |
-| **[Plot](../openprocess/flow/boxes/science.py#L158)**<br/>Bars per model for scores, histograms for bootstrap tables, or column *y* of a table against column *x*: bars when *x* holds names (a model per bar), a line… | scores: Scores (any number), tables: Table (any number) | Figure | `x` = '', `y` = '' | matplotlib |
-| **[Bubble chart](../openprocess/flow/boxes/science.py#L223)**<br/>One bubble per row: *x* against *y*, its area by *size* and its colour by *colour* (a column of names), as in a compliance-per-vendor chart. | table: Table | Figure | `x` = 'cases', `y` = 'compliance (%)', `size` = '', `colour` = '', `log_x` = True | matplotlib |
+| **[Describe log](../openprocess/flow/boxes/science.py#L22)**<br/>pandas' ``describe()`` of the events per case and, when the log has timestamps, of the case durations in hours. The log goes in as a DataFrame through the co… | log: Log | Table | – | pandas |
+| **[Bootstrap fitness](../openprocess/flow/boxes/science.py#L41)**<br/>Fitness with a 95 % bootstrap interval: resample the cases with replacement *samples* times and replay each sample, so a number comes with its uncertainty. | model: Petri net, log: Log | Table | `samples` = 200, `seed` = 0 | numpy |
+| **[Compare samples](../openprocess/flow/boxes/science.py#L75)**<br/>Do two models score differently? *Bootstrap difference* (the default, for two Bootstrap fitness tables): the 95 % interval of A − B. When both tables were re… | a: Table, b: Table | Table | `test` ∈ {Bootstrap difference, Mann–Whitney U, t-test} | – |
+| **[Correlate](../openprocess/flow/boxes/science.py#L145)**<br/>Correlations between the numeric columns of a table (pandas), e.g. a swept noise level against fitness. | table: Table | Table | – | pandas |
+| **[Plot](../openprocess/flow/boxes/science.py#L157)**<br/>Bars per model for scores, histograms for bootstrap tables, or column *y* of a table against column *x*: bars when *x* holds names (a model per bar), a line… | scores: Scores (any number), tables: Table (any number) | Figure | `x` = '', `y` = '' | matplotlib |
+| **[Bubble chart](../openprocess/flow/boxes/science.py#L222)**<br/>One bubble per row: *x* against *y*, its area by *size* and its colour by *colour* (a column of names), as in a compliance-per-vendor chart. | table: Table | Figure | `x` = 'cases', `y` = 'compliance (%)', `size` = '', `colour` = '', `log_x` = True | matplotlib |
 
 ## Predict
 

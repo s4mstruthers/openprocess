@@ -72,10 +72,10 @@ from PySide6.QtWidgets import (
 
 from ...mining.csv_import import ColumnMapping, guess_mapping, read_csv, sniff
 from ...mining.log import EventLog, parse_simple_log
-from ...mining.pnml import read_pnml, write_pnml
+from ...mining.pnml import read_pnml
 from ...flow.loading import read_log
 from ...flow.record import EXTENSION, analysis_name, is_analysis_file
-from ...mining.xes import read_xes, write_xes
+from ...mining.xes import write_xes
 from .. import theme
 from . import motion, style
 from ..canvas import NetScene, NetView
@@ -344,14 +344,31 @@ class SidebarDelegate(QStyledItemDelegate):
         size = self.BUTTON
         return QRect(row.right() - size - 8, row.center().y() - size // 2 + 1, size, size)
 
+    @staticmethod
+    def _shows_button(option, index) -> bool:
+        return index.data(Qt.UserRole) is not None and bool(
+            option.state & (QStyle.State_MouseOver | QStyle.State_Selected))
+
+    def initStyleOption(self, option, index) -> None:  # noqa: N802
+        """A name uses the whole row; only a row that shows its ✕ gives up the
+        room for it.  The name is shortened in the middle, so two files that
+        start alike ("order handling", "order handling (sound)") still read
+        apart and the • of unsaved changes at the end is never cut off."""
+        super().initStyleOption(option, index)
+        if not self._shows_button(option, index):
+            return
+        widget = option.widget
+        qstyle = widget.style() if widget is not None else QApplication.style()
+        text = qstyle.subElementRect(QStyle.SE_ItemViewItemText, option, widget)
+        room = self._button_rect(option.rect).left() - text.left() - 8
+        if room > 0:
+            option.text = option.fontMetrics.elidedText(option.text, Qt.ElideMiddle, room)
+
     def paint(self, painter: QPainter, option, index) -> None:
         super().paint(painter, option, index)
-        if index.data(Qt.UserRole) is None:
+        if not self._shows_button(option, index):
             return
-        hovered = bool(option.state & QStyle.State_MouseOver)
         selected = bool(option.state & QStyle.State_Selected)
-        if not (hovered or selected):
-            return
         t = style.tokens()
         rect = QRectF(self._button_rect(option.rect))
         painter.save()
@@ -676,7 +693,10 @@ class StudioWindow(QMainWindow):
         self.notes.set_text(self._loose_notes)
         root.addWidget(right)
         root.setStretchFactor(1, 1)
-        root.setSizes([220, 1260])
+        self._root = root
+        # The sidebar as wide as you left it (between its narrowest and widest).
+        sidebar_width = min(max(self._setting("window/sidebar_width", 220), 180), 360)
+        root.setSizes([sidebar_width, max(self.width() - sidebar_width, 480)])
         # Learn takes the whole window (see open_exercise); the
         # folder's view waits underneath, as it was.
         from ..learn.mode import LearnMode
@@ -713,6 +733,9 @@ class StudioWindow(QMainWindow):
         self._rescan_timer.timeout.connect(self.refresh_review)
         self.watcher.fileChanged.connect(self._journal_changed)
         self._build_menus()
+        #: The document that was shown when the status bar's message appeared (see _on_select).
+        self._status_document: int | None = None
+        self.statusBar().messageChanged.connect(self._status_changed)
         if not self._setting("window/sidebar", True):
             self.toggle_sidebar(False)
         self.set_notes_button(self._setting("notes/button", True))
@@ -768,8 +791,21 @@ class StudioWindow(QMainWindow):
         area = screen.availableGeometry()
         width = min(1440, int(area.width() * 0.94))
         height = min(900, int(area.height() * 0.94))
+        # The size you left the window at, when this screen still has room for it.
+        saved = (self._setting("window/width", 0), self._setting("window/height", 0))
+        if saved[0] >= self.minimumWidth() and saved[1] >= self.minimumHeight():
+            width, height = min(saved[0], area.width()), min(saved[1], area.height())
         self.resize(width, height)
         self.move(area.x() + (area.width() - width) // 2, area.y() + (area.height() - height) // 2)
+
+    def _save_window_layout(self) -> None:
+        """Remember the window's size and the sidebar's width for next time
+        (not a maximised or full-screen size: that is the screen's, not yours)."""
+        if not (self.isMaximized() or self.isFullScreen()):
+            self._set_setting("window/width", self.width())
+            self._set_setting("window/height", self.height())
+        if self.sidebar.isVisible() and self.sidebar.width() > 0:
+            self._set_setting("window/sidebar_width", self.sidebar.width())
 
     def _setting(self, key: str, default):
         """A setting of the app (the default in tests, which must not see yours)."""
@@ -800,7 +836,7 @@ class StudioWindow(QMainWindow):
         self.tree.setRootIsDecorated(False)
         self.tree.setMouseTracking(True)                  # hover state for the ✕ button
         self.tree.setSelectionMode(QAbstractItemView.ExtendedSelection)   # ⌘/⇧-click
-        self.tree.setTextElideMode(Qt.ElideRight)
+        self.tree.setTextElideMode(Qt.ElideMiddle)        # the end of a name tells files apart
         self.tree.path_for = self._row_path
         self.tree.drop_folder = self._drop_folder
         self.tree.paths_dropped.connect(self._sidebar_drop)
@@ -1402,7 +1438,13 @@ class StudioWindow(QMainWindow):
         tip.setAlignment(Qt.AlignHCenter)
         tip.setMaximumWidth(760)
         tip.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        outer.addLayout(hbox(None, tip, None))
+        # As wide as the cards above it: between two plain stretches a wrapped
+        # label gets only its narrowest width and runs to four short lines.
+        tip_row = QHBoxLayout()
+        tip_row.addStretch(1)
+        tip_row.addWidget(tip, 1000)
+        tip_row.addStretch(1)
+        outer.addLayout(tip_row)
         outer.addStretch(2)
         self._refresh_welcome_recent()
         return page
@@ -1841,6 +1883,10 @@ class StudioWindow(QMainWindow):
             self._flush_autosaves([left])
         if current is None or current.data(0, Qt.UserRole) is None:
             return
+        # A hint about the file you just left ("drag from a dot to connect
+        # boxes") says nothing about this one: the status bar starts clean.
+        if self._status_document is not None and self._status_document != current.data(0, Qt.UserRole):
+            self.statusBar().clearMessage()
         holder = self.holders.get(current.data(0, Qt.UserRole))
         if holder is not None:
             self._restore_tab(self.pages[current.data(0, Qt.UserRole)])
@@ -1848,6 +1894,13 @@ class StudioWindow(QMainWindow):
             self._schedule_fit()
             self._set_title(self._document(current.data(0, Qt.UserRole)))
         self._update_palette()
+
+    def _status_changed(self, message: str) -> None:
+        item = self.tree.currentItem() if message else None
+        try:
+            self._status_document = item.data(0, Qt.UserRole) if item is not None else None
+        except RuntimeError:                      # a row the sidebar has just rebuilt
+            self._status_document = None
 
     def _restore_tab(self, page: QWidget) -> None:
         """Show the same tab on the newly selected page as on the last one."""
@@ -3068,6 +3121,7 @@ class StudioWindow(QMainWindow):
                 event.ignore()
                 return
         self._save_session()
+        self._save_window_layout()
         event.accept()
         if self._installer is not None:         # an update is ready: swap the apps now
             from . import updates

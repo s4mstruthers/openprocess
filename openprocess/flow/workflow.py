@@ -36,7 +36,6 @@ from typing import Any, Callable
 
 from .box import Box, BoxSpec, Port
 from .sweep import Sweep, is_sweep
-from .types import type_info
 
 _ids = itertools.count(1)
 

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How do I ...?
+    url: https://github.com/s4mstruthers/openprocess#contents
+    about: The README covers installing, folders, Petri nets, process mining, Learn and workflows.
+  - name: Report a security problem
+    url: https://github.com/s4mstruthers/openprocess/security/advisories/new
+    about: Privately, please - see SECURITY.md.

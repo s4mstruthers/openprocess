@@ -6,6 +6,45 @@ and each [release on GitHub](https://github.com/s4mstruthers/openprocess/release
 uses it as its description. Write for the people using the app: what they will
 notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 
+## 0.16.3
+
+Faster conformance checking with the same answers, and a window that is
+easier to live with.
+
+- **Alignments, soundness and token replay are faster; every result is the
+  same.** Alignments are about 2.7× faster on small models and 1.4× on a
+  large model with many silent steps. The soundness check and everything else that walks a state space
+  (the reachability graph, the behavioural properties, the footprint of a
+  net) take about 40 % less time. Token replay on a model with many silent
+  steps is about 1.7× faster. Nothing about what is computed changed: the
+  new code was compared with the old on 1,440 random models and logs and
+  gave the same alignments, the same replays and the same scores each time,
+  and a recorded analysis checks as before.
+- **Names in the sidebar can be told apart.** A long name is shortened in
+  the middle, not at the end, so *order handling* and *order handling
+  (sound)* no longer both read *order handli…*, and the • of unsaved changes
+  is never cut off. A name also uses the whole row: only the row that shows
+  its ✕ gives up the room for it.
+- **The window opens the way you left it.** Its size and the width of the
+  sidebar are remembered.
+- **The status bar does not talk about another file.** A hint about the file
+  you were on ("drag from a dot to connect boxes") is cleared when you
+  select a different one.
+- **Comparing logs: the note is shown whole.** *not in Textbook L1* was cut
+  to *not in Textbo…* while the bars beside it had room to spare.
+- **A log without timestamps says so.** Its overview read *mean –* under an
+  empty median case duration; it now reads *the log has no timestamps*.
+- **Tables no longer end in a grey block.** The header of a table narrower
+  than its space (the variants in a Report, say) was filled in grey to the
+  right of the last column.
+- **The welcome page's tip is as wide as the cards above it**, not a narrow
+  column of four short lines.
+- **`openprocess --version`** prints the version.
+- For contributors: `ruff check .` is part of the checks (its rules are in
+  `pyproject.toml`), issues and pull requests have templates, and
+  `SECURITY.md` says how to report a security problem and what the app does
+  with code, files and the network.
+
 ## 0.16.2
 
 Five answers that were wrong without saying so. **A recorded Check fit result

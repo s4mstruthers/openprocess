@@ -7,7 +7,7 @@ from openprocess.ml.colorsets import (
     IntColourSet, ListColourSet, ProductColourSet, RecordColourSet,
     UnionColourSet, standard_colour_sets,
 )
-from openprocess.ml.values import Constructor, MLList, Record
+from openprocess.ml.values import Constructor
 from openprocess.model.declarations import parse_colour_set_declaration
 
 

@@ -12,8 +12,8 @@ import sys
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
-    QButtonGroup, QComboBox, QFrame, QMenu, QHBoxLayout, QLabel, QLayout, QPushButton, QSizePolicy, QStyle, QStyledItemDelegate,
-    QVBoxLayout, QWidget,
+    QButtonGroup, QComboBox, QFrame, QMenu, QHBoxLayout, QLabel, QLayout, QPushButton, QScrollArea, QSizePolicy, QStyle,
+    QStyledItemDelegate, QTableWidget, QVBoxLayout, QWidget,
 )
 
 from .. import theme
@@ -698,17 +698,24 @@ class _RoundedMenus(QObject):
 
     POPUPS = ("QComboBoxPrivateContainer", "QTipLabel")
 
+    _WATCHED = frozenset((QEvent.MouseButtonPress, QEvent.Show, QEvent.Polish))
+
     def eventFilter(self, watched, event) -> bool:  # noqa: N802
-        if event.type() == QEvent.MouseButtonPress and isinstance(watched, QComboBox):
+        # Every event of the application passes through here (each mouse move,
+        # each repaint): ask for its type once and let the rest go at once.
+        kind = event.type()
+        if kind not in self._WATCHED:
+            return False
+        if kind == QEvent.MouseButtonPress and isinstance(watched, QComboBox):
             # Size the list before it opens.  Resizing the popup once it is
             # showing (what _fit_list did) makes macOS flicker and close it,
             # so a list with long entries could not be used at all.
             self._prepare_list(watched)
-        if event.type() == QEvent.Show and isinstance(watched, QWidget) \
+        if kind == QEvent.Show and isinstance(watched, QWidget) \
                 and watched.metaObject().className() == "QComboBoxPrivateContainer" \
                 and sys.platform != "darwin":
             self._fit_list(watched)
-        if event.type() == QEvent.Polish and isinstance(watched, QWidget) \
+        if kind == QEvent.Polish and isinstance(watched, QWidget) \
                 and (isinstance(watched, QMenu) or watched.metaObject().className()
                      in self.POPUPS) \
                 and not watched.testAttribute(Qt.WA_WState_Created):
@@ -832,7 +839,6 @@ def scroll(widget: QWidget, horizontal: bool = False) -> "QScrollArea":
     sideways when the viewport is narrower than its minimum width -- used
     around whole pages so that the *window* can always be made smaller.
     """
-    from PySide6.QtWidgets import QScrollArea
     area = QScrollArea()
     area.setWidgetResizable(True)
     if not horizontal:
@@ -1016,7 +1022,7 @@ def footprint_table(fp, compact: bool = False) -> "QTableWidget":
 
     ``compact`` (narrow panels): columns are headed by short names, with the
     full name in the header's tooltip."""
-    from PySide6.QtWidgets import QAbstractItemView, QTableWidget, QTableWidgetItem
+    from PySide6.QtWidgets import QAbstractItemView, QTableWidgetItem
     from ...mining.footprint import CAUSAL, INVERSE, PARALLEL
     activities = fp.activities
     table = QTableWidget(len(activities), len(activities))

@@ -41,13 +41,11 @@ seeds both generators, so the whole run is reproducible.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
-from typing import Any, Iterable, Sequence
+from dataclasses import dataclass
 
-from ..ml.errors import CPNMLError
-from ..ml.evaluator import Environment, expand_lists, to_multiset
-from ..ml.multiset import Multiset, TimedMultiset
-from ..model.net import Arc, CPNet, Marking, Place, Transition
+from ..ml.evaluator import Environment, expand_lists
+from ..ml.multiset import TimedMultiset
+from ..model.net import CPNet, Marking, Transition
 from .binding import Binder, BindingElement
 
 

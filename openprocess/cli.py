@@ -38,7 +38,7 @@ from .analysis.state_space import StateSpace
 from .io.cpn_reader import read_cpn
 from .io.cpn_writer import write_cpn
 from .model.net import CPNet
-from .sim.simulator import DeadMarkingError, Simulator
+from .sim.simulator import Simulator
 
 
 def _load(path: str) -> CPNet:
@@ -663,6 +663,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="OpenProcess from the command line: process mining on event logs, Petri net "
                     "analysis, coloured net simulation, workflows, exercise packs and an MCP server.",
     )
+    from . import __version__
+    parser.add_argument("--version", action="version", version=f"OpenProcess {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     check = subparsers.add_parser("check", help="parse a model and report problems")

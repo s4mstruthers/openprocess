@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
 
 from ...mining.discovery.alpha import AlphaResult
 from ...mining.discovery.inductive import InductiveResult
-from ...mining.processtree import Operator, ProcessTree
+from ...mining.processtree import ProcessTree
 from . import style
 from .graph_view import EdgeSpec, GraphView, NodeSpec, node_size
 from .widgets import Verdict, label
@@ -103,8 +103,8 @@ def alpha_view(result: AlphaResult) -> QWidget:
     x_lines = "<br>".join(
         (f"<b>{_pair(p)}</b>" if p in maximal else _pair(p)) for p in result.X_L) or "∅"
     y_lines = "<br>".join(_pair(p) for p in result.Y_L) or "∅"
-    places = ", ".join([f"<i>i</i><sub>L</sub>"] + [_place(p) for p in result.Y_L]
-                       + [f"<i>o</i><sub>L</sub>"])
+    places = ", ".join(["<i>i</i><sub>L</sub>"] + [_place(p) for p in result.Y_L]
+                       + ["<i>o</i><sub>L</sub>"])
     arcs = []
     for arc in result.net.arcs:
         arcs.append(f"({escape(result.net.node_name(arc.source))}, "

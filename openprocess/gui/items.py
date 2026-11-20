@@ -714,8 +714,6 @@ class TransitionItem(_NodeItem):
         return path
 
     def refresh(self) -> None:
-        palette = theme.palette()
-
         self.name_label.setText(self.transition.name)
         bounds = self.name_label.boundingRect()
         if self.names_outside:

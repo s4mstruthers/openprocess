@@ -27,7 +27,6 @@ CPN-specific additions to plain SML:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterator
 
 from .errors import LexError
 

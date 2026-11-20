@@ -8,7 +8,7 @@ from typing import Literal
 
 from ... import flow
 from ...mining.bpmn import BPMN
-from ...mining.log import KEY_NAME, Event, EventLog, Trace, parse_simple_log
+from ...mining.log import EventLog, parse_simple_log
 from ...mining.petrinet import PetriNet
 from ...mining.playout import play_out
 from ...mining.transition_system import TransitionSystem, parse_transition_system

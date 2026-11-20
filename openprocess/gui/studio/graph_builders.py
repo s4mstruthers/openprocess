@@ -40,7 +40,6 @@ def petri_net_specs(net: PetriNet, marking: Marking | None = None,
                     badges: dict[str, list[tuple[str, str]]] | None = None,
                     fills: dict[str, str] | None = None,
                     show_place_names: bool = True) -> tuple[list[NodeSpec], list[EdgeSpec]]:
-    t = style.tokens()
     marking = marking if marking is not None else net.initial_marking
     enabled = enabled or set()
     badges = badges or {}

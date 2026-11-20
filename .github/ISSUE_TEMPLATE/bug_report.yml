@@ -1,0 +1,57 @@
+name: Something does not work
+description: A crash, an error message, a window that misbehaves, a file that will not open.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, step by step, and what the app did. A screenshot helps.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: The error message, if there was one
+      description: Paste it whole. Started from a terminal? Include what the terminal printed.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: OpenProcess version
+      description: "Help ▸ About OpenProcess Studio, or `openprocess --version`."
+      placeholder: "0.16.3"
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: System
+      options:
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Windows
+        - Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you installed it
+      options:
+        - The downloaded app
+        - pip install openprocess
+        - From source
+    validations:
+      required: true
+  - type: textarea
+    id: file
+    attributes:
+      label: A file that shows it
+      description: If it happens with one file and not with others, attach it (zipped) or the smallest file that still shows it.

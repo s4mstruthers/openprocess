@@ -16,7 +16,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QFrame, QGraphicsDropShadowEffect, QGridLayout, QLineEdit, QPushButton, QScrollArea,
+from PySide6.QtWidgets import (QFrame, QGraphicsDropShadowEffect, QGridLayout, QHBoxLayout, QLineEdit, QPushButton,
+                               QScrollArea,
                                QSizePolicy, QVBoxLayout, QWidget)
 
 from ...flow.library import Library

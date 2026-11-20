@@ -24,7 +24,6 @@ import sys
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 from .box import Box, BoxError, BoxSpec
 

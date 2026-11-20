@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from openprocess.mining import (BY_NAME, Event, EventLog, Trace, align_log, alpha_miner, check_soundness,
-                                parse_simple_log, precision, read_xes, region_miner, token_replay)
+                                parse_simple_log, read_xes, region_miner, token_replay)
 from openprocess.mining.pnml import parse_pnml, pnml_string
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -247,7 +247,7 @@ def test_deadlock_freedom_is_not_claimed_for_an_unbounded_net():
     """pump: p0 -> p0 + p1; stop: p0 + p1 -> p2; eat: 2 p1 -> p1.  [p2] is
     reachable (pump, stop) and dead, but the coverability graph's ω in p1
     keeps *eat* enabled in the node that covers it."""
-    from openprocess.mining import analyse, reachability_graph
+    from openprocess.mining import analyse
     from openprocess.mining.petrinet import Marking, PetriNet
 
     net = PetriNet("pump")

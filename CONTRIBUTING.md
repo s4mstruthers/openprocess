@@ -53,9 +53,16 @@ pytest -q
 ```
 
 The suite includes the GUI tests, which draw their windows offscreen. On a
-machine without a display, set `QT_QPA_PLATFORM=offscreen` first. A pull
-request runs the same suite on GitHub; please run it locally before you open
-one.
+machine without a display, set `QT_QPA_PLATFORM=offscreen` first.
+
+```bash
+ruff check .
+```
+
+looks for mistakes a test may not reach: a name that does not exist, an
+import nobody uses. Its rules are in `pyproject.toml`; it does not judge
+layout. A pull request runs both on GitHub; please run them locally before
+you open one.
 
 ## What a change should come with
 

@@ -64,7 +64,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree as ET
-from xml.sax.saxutils import escape, quoteattr
+from xml.sax.saxutils import quoteattr
 
 from .layout import layered_layout
 from .petrinet import Marking, PetriNet

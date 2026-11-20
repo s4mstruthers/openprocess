@@ -4,7 +4,6 @@ If any of these fail, every simulation result is suspect, so they are checked
 against hand-computed values rather than against the implementation.
 """
 
-import pytest
 
 from openprocess.ml.multiset import Multiset, TimedMultiset
 

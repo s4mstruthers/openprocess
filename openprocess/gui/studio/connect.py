@@ -12,7 +12,6 @@ The work is :mod:`openprocess.mcp.install`; this is its face.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDialog, QScrollArea, QVBoxLayout, QWidget
 
 from ...mcp import install

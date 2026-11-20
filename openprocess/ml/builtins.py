@@ -36,7 +36,7 @@ from typing import Any, Callable
 
 from .errors import EvalError
 from .multiset import Multiset
-from .values import UNIT, Constructor, MLList, Record, Unit, format_value
+from .values import UNIT, Constructor, MLList, format_value
 
 
 class Builtin:

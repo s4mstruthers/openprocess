@@ -55,7 +55,7 @@ if sys.getrecursionlimit() < 20_000:
     sys.setrecursionlimit(20_000)
 from .errors import EvalError, MatchError
 from .multiset import Multiset, TimedTokens
-from .values import UNIT, Constructor, MLList, Record, Unit, format_value, sort_key
+from .values import Constructor, MLList, Record, format_value, sort_key
 
 
 class Environment:

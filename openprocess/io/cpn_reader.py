@@ -45,7 +45,6 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
-from typing import Any
 
 from ..model.declarations import parse_variable_declaration
 from ..model.net import Arc, CPNet, Graphics, Page, Place, Transition

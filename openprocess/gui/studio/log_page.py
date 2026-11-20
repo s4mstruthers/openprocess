@@ -13,20 +13,18 @@ from pathlib import Path
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
-    QAbstractItemView, QComboBox, QFileDialog, QGridLayout, QHeaderView, QLabel,
-    QGraphicsOpacityEffect, QLineEdit, QPlainTextEdit, QSizePolicy, QSlider, QSpinBox, QSplitter, QStackedWidget, QTableView,
+    QAbstractItemView, QComboBox, QFileDialog, QGridLayout, QHeaderView, QGraphicsOpacityEffect, QLineEdit, QSizePolicy, QSlider, QSpinBox, QSplitter, QStackedWidget, QTableView,
     QVBoxLayout, QWidget,
 )
 
 from ...mining import pm4py_bridge
 from ...mining.dfg import discover_dfg
-from ...mining.discovery.alpha import AlphaResult, alpha_miner
+from ...mining.discovery.alpha import alpha_miner
 from ...mining.discovery.heuristics import heuristics_miner, heuristics_net
-from ...mining.discovery.inductive import InductiveResult, inductive_miner
+from ...mining.discovery.inductive import inductive_miner
 from ...mining.footprint import footprint_of_log
 from ...mining.stats import format_duration
 from ...mining.xes import write_xes
-from .. import theme
 from . import style
 from .charts import ColumnChart
 from ..learn.concealment import ConcealsResults
@@ -40,7 +38,7 @@ from .widgets import (
     footprint_table,
     BarDelegate, Card, ElidedLabel, Legend, LegendSwatch, PageHeader, SegmentedControl,
     SequenceDelegate, StatTile, Verdict,
-    button, hbox, label, scroll, vbox,
+    button, hbox, label, scroll,
 )
 from .workers import run_in_background
 
@@ -440,7 +438,8 @@ class LogPage(ConcealsResults, QWidget):
         column.setSpacing(14)
 
         span = "–"
-        if s.start and s.end:
+        timed = bool(s.start and s.end)
+        if timed:
             span = format_duration(s.end - s.start)
         tiles = [
             StatTile("Cases", f"{s.case_count:,}"),
@@ -450,8 +449,9 @@ class LogPage(ConcealsResults, QWidget):
             StatTile("Activities", f"{s.activity_count}"),
             StatTile("Variants", f"{s.variant_count:,}",
                      f"{s.variant_count / max(s.case_count, 1):.2f} variants per case"),
+            # A typed textbook log has no times: say so once, not "mean –".
             StatTile("Median case duration", format_duration(s.median_case_duration),
-                     f"mean {format_duration(s.mean_case_duration)}"),
+                     f"mean {format_duration(s.mean_case_duration)}" if timed else "the log has no timestamps"),
             StatTile("Time span", span, s.start.strftime("%d %b %Y %H:%M") if s.start else ""),
         ]
         grid = QGridLayout()

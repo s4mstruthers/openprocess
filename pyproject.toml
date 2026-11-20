@@ -27,6 +27,11 @@ classifiers = [
     "Intended Audience :: Education",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering",
     "Topic :: Education",
 ]
@@ -47,7 +52,7 @@ dependencies = ["numpy>=1.24"]
 # updates (its bundled Python cannot find the system's own).
 app = ["PySide6>=6.6", "certifi"]
 gui = ["PySide6>=6.6", "certifi"]
-dev = ["pytest>=8.0", "mcp>=2.3"]
+dev = ["pytest>=8.0", "mcp>=2.3", "ruff>=0.6"]
 # The Science boxes (Describe log, Bootstrap fitness, Compare samples, Correlate,
 # Plot) and the converters to pandas and matplotlib.  Each box says which of
 # these it needs; without them it is listed greyed out.
@@ -64,6 +69,8 @@ mcp = ["mcp>=2.3"]
 Homepage = "https://github.com/s4mstruthers/openprocess"
 Changelog = "https://github.com/s4mstruthers/openprocess/blob/main/CHANGELOG.md"
 Releases = "https://github.com/s4mstruthers/openprocess/releases"
+Documentation = "https://github.com/s4mstruthers/openprocess#contents"
+Issues = "https://github.com/s4mstruthers/openprocess/issues"
 
 [project.scripts]
 # Command-line entry points created by `pip install -e .`
@@ -97,3 +104,22 @@ include = ["openprocess*", "cpnpy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# Lint: `ruff check .` (CI runs it before the tests).  The rules are the ones
+# that find mistakes -- a name that does not exist, an import nobody uses, a
+# comparison that cannot be true -- not a house style: the code is laid out
+# by hand, with lines up to about 120 characters.
+[tool.ruff]
+target-version = "py310"
+line-length = 130
+extend-exclude = ["build", "dist"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B006", "B018", "PLE"]
+# Layout, not mistakes: `a = 1; b = 2` on one line, a lambda with a name, a short loop variable.
+ignore = ["E702", "E731", "E741"]
+
+[tool.ruff.lint.per-file-ignores]
+# The old names (cpnpy, openprocess.teaching) re-export everything on purpose.
+"cpnpy/__init__.py" = ["F401", "F403"]
+"openprocess/teaching/*.py" = ["F401", "F403"]

@@ -7,7 +7,7 @@ import textwrap
 import pytest
 
 from openprocess import flow
-from openprocess.flow import Runner, Workflow, check, library_for, load, save
+from openprocess.flow import Runner, Workflow, library_for, load, save
 
 L1 = "[<a,b,c,d>^3, <a,c,b,d>^2, <a,e,d>, <a,b,c,d,e>, <a,e,b,d>, <a,c,d>]"
 

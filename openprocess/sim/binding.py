@@ -59,8 +59,8 @@ also what CPN Tools requires.
 from __future__ import annotations
 
 import itertools
-from dataclasses import dataclass, field
-from typing import Any, Iterator, Sequence
+from dataclasses import dataclass
+from typing import Any, Sequence
 
 from ..ml.ast_nodes import (
     App, BinOp, CaseExpr, Coefficient, Delay, EmptyMultiset, Expr, FnExpr,

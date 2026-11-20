@@ -44,7 +44,7 @@ import bisect
 import math
 import time
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal

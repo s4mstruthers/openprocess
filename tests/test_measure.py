@@ -11,7 +11,7 @@ from openprocess.flow.boxes.filter import case_attribute
 from openprocess.flow.boxes.measure import (
     compliance_by, dotted_chart, order_rule, segregation_of_duties, time_between, who_does_what,
 )
-from openprocess.flow.boxes.predict import FrequencyModel, predict, prefixes, split_by_time
+from openprocess.flow.boxes.predict import FrequencyModel, predict, prefixes
 from openprocess.flow.boxes.science import _bootstrap_difference
 from openprocess.flow.types import Dataset, Table
 from openprocess.mining import parse_simple_log

@@ -31,7 +31,7 @@ Activities, variants and lengths are seen through the log's *classifier*
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 
 import numpy as np

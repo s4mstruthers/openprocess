@@ -26,7 +26,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QFrame, QGraphicsItem, QGraphicsObject, QGraphicsPathItem, QGraphicsScene, QGraphicsView,
-    QHBoxLayout, QLabel, QToolButton,
+    QHBoxLayout, QToolButton,
 )
 
 from ...mining.layout import layered_layout

@@ -26,7 +26,7 @@ import platform
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .. import __version__
 from ..mining.log import EventLog, SimpleLog, format_simple_log
@@ -34,6 +34,9 @@ from ..mining.petrinet import PetriNet
 from .runner import DONE, Run
 from .types import Dataset, Figure, Predictions, Scores, Table, Text
 from .workflow import Workflow
+
+if TYPE_CHECKING:                       # only named in annotations (versions imports this module)
+    from .versions import Versions
 
 FORMAT = "analysis/1"
 
@@ -609,7 +612,6 @@ def export_experiment(workflow: Workflow, run: Run | None, target: str | Path,
     """A zip with the workflow file and its record, the input files, the
     custom box files, every result as a file (CSV, PNML, SVG, XES), a
     ``requirements.lock`` and a ``README.md`` that says what was run."""
-    import io
     import zipfile
     target = Path(target)
     folder = Path(folder) if folder is not None else target.parent
@@ -625,7 +627,7 @@ def export_experiment(workflow: Workflow, run: Run | None, target: str | Path,
             continue
         key = str(source.resolve())
         if key not in packed:
-            stem, suffix, number = Path(item["file"]).name, "", 2
+            stem, number = Path(item["file"]).name, 2
             candidate = f"inputs/{stem}"
             while candidate in packed.values():
                 candidate = f"inputs/{Path(stem).stem} {number}{''.join(Path(stem).suffixes)}"
