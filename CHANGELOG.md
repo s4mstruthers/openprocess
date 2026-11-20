@@ -43,7 +43,10 @@ earlier version computed has changed.
   Python 3.12 and newer, are not affected.
 - For contributors: the engines and the framework are tested on Python
   3.10, 3.11 and 3.13 as well (without Qt); `openprocess` ships `py.typed`;
-  Dependabot watches the GitHub Actions.
+  Dependabot watches the GitHub Actions; a test freezes how many states an
+  alignment search expands, so a slower search fails a test on any machine;
+  and the main window's icons, sidebar delegate and two dialogs moved out of
+  `gui/studio/app.py` into modules of their own.
 
 ## 0.16.3
 

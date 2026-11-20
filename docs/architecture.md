@@ -432,12 +432,14 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`gui/studio/cpn_page.py`](../openprocess/gui/studio/cpn_page.py) | The coloured-Petri-net workspace: edit, simulate and analyse a CPN model. |
 | [`gui/studio/definition_view.py`](../openprocess/gui/studio/definition_view.py) | Definitions on screen: hover tooltips, click pop-ups and the reference dialog. |
 | [`gui/studio/derivation_view.py`](../openprocess/gui/studio/derivation_view.py) | Typeset derivations: how a discovery algorithm arrived at its model. |
+| [`gui/studio/dialogs.py`](../openprocess/gui/studio/dialogs.py) | Two small dialogs of the Studio window: which logs to compare, and which columns of a CSV file are the case, the activity and the time. |
 | [`gui/studio/documents.py`](../openprocess/gui/studio/documents.py) | Open documents: the objects the sidebar lists. |
 | [`gui/studio/dotted_chart.py`](../openprocess/gui/studio/dotted_chart.py) | The dotted chart, with the configuration and navigation of ProM's plug-in. |
 | [`gui/studio/file_dialogs.py`](../openprocess/gui/studio/file_dialogs.py) | Small dialogs about files and folders. |
 | [`gui/studio/filter_dialog.py`](../openprocess/gui/studio/filter_dialog.py) | The Filter… dialog of a log page: ProM's and Disco's log filters in one form. |
 | [`gui/studio/graph_builders.py`](../openprocess/gui/studio/graph_builders.py) | Turn mining objects into canvas descriptions (:class:`NodeSpec` / :class:`EdgeSpec`). |
 | [`gui/studio/graph_view.py`](../openprocess/gui/studio/graph_view.py) | A zoomable canvas for laid-out graphs, and builders for each graph kind. |
+| [`gui/studio/icons.py`](../openprocess/gui/studio/icons.py) | The small icons of the sidebar and the window: painted, so the app ships no image files beside its logo. |
 | [`gui/studio/instances.py`](../openprocess/gui/studio/instances.py) | The definitions, filled in for the net being analysed. |
 | [`gui/studio/loading.py`](../openprocess/gui/studio/loading.py) | Opening a large file: a page that says what is happening, instead of a window that seems stuck. |
 | [`gui/studio/log_editor.py`](../openprocess/gui/studio/log_editor.py) | Editing an event log inside the app. |
@@ -454,7 +456,7 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`gui/studio/regions_view.py`](../openprocess/gui/studio/regions_view.py) | Transition systems and their regions on screen. |
 | [`gui/studio/remote.py`](../openprocess/gui/studio/remote.py) | The app's command port: a local socket other programs hand things to. |
 | [`gui/studio/review.py`](../openprocess/gui/studio/review.py) | Reviewing what an assistant changed: a list, a diff, Keep or Undo. |
-| [`gui/studio/sidebar.py`](../openprocess/gui/studio/sidebar.py) | The sidebar's tree: open documents, files not open yet, and subfolders. |
+| [`gui/studio/sidebar.py`](../openprocess/gui/studio/sidebar.py) | The sidebar's tree: open documents, files not open yet, and subfolders, and the delegate that draws a row's name and its ✕. |
 | [`gui/studio/spaces.py`](../openprocess/gui/studio/spaces.py) | The three spaces of the window: Mine, Model and Learn. |
 | [`gui/studio/style.py`](../openprocess/gui/studio/style.py) | Design tokens and the stylesheet for the Studio window. |
 | [`gui/studio/tool_icons.py`](../openprocess/gui/studio/tool_icons.py) | Icons and mouse cursors for the drawing tools. |
@@ -501,5 +503,5 @@ opens in under 5 s; see [examples/bpi2019](../examples/bpi2019/README.md).
 | [`mcp/install.py`](../openprocess/mcp/install.py) | Connecting an assistant: one click in the app, or ``openprocess mcp install <client>``. |
 | [`mcp/server.py`](../openprocess/mcp/server.py) | The MCP server: OpenProcess's tools for Claude and other AI assistants. |
 
-193 modules.
+195 modules.
 <!-- /generated -->

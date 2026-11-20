@@ -57,17 +57,16 @@ from dataclasses import asdict
 from pathlib import Path
 
 from PySide6.QtCore import (
-    QEvent, QFile, QFileSystemWatcher, QObject, QPoint, QRect, QRectF, QSettings, QSize, Qt, QTimer, QUrl, Signal,
+    QFile, QFileSystemWatcher, QObject, QPoint, QSettings, QSize, Qt, QTimer, QUrl, Signal,
 )
 from PySide6.QtGui import (
-    QAction, QColor, QDesktopServices, QIcon, QKeySequence, QPainter, QPen, QPixmap, QShortcut,
+    QAction, QColor, QDesktopServices, QKeySequence, QShortcut,
 )
 from PySide6.QtWidgets import (
     QButtonGroup,
     QAbstractItemView, QApplication, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
     QFormLayout, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu, QMessageBox,
-    QSizePolicy, QSplitter, QStackedWidget, QStyle, QStyledItemDelegate,
-    QToolBar, QToolButton, QTreeWidgetItem, QTreeWidgetItemIterator, QVBoxLayout, QWidget,
+    QSizePolicy, QSplitter, QStackedWidget, QToolBar, QToolButton, QTreeWidgetItem, QTreeWidgetItemIterator, QVBoxLayout, QWidget,
 )
 
 from ...mining.csv_import import ColumnMapping, guess_mapping, read_csv, sniff
@@ -93,7 +92,9 @@ from .graph_view import GraphView, ZoomControls
 from .log_editor import EXAMPLES, NotationDialog  # noqa: F401 - NotationDialog: older imports
 from .log_page import LogPage
 from .model_page import ModelPage
-from .sidebar import FILE_ROLE, FOLDABLE_ROLE, FOLDER_ROLE, GROUP_ROLE, SidebarTree
+from .dialogs import CompareDialog, CsvDialog
+from .icons import app_icon, faded_icon as _faded_icon, icon as _icon
+from .sidebar import FILE_ROLE, FOLDABLE_ROLE, FOLDER_ROLE, GROUP_ROLE, SidebarDelegate, SidebarTree
 from .spaces import FILE_KINDS, LABELS, LEARN, MAIN_KINDS, MINE, MODEL, SPACES, is_main, space_of
 from .widgets import (
     Card, ElidedLabel, NoticeBar, SegmentedControl, button, dialog_folder, hbox, label,
@@ -236,243 +237,6 @@ def report_unexpected_errors() -> None:
         except Exception:  # noqa: BLE001 - never fail inside the error reporter
             pass
     sys.excepthook = hook
-
-
-def app_icon() -> QIcon:
-    """The OpenProcess logo (Dock, window and About box)."""
-    return QIcon(str(Path(__file__).resolve().parents[1] / "resources" / "openprocess-icon.png"))
-
-
-def _icon(kind: str) -> QIcon:
-    """Tiny painted icons, so the app ships no image files.
-
-    Drawn twice: in colour, and in the selected row's text colour, which Qt
-    uses for the selected row (a blue icon on the blue highlight vanished).
-    """
-    icon = QIcon(_icon_pixmap(kind, None))
-    icon.addPixmap(_icon_pixmap(kind, QColor(style.tokens().accent_text)), QIcon.Selected)
-    return icon
-
-
-def _faded_icon(kind: str) -> QIcon:
-    """The kind's icon at reduced opacity: a workspace file that is not open yet."""
-    source = _icon_pixmap(kind, None)
-    faded = QPixmap(source.size())
-    faded.fill(Qt.transparent)
-    painter = QPainter(faded)
-    painter.setOpacity(0.45)
-    painter.drawPixmap(0, 0, source)
-    painter.end()
-    icon = QIcon(faded)
-    icon.addPixmap(_icon_pixmap(kind, QColor(style.tokens().accent_text)), QIcon.Selected)
-    return icon
-
-
-def _icon_pixmap(kind: str, ink: QColor | None) -> QPixmap:
-    pixmap = QPixmap(32, 32)
-    pixmap.fill(Qt.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.Antialiasing)
-    colour = ink if ink is not None else QColor(
-        {"log": style.categorical(0), "cpn": style.categorical(2)}.get(kind, style.categorical(6)))
-    pen = QPen(colour, 3)
-    pen.setCapStyle(Qt.RoundCap)
-    painter.setPen(pen)
-    if kind == "folder":
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(ink if ink is not None else QColor(style.tokens().accent))
-        tab = QRectF(3, 7, 11, 6)
-        painter.drawRoundedRect(tab, 2, 2)
-        painter.drawRoundedRect(QRectF(3, 10, 26, 16), 2.5, 2.5)
-    elif kind == "compare":
-        painter.setPen(Qt.NoPen)
-        for index, (x, height) in enumerate(((5, 12), (12, 20), (19, 8), (26, 16))):
-            painter.setBrush(ink if ink is not None else QColor(style.categorical(index % 2)))
-            painter.drawRoundedRect(QRectF(x - 2, 27 - height, 5, height), 1.5, 1.5)
-    elif kind == "cpn":
-        painter.drawEllipse(QRectF(3, 9, 13, 13))
-        painter.drawRoundedRect(QRectF(19, 8, 10, 15), 2, 2)
-        painter.setBrush(colour)
-        painter.drawEllipse(QRectF(8, 14, 3, 3))
-    elif kind == "log":
-        for y in (9, 16, 23):
-            painter.drawLine(7, y, 25, y)
-        painter.setBrush(colour)
-        painter.drawEllipse(4, 7, 1, 1)
-    elif kind == "ts":
-        # Two states and an arrow between them.
-        painter.drawEllipse(QRectF(3, 11, 9, 9))
-        painter.drawEllipse(QRectF(20, 11, 9, 9))
-        painter.drawLine(13, 15, 18, 15)
-        painter.drawLine(15, 12, 18, 15)
-        painter.drawLine(15, 18, 18, 15)
-    elif kind == "workflow":
-        # Two boxes joined by a wire.
-        painter.drawRoundedRect(QRectF(3, 6, 11, 9), 2, 2)
-        painter.drawRoundedRect(QRectF(18, 17, 11, 9), 2, 2)
-        painter.drawLine(14, 10, 18, 21)
-    elif kind == "exercise":
-        # A sheet with a question mark.
-        painter.drawRoundedRect(QRectF(6, 4, 20, 24), 3, 3)
-        font = painter.font()
-        font.setBold(True)
-        font.setPixelSize(17)
-        painter.setFont(font)
-        painter.drawText(QRectF(6, 4, 20, 24), Qt.AlignCenter, "?")
-    else:
-        painter.drawEllipse(QRectF(4, 10, 11, 11))
-        painter.drawRect(QRectF(19, 9, 9, 13))
-    painter.end()
-    return pixmap
-
-
-# ---------------------------------------------------------------------------
-# Sidebar: a remove button that appears on hover
-# ---------------------------------------------------------------------------
-class SidebarDelegate(QStyledItemDelegate):
-    """Draws a small ✕ on the hovered (or selected) document row.
-
-    Clicking it asks the window to remove that document from the workspace --
-    the same gesture as closing a tab in Safari or a document in Xcode's
-    sidebar.  Section headers ("EVENT LOGS", "MODELS") never get one.
-    """
-
-    remove_clicked = Signal(int)        # document id
-    BUTTON = 18
-
-    def _button_rect(self, row: QRect) -> QRect:
-        size = self.BUTTON
-        return QRect(row.right() - size - 8, row.center().y() - size // 2 + 1, size, size)
-
-    @staticmethod
-    def _shows_button(option, index) -> bool:
-        return index.data(Qt.UserRole) is not None and bool(
-            option.state & (QStyle.State_MouseOver | QStyle.State_Selected))
-
-    def initStyleOption(self, option, index) -> None:  # noqa: N802
-        """A name uses the whole row; only a row that shows its ✕ gives up the
-        room for it.  The name is shortened in the middle, so two files that
-        start alike ("order handling", "order handling (sound)") still read
-        apart and the • of unsaved changes at the end is never cut off."""
-        super().initStyleOption(option, index)
-        if not self._shows_button(option, index):
-            return
-        widget = option.widget
-        qstyle = widget.style() if widget is not None else QApplication.style()
-        text = qstyle.subElementRect(QStyle.SE_ItemViewItemText, option, widget)
-        room = self._button_rect(option.rect).left() - text.left() - 8
-        if room > 0:
-            option.text = option.fontMetrics.elidedText(option.text, Qt.ElideMiddle, room)
-
-    def paint(self, painter: QPainter, option, index) -> None:
-        super().paint(painter, option, index)
-        if not self._shows_button(option, index):
-            return
-        selected = bool(option.state & QStyle.State_Selected)
-        t = style.tokens()
-        rect = QRectF(self._button_rect(option.rect))
-        painter.save()
-        painter.setRenderHint(QPainter.Antialiasing)
-        ink = QColor(t.accent_text if selected else t.text_secondary)
-        backdrop = QColor(ink)
-        backdrop.setAlphaF(0.18)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(backdrop)
-        painter.drawEllipse(rect)
-        pen = QPen(ink, 1.6)
-        pen.setCapStyle(Qt.RoundCap)
-        painter.setPen(pen)
-        inset = rect.adjusted(5.5, 5.5, -5.5, -5.5)
-        painter.drawLine(inset.topLeft(), inset.bottomRight())
-        painter.drawLine(inset.topRight(), inset.bottomLeft())
-        painter.restore()
-
-    def editorEvent(self, event, model, option, index) -> bool:  # noqa: N802
-        if index.data(Qt.UserRole) is not None and event.type() in (
-                QEvent.MouseButtonPress, QEvent.MouseButtonRelease):
-            if self._button_rect(option.rect).contains(event.position().toPoint()):
-                if event.type() == QEvent.MouseButtonRelease:
-                    self.remove_clicked.emit(int(index.data(Qt.UserRole)))
-                return True     # swallow the press too, so the row is not selected
-        return super().editorEvent(event, model, option, index)
-
-
-# ---------------------------------------------------------------------------
-# Dialogs
-# ---------------------------------------------------------------------------
-class CompareDialog(QDialog):
-    """Pick the logs to compare (at least two)."""
-
-    def __init__(self, logs: list, preselected: list, parent=None) -> None:
-        super().__init__(parent)
-        from PySide6.QtWidgets import QListWidget, QListWidgetItem
-        self.setWindowTitle("Compare logs")
-        self.logs = logs
-        layout = QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.addWidget(label("Choose two or more event logs to show side by side.",
-                               "muted", wrap=True))
-        self.list = QListWidget()
-        chosen = {d.id for d in preselected}
-        for log in logs:
-            item = QListWidgetItem(log.name)
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked if log.id in chosen or len(logs) == 2
-                               else Qt.Unchecked)
-            self.list.addItem(item)
-        self.list.itemChanged.connect(lambda _item: self._validate())
-        layout.addWidget(self.list)
-        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self.buttons.button(QDialogButtonBox.Ok).setText("Compare")
-        self.buttons.accepted.connect(self.accept)
-        self.buttons.rejected.connect(self.reject)
-        layout.addWidget(self.buttons)
-        self._validate()
-
-    def chosen(self) -> list:
-        return [log for index, log in enumerate(self.logs)
-                if self.list.item(index).checkState() == Qt.Checked]
-
-    def _validate(self) -> None:
-        self.buttons.button(QDialogButtonBox.Ok).setEnabled(len(self.chosen()) >= 2)
-
-
-class CsvDialog(QDialog):
-    """Confirm which CSV columns hold case id, activity, timestamp, ..."""
-
-    def __init__(self, path: str, parent=None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(f"Import {Path(path).name}")
-        _, header = sniff(path)
-        guess = guess_mapping(header) or ColumnMapping(header[0] if header else "",
-                                                       header[1] if len(header) > 1 else "")
-        self.boxes: dict[str, QComboBox] = {}
-        form = QFormLayout()
-        for role, title, optional in (("case", "Case id", False), ("activity", "Activity", False),
-                                      ("timestamp", "Timestamp", True),
-                                      ("resource", "Resource", True),
-                                      ("lifecycle", "Lifecycle", True)):
-            box = QComboBox()
-            if optional:
-                box.addItem("— none —", None)
-            for column in header:
-                box.addItem(column, column)
-            current = getattr(guess, role)
-            if current is not None:
-                box.setCurrentIndex(box.findData(current))
-            self.boxes[role] = box
-            form.addRow(title, box)
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout = QVBoxLayout(self)
-        layout.addWidget(label("Choose the columns that identify cases and activities. "
-                               "Other columns become event attributes.", "muted", wrap=True))
-        layout.addLayout(form)
-        layout.addWidget(buttons)
-
-    def mapping(self) -> ColumnMapping:
-        return ColumnMapping(**{role: box.currentData() for role, box in self.boxes.items()})
 
 
 # ---------------------------------------------------------------------------

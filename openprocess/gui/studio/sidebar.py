@@ -1,4 +1,5 @@
-"""The sidebar's tree: open documents, files not open yet, and subfolders.
+"""The sidebar's tree: open documents, files not open yet, and subfolders,
+and the delegate that draws a row's name and its ✕.
 
 Rows carry what they stand for in their item data:
 
@@ -20,9 +21,10 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl, Signal
+from PySide6.QtCore import QEvent, QMimeData, QPointF, QRect, QRectF, Qt, QUrl, Signal
 from PySide6.QtGui import QColor, QDrag, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import QAbstractItemView, QTreeWidget, QTreeWidgetItem
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QStyle, QStyledItemDelegate, QTreeWidget,
+                               QTreeWidgetItem)
 
 from . import style
 
@@ -156,3 +158,74 @@ class SidebarTree(QTreeWidget):
         self._target = item
         if item is not None:
             item.setBackground(0, style.qc(style.tokens().accent, 0.22))
+
+
+# ---------------------------------------------------------------------------
+# Sidebar: a remove button that appears on hover
+# ---------------------------------------------------------------------------
+class SidebarDelegate(QStyledItemDelegate):
+    """Draws a small ✕ on the hovered (or selected) document row.
+
+    Clicking it asks the window to remove that document from the workspace --
+    the same gesture as closing a tab in Safari or a document in Xcode's
+    sidebar.  Section headers ("EVENT LOGS", "MODELS") never get one.
+    """
+
+    remove_clicked = Signal(int)        # document id
+    BUTTON = 18
+
+    def _button_rect(self, row: QRect) -> QRect:
+        size = self.BUTTON
+        return QRect(row.right() - size - 8, row.center().y() - size // 2 + 1, size, size)
+
+    @staticmethod
+    def _shows_button(option, index) -> bool:
+        return index.data(Qt.UserRole) is not None and bool(
+            option.state & (QStyle.State_MouseOver | QStyle.State_Selected))
+
+    def initStyleOption(self, option, index) -> None:  # noqa: N802
+        """A name uses the whole row; only a row that shows its ✕ gives up the
+        room for it.  The name is shortened in the middle, so two files that
+        start alike ("order handling", "order handling (sound)") still read
+        apart and the • of unsaved changes at the end is never cut off."""
+        super().initStyleOption(option, index)
+        if not self._shows_button(option, index):
+            return
+        widget = option.widget
+        qstyle = widget.style() if widget is not None else QApplication.style()
+        text = qstyle.subElementRect(QStyle.SE_ItemViewItemText, option, widget)
+        room = self._button_rect(option.rect).left() - text.left() - 8
+        if room > 0:
+            option.text = option.fontMetrics.elidedText(option.text, Qt.ElideMiddle, room)
+
+    def paint(self, painter: QPainter, option, index) -> None:
+        super().paint(painter, option, index)
+        if not self._shows_button(option, index):
+            return
+        selected = bool(option.state & QStyle.State_Selected)
+        t = style.tokens()
+        rect = QRectF(self._button_rect(option.rect))
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        ink = QColor(t.accent_text if selected else t.text_secondary)
+        backdrop = QColor(ink)
+        backdrop.setAlphaF(0.18)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(backdrop)
+        painter.drawEllipse(rect)
+        pen = QPen(ink, 1.6)
+        pen.setCapStyle(Qt.RoundCap)
+        painter.setPen(pen)
+        inset = rect.adjusted(5.5, 5.5, -5.5, -5.5)
+        painter.drawLine(inset.topLeft(), inset.bottomRight())
+        painter.drawLine(inset.topRight(), inset.bottomLeft())
+        painter.restore()
+
+    def editorEvent(self, event, model, option, index) -> bool:  # noqa: N802
+        if index.data(Qt.UserRole) is not None and event.type() in (
+                QEvent.MouseButtonPress, QEvent.MouseButtonRelease):
+            if self._button_rect(option.rect).contains(event.position().toPoint()):
+                if event.type() == QEvent.MouseButtonRelease:
+                    self.remove_clicked.emit(int(index.data(Qt.UserRole)))
+                return True     # swallow the press too, so the row is not selected
+        return super().editorEvent(event, model, option, index)

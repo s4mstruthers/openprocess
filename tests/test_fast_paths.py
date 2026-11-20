@@ -145,3 +145,19 @@ def test_replay_counts_are_what_they_were():
     net = inductive_miner(log).net
     replay = token_replay(net, Counter({("a", "b", "d"): 1, ("a", "e", "e", "d"): 1, ("d",): 2}))
     assert [(t.trace, t.produced, t.consumed, t.missing, t.remaining) for t in replay.traces] == EXPECTED
+
+
+def test_the_search_does_no_more_work_than_it_did():
+    """A guard on effort that does not depend on the machine: the number of
+    states an alignment search expands is the same on every run.  If a change
+    makes it larger, the search got slower, whatever a stopwatch says; if the
+    change is meant to (another order of moves, say), put the new numbers here."""
+    from openprocess.mining import parse_simple_log
+
+    net = inductive_miner(parse_simple_log("[<a,b,c,d,e,f>^5, <a,c,b,d,f,e>^3, <a,b,d,c,e,f>^2, <a,g,f>]")).net
+    log = parse_simple_log("[<a,b,c,d,e,f>, <a,d,c,b,f>, <g,a,f,e>, <a,b,b,c,d,x,e,f>, <>]")
+    result = align_log(net, log, workers=1)
+    work = {a.trace: (a.cost, a.states_visited) for a in result.alignments}
+    assert work == {(): (3, 13), ("a", "b", "b", "c", "d", "x", "e", "f"): (2, 29),
+                    ("a", "b", "c", "d", "e", "f"): (0, 12), ("a", "d", "c", "b", "f"): (2, 54),
+                    ("g", "a", "f", "e"): (2, 30)}
