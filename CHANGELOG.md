@@ -11,6 +11,15 @@ notice, not how it was done. Versions before 0.7.0 were released as CPNpy.
 Rules, people and waiting: three new ways to look at a log. Nothing that an
 earlier version computed has changed.
 
+- **Introduction to process mining: twelve lessons.** *Learn ▸
+  Introduction to Process Mining* (also on the welcome page) is a course for
+  someone who has never seen an event log: what a log is, what follows
+  what, the token game, choice and parallel, soundness, the α-algorithm,
+  the Inductive Miner, a first workflow, token replay, alignments, what
+  makes a model good, and rules. Each lesson is a few lines of explanation
+  and then a question, about one small example (a pizza shop's orders),
+  with the log or the model open beside it; hints nudge and *Show answer*
+  explains. 70 answer boxes, nearly all checked by the app.
 - **Declare rules.** A net says what may happen; a rule says one thing that
   must. The new **Discover rules** box reads the rules a log keeps: *every
   register is followed by pay*, *the case starts with register*, *ship
@@ -46,7 +55,10 @@ earlier version computed has changed.
   Dependabot watches the GitHub Actions; a test freezes how many states an
   alignment search expands, so a slower search fails a test on any machine;
   and the main window's icons, sidebar delegate and two dialogs moved out of
-  `gui/studio/app.py` into modules of their own.
+  `gui/studio/app.py` into modules of their own. The README shows the AI
+  changes dialog and a BPMN result (`docs/make_screenshots.py` makes both),
+  and `tests/cross_check_inductive_miner.py` takes a noise threshold to
+  compare IMf with PM4Py's.
 
 ## 0.16.3
 

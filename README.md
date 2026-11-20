@@ -527,6 +527,24 @@ without distractions, and *Exit* brings your folder back exactly as it was.
 
 ![An exercise in Learn: the worksheet with its answer boxes on the left, the exercise's log, given net and workflow on the right](docs/screenshots/learn-exercise.png)
 
+New to process mining? **Learn ▸ Introduction to Process Mining** is a
+course of twelve short lessons that ships with the app, for someone who has
+never seen an event log. Every lesson is a few lines of explanation and
+then a question straight away, all about one small example (the orders of a
+pizza shop), with the log or the model open beside it to click and play:
+
+| | Lesson | | Lesson |
+|---|---|---|---|
+| 1 | What is an event log? | 7 | Cutting a log into pieces (the Inductive Miner) |
+| 2 | What follows what? (process maps, footprints) | 8 | Your first analysis (a workflow) |
+| 3 | The token game (Petri nets) | 9 | Does reality follow the model? (token replay) |
+| 4 | Choice and parallel | 10 | Alignments |
+| 5 | When a model is broken (soundness) | 11 | What makes a model good? (fitness, precision) |
+| 6 | From log to model (the α-algorithm) | 12 | Rules (Declare) |
+
+It is an ordinary exercise pack ([openprocess/lessons](openprocess/lessons)):
+copy it to make a course of your own.
+
 - **The worksheet** on the left is the question top to bottom, with an
   answer box wherever one is needed: yes/no, multiple choice, a set
   (`{a, b}`, sets of sets, or pairs like `({a}, {b,d})`), a number, a short
@@ -863,6 +881,13 @@ extra) and *Predict the next activity*. Or start empty.
   counts each activity per resource;
   [examples/energy_contracts](examples/energy_contracts/README.md) uses them
   with the course's miners and checks on the 2AMI10 exam log.
+- **BPMN.** *Tree to BPMN* draws the Inductive Miner's process tree as a
+  BPMN model (× an exclusive gateway, + a parallel one), *Net to BPMN* does
+  the same for a Petri net, *BPMN to net* gives a BPMN file its Petri net
+  semantics so that it can be checked like any other model, and *Save as
+  BPMN* writes a `.bpmn` file other tools open.
+
+  ![A BPMN model as a box's result in the Report: the Inductive Miner's tree for the textbook log, with exclusive and parallel gateways](docs/screenshots/workflow-bpmn.png)
 - **Rules** are the other way to describe a process: not a net of what may
   happen, but the few things that must hold. *Discover rules* reads the
   Declare rules a log keeps ("every *register* is followed by *pay*", "the
@@ -1056,6 +1081,8 @@ FILE --check`), write a new algorithm as a **`@box`** in the folder's
 `boxes/`, work in **your folder**, and **open** what it made in OpenProcess.
 Every file it writes is journaled with a backup: the status bar says *AI
 changed N files · Review*, with a diff, *Undo* and *Keep* for each.
+
+![Help ▸ Review AI Changes: the file an assistant changed as a diff, with Keep and Undo, and the "AI changed 1 file · Review" pill in the status bar](docs/screenshots/ai-review.png)
 
 The full guide is [openprocess/mcp/connecting.md](openprocess/mcp/connecting.md)
 (also *Help ▸ Connect an AI Assistant*). The same operations are plain Python

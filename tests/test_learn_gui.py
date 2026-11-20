@@ -274,7 +274,7 @@ def test_the_learn_menu_and_the_exam_importer(app, tmp_path, monkeypatch):
     learn = next(m for m in window.menuBar().findChildren(type(window.menuBar().actions()[0].menu()))
                  if m.title() == "&Learn")
     assert [a.text() for a in learn.actions() if a.text()] == [
-        "Open Exercise Pack…", "Open Demo Exercises", "Make a Pack from an Exam…",
+        "Introduction to Process Mining", "Open Exercise Pack…", "Open Demo Exercises", "Make a Pack from an Exam…",
         "Writing Exercise Packs"]
     window.action_import_exam()
     target = tmp_path / "Exam 2025"

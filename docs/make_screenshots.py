@@ -35,6 +35,13 @@ L2 = ("[<a,b,c,d>^3, <a,c,b,d>^4, <a,b,c,e,f,b,c,d>^2, <a,b,c,e,f,c,b,d>, "
       "<a,c,b,e,f,b,c,d>^2, <a,c,b,e,f,b,c,e,f,c,b,d>]")
 
 
+def style_border():
+    from PySide6.QtGui import QColor
+
+    from openprocess.gui.studio import style
+    return QColor(style.tokens().border)
+
+
 def make_folder(where: Path) -> Path:
     """A course folder, "Week 2": logs and nets in subfolders, as a student keeps them."""
     from openprocess.mining.log import EventLog, parse_simple_log
@@ -197,6 +204,9 @@ class Shooter:
         compare_page.select(compare.id, 0)
         self.shot("workflow-canvas")
 
+        self.bpmn_shot(w)
+        self.review_shot(w, folder)
+
         w.compare([l1, l2])
         comparison = w.current_page()
         self.pump(0.5)
@@ -267,6 +277,71 @@ class Shooter:
         for document in w.documents:
             document.dirty = False
         w.close()
+
+    def bpmn_shot(self, w) -> None:
+        """A BPMN model as a box's result: the Inductive Miner's tree, translated."""
+        if not self.wants("workflow-bpmn"):
+            return
+        from openprocess.flow.workflow import Workflow
+
+        def build(library, log_file=None):
+            wf = Workflow("Orders as BPMN", library)
+            log = wf.add("typed_log", {"text": L1}, (0.0, 120.0))
+            tree = wf.add("inductive_tree", {}, (240.0, 120.0))
+            bpmn = wf.add("tree_to_bpmn", {}, (480.0, 120.0))
+            wf.connect(log, tree)
+            wf.connect(tree, bpmn)
+            return wf
+
+        w.action_new_workflow(build)
+        page = w.current_page()
+        self.wait_run(page)
+        bpmn = next(n for n in page.workflow.nodes.values() if n.box.endswith("tree_to_bpmn"))
+        page.show_view(0)                               # Report: the model at a size that can be read
+        self.pump(0.3)
+        page.report.flush()
+        self.pump(0.3)
+        page.report.scroll_to(bpmn.id)
+        self.shot("workflow-bpmn")
+        page.show_view(1)
+
+    def review_shot(self, w, folder: Path) -> None:
+        """Help ▸ Review AI Changes…: an assistant's change as a diff, with Keep and
+        Undo, over the window whose status bar says "AI changed 1 file · Review"."""
+        if not self.wants("ai-review"):
+            return
+        from PySide6.QtGui import QPainter
+
+        from openprocess.flow import changes as journal
+        orders = folder / "logs" / "orders.log.txt"
+        orders.write_text("[<register, check, ship, pay>^12, <register, check, pay, ship>^7]\n", encoding="utf-8")
+        journal.record(orders, "[<register, check, ship, pay>^12, <register, check, pay, ship>^7,\n"
+                               " <register, check, reject>^3]\n",
+                       tool="write_log", summary="Added the three rejected orders", client="Claude", folder=folder)
+        w.refresh_review()
+        w.review_changes()
+        self.pump(0.5)
+        dialog = w._review_dialog
+        # One picture of both: the dialog is a window of its own, so it is
+        # drawn over the main window's picture, where it opens on a screen.
+        picture, card = w.grab(), dialog.grab()
+        painter = QPainter(picture)
+        scale = picture.devicePixelRatio() or 1.0
+        x = (picture.width() / scale - card.width() / (card.devicePixelRatio() or 1.0)) / 2
+        y = (picture.height() / scale - card.height() / (card.devicePixelRatio() or 1.0)) / 2 - 20
+        painter.fillRect(int(x) - 1, int(y) - 1, int(card.width() / (card.devicePixelRatio() or 1.0)) + 2,
+                         int(card.height() / (card.devicePixelRatio() or 1.0)) + 2, style_border())
+        painter.drawPixmap(int(x), int(y), card)
+        painter.end()
+        OUT.mkdir(parents=True, exist_ok=True)
+        picture.save(str(OUT / "ai-review.png"))
+        self.made.append("ai-review.png")
+        print("  ai-review.png")
+        dialog.close()
+        journal.mark_reviewed(folder, journal.pending(folder)[0].id)
+        orders.unlink()
+        w.refresh_review()
+        self.pump(0.3)
 
     def _button_class(self):
         from PySide6.QtWidgets import QPushButton

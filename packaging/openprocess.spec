@@ -82,6 +82,7 @@ analysis = Analysis(
     datas=PIP_DATAS + MCP_DATAS + [(str(ROOT / "openprocess" / "gui" / "resources" / "openprocess-icon.png"),
             "openprocess/gui/resources"),
            (str(ROOT / "openprocess" / "exercises"), "openprocess/exercises"),
+           (str(ROOT / "openprocess" / "lessons"), "openprocess/lessons"),
            # Help ▸ Writing Exercise Packs.
            (str(ROOT / "openprocess" / "learn" / "exercise-packs.md"), "openprocess/learn"),
            # Help ▸ Connect an AI Assistant, and the guide the server gives assistants.

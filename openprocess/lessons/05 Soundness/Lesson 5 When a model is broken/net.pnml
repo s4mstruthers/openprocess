@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pnml>
+  <net id="net1" type="http://www.pnml.org/version-2009/grammar/pnmlcoremodel">
+    <name><text>pizza</text></name>
+    <page id="page1">
+      <place id="i"><name><text>i</text></name><initialMarking><text>1</text></initialMarking><graphics><position x="40.0" y="160.0"/><dimension x="40" y="40"/></graphics></place>
+      <place id="c1"><name><text>c1</text></name><graphics><position x="220.0" y="160.0"/><dimension x="40" y="40"/></graphics></place>
+      <place id="c2"><name><text>c2</text></name><graphics><position x="400.0" y="160.0"/><dimension x="40" y="40"/></graphics></place>
+      <place id="c4"><name><text>c4</text></name><graphics><position x="580.0" y="90.0"/><dimension x="40" y="40"/></graphics></place>
+      <place id="c5"><name><text>c5</text></name><graphics><position x="580.0" y="230.0"/><dimension x="40" y="40"/></graphics></place>
+      <place id="o"><name><text>o</text></name><graphics><position x="760.0" y="160.0"/><dimension x="40" y="40"/></graphics></place>
+      <transition id="order"><name><text>order</text></name><graphics><position x="130.0" y="160.0"/><dimension x="40" y="40"/></graphics></transition>
+      <transition id="cancel"><name><text>cancel</text></name><graphics><position x="490.0" y="340.0"/><dimension x="40" y="40"/></graphics></transition>
+      <transition id="confirm"><name><text>confirm</text></name><graphics><position x="310.0" y="160.0"/><dimension x="40" y="40"/></graphics></transition>
+      <transition id="pay"><name><text>pay</text></name><graphics><position x="490.0" y="90.0"/><dimension x="40" y="40"/></graphics></transition>
+      <transition id="bake"><name><text>bake</text></name><graphics><position x="490.0" y="230.0"/><dimension x="40" y="40"/></graphics></transition>
+      <transition id="deliver"><name><text>deliver</text></name><graphics><position x="670.0" y="160.0"/><dimension x="40" y="40"/></graphics></transition>
+      <arc id="arc1" source="i" target="order"></arc>
+      <arc id="arc2" source="order" target="c1"></arc>
+      <arc id="arc3" source="c1" target="cancel"></arc>
+      <arc id="arc4" source="cancel" target="o"></arc>
+      <arc id="arc5" source="c1" target="confirm"></arc>
+      <arc id="arc6" source="confirm" target="c2"></arc>
+      <arc id="arc7" source="c2" target="pay"></arc>
+      <arc id="arc8" source="c2" target="bake"></arc>
+      <arc id="arc9" source="pay" target="c4"></arc>
+      <arc id="arc10" source="bake" target="c5"></arc>
+      <arc id="arc11" source="c4" target="deliver"></arc>
+      <arc id="arc12" source="c5" target="deliver"></arc>
+      <arc id="arc13" source="deliver" target="o"></arc>
+    </page>
+    <finalmarkings><marking>
+      <place idref="o"><text>1</text></place>
+    </marking></finalmarkings>
+  </net>
+</pnml>

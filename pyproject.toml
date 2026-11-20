@@ -102,7 +102,8 @@ include = ["openprocess*", "cpnpy"]
 "openprocess.gui" = ["resources/*.png"]
 # The demo exercises (File ▸ Open Demo Exercises).
 # py.typed: the code is annotated throughout; a type checker may use that in a box of your own.
-"openprocess" = ["exercises/*.md", "exercises/*/*/*", "py.typed"]
+# and the lessons (Learn ▸ Introduction to Process Mining).
+"openprocess" = ["exercises/*.md", "exercises/*/*/*", "lessons/*.md", "lessons/*/*/*", "py.typed"]
 # The guide shown by Help ▸ Writing Exercise Packs.
 "openprocess.learn" = ["*.md"]
 # The guide shown by Help ▸ Connect an AI Assistant, and served to assistants.

@@ -9,6 +9,7 @@ guarantees hold on the OpenProcess side regardless.  Run it after touching
 
     pip install pm4py           # AGPL-3.0; a reference, not a dependency
     python tests/cross_check_inductive_miner.py [seed] [random logs]
+    python tests/cross_check_inductive_miner.py [seed] [logs] 0.2     # IMf, see below
 
 What it does, for the six textbook logs and (by default) 400 random ones:
 
@@ -35,6 +36,25 @@ Baseline against PM4Py 2.7.23, seed 2026, 400 random logs:
   precise, 2 equal, 1 more precise), all of them fall-throughs on logs that
   have no cut at all, where the two implementations try the fall-throughs
   in a different order.
+
+With a third argument, a noise threshold, it compares **IMf** instead
+(issue #74), on logs that look like a real process with a few odd cases:
+each is played out from a random process tree (4–8 activities; sequence,
+choice, parallel, loop) and gets up to four rare traces with an event
+dropped or added.  Only the trees and the soundness of ours are compared:
+IMf does not promise fitness 1.  Against PM4Py 2.7.23, seed 1, 150 logs,
+f = 0.2: 129 identical, 21 different.  What the 21 show:
+
+* 8 come from the **end activities**: OpenProcess filters them like the
+  edges, PM4Py keeps them all, so a rare trace that ends inside a loop
+  (``<c,d>`` among ``<c>, <c,d,c>``) stops PM4Py from finding the loop cut
+  that OpenProcess finds on the filtered graph.
+* a **sequence cut on the filtered graph** can leave a group whose sublog is
+  empty: OpenProcess keeps it as a τ in the sequence, ``→(c, τ, …)``;
+* a **loop with several redo parts** is ``↺(body, r1, r2)`` here and
+  ``↺(body, ×(r1, r2))`` in PM4Py: the same behaviour, written differently;
+* after a cut on the filtered graph the **sublogs differ** (which events of
+  an odd trace go to which side), and a different cut follows further down.
 """
 
 from __future__ import annotations
@@ -110,6 +130,73 @@ def to_dataframe(log: SimpleLog):
     return pd.DataFrame(rows)
 
 
+def structured_logs(seed: int, count: int) -> list[SimpleLog]:
+    """Logs played out from random process trees, with a few rare odd traces."""
+    rng = random.Random(seed)
+
+    def tree(activities: list[str], depth: int = 0):
+        if len(activities) == 1:
+            return activities[0]
+        operator = rng.choice(["seq", "seq", "xor", "and", "loop"] if depth else ["seq"])
+        cut = rng.randint(1, len(activities) - 1)
+        return (operator, tree(activities[:cut], depth + 1), tree(activities[cut:], depth + 1))
+
+    def play(node) -> list[str]:
+        if isinstance(node, str):
+            return [node]
+        operator, left, right = node
+        if operator == "seq":
+            return play(left) + play(right)
+        if operator == "xor":
+            return play(left) if rng.random() < 0.6 else play(right)
+        if operator == "and":
+            first, second, mixed = play(left), play(right), []
+            while first or second:
+                source = first if (first and (not second or rng.random() < 0.5)) else second
+                mixed.append(source.pop(0))
+            return mixed
+        run = play(left)
+        while rng.random() < 0.3:
+            run += play(right) + play(left)
+        return run
+
+    logs = []
+    for _ in range(count):
+        activities = list("abcdefgh"[: rng.randint(4, 8)])
+        model = tree(activities)
+        log: SimpleLog = Counter(tuple(play(model)) for _ in range(rng.randint(30, 120)))
+        for _ in range(rng.randint(0, 4)):
+            odd = list(rng.choice(list(log)))
+            if len(odd) > 1 and rng.random() < 0.5:
+                del odd[rng.randrange(len(odd))]
+            else:
+                odd.insert(rng.randrange(len(odd) + 1), rng.choice(activities))
+            log[tuple(odd)] += rng.randint(1, 2)
+        logs.append(log)
+    return logs
+
+
+def cross_check_noise(seed: int, count: int, noise: float) -> int:
+    import pm4py
+    same, different, unsound = 0, [], 0
+    for log in structured_logs(seed, count):
+        result = inductive_miner(log, noise)
+        reference = pm4py.discover_process_tree_inductive(to_dataframe(log), noise_threshold=noise)
+        ours, theirs = canonical_openprocess(result.tree), canonical_pm4py(reference)
+        unsound += not check_soundness(result.net).sound
+        if ours == theirs:
+            same += 1
+        else:
+            different.append((sum(len(trace) for trace in log), log, ours, theirs))
+    print(f"OpenProcess IMf (f = {noise:g}) vs PM4Py {pm4py.__version__}, seed {seed}")
+    print(f"{count} logs: identical trees {same}, different {len(different)}; "
+          f"OpenProcess's model unsound on {unsound}")
+    print("\nDifferences (the 10 smallest logs):")
+    for _size, log, ours, theirs in sorted(different, key=lambda entry: entry[0])[:10]:
+        print(f"- {notation(log)}\n     OpenProcess  {ours}\n     PM4Py        {theirs}")
+    return 0
+
+
 def notation(log: SimpleLog) -> str:
     return "[" + ", ".join(f"<{','.join(t)}>^{n}" for t, n in log.items()) + "]"
 
@@ -155,6 +242,8 @@ def main(argv: list[str]) -> int:
     import pm4py
     seed = int(argv[1]) if len(argv) > 1 else 2026
     count = int(argv[2]) if len(argv) > 2 else 400
+    if len(argv) > 3 and float(argv[3]) > 0:
+        return cross_check_noise(seed, count, float(argv[3]))
     logs = [("textbook", parse_simple_log(s)) for s in TEXTBOOK]
     logs += [("random", log) for log in random_logs(seed, count)]
 

@@ -1173,7 +1173,8 @@ class StudioWindow(QMainWindow):
               ("Open CPN model…", self.action_open_cpn)]),
             ("Learn", "Exercise packs. A worksheet beside its materials, answers checked as "
              "you go, results hidden until you have worked them out.",
-             [("Demo exercises", self.open_demo_exercises),
+             [("Introduction to process mining", self.open_lessons),
+              ("Demo exercises", self.open_demo_exercises),
               ("Open exercise pack…", self.action_open_exercise)]),
         ]
         for index, (heading, text, actions) in enumerate(cards):
@@ -1313,6 +1314,7 @@ class StudioWindow(QMainWindow):
 
         # Learn: exercise packs on top of the app (openprocess.learn, openprocess.gui.learn).
         learn_menu = self.menuBar().addMenu("&Learn")
+        self._action(learn_menu, "Introduction to Process Mining", None, self.open_lessons)
         self._action(learn_menu, "Open Exercise Pack…", None, self.action_open_exercise)
         self._action(learn_menu, "Open Demo Exercises", None, self.open_demo_exercises)
         learn_menu.addSeparator()
@@ -4483,45 +4485,69 @@ class StudioWindow(QMainWindow):
             "files, then run openprocess exercises check on the folder.")
         self.open_exercise(target)
 
+    #: The packs that ship with OpenProcess: key -> (folder in the package, the
+    #: name of your copy, the setting that remembers where the copy is).
+    BUNDLED_PACKS = {
+        "demo": ("exercises", "OpenProcess Demo Exercises", "exercises/demo_copy"),
+        "lessons": ("lessons", "Introduction to Process Mining", "exercises/lessons_copy"),
+    }
+
+    @classmethod
+    def bundled_pack_source(cls, key: str) -> Path:
+        """A pack that ships with OpenProcess (read-only in an installed app)."""
+        return Path(__file__).resolve().parents[2] / cls.BUNDLED_PACKS[key][0]
+
     @staticmethod
     def demo_exercises_source() -> Path:
         """The demo exercises that ship with OpenProcess (read-only in an installed app)."""
-        return Path(__file__).resolve().parents[2] / "exercises"
+        return StudioWindow.bundled_pack_source("demo")
 
-    def demo_exercises_target(self) -> Path | None:
-        """Where the demo exercises are copied (so your answers can be saved): the
+    def bundled_pack_target(self, key: str) -> Path | None:
+        """Where a shipped pack is copied (so your answers can be saved): the
         copy made before, else a folder you choose now (None: you cancelled)."""
-        remembered = self._setting("exercises/demo_copy", "")
+        _folder, name, setting = self.BUNDLED_PACKS[key]
+        remembered = self._setting(setting, "")
         if remembered and Path(remembered).is_dir():
             return Path(remembered)
         start = str(self.workspace.folder) if self.workspace else dialog_folder()
         parent = QFileDialog.getExistingDirectory(
-            self, "Where should the demo exercises go? (Your answers are saved there.)",
+            self, f"Where should “{name}” go? (Your answers are saved there.)",
             start or str(Path.home()))
         if not parent:
             return None
-        return unique_path(parent, "OpenProcess Demo Exercises")
+        return unique_path(parent, name)
 
-    def open_demo_exercises(self) -> None:
-        """Copy the demo exercises (once, where you say) and do them."""
-        target = self.demo_exercises_target()
+    def demo_exercises_target(self) -> Path | None:
+        return self.bundled_pack_target("demo")
+
+    def open_bundled_pack(self, key: str) -> None:
+        """Copy a shipped pack (once, where you say) and do it."""
+        _folder, name, setting = self.BUNDLED_PACKS[key]
+        target = self.demo_exercises_target() if key == "demo" else self.bundled_pack_target(key)
         if target is None:
             return
-        source = self.demo_exercises_source()
+        source = self.bundled_pack_source(key)
         try:
             if not target.exists():
                 shutil.copytree(source, target)
-                self.statusBar().showMessage(f"Copied the demo exercises to {target}", 8000)
+                self.statusBar().showMessage(f"Copied “{name}” to {target}", 8000)
             elif not (target / "pack.md").exists():
                 # A copy made by an older version: bring its worksheets up to
                 # date; your answers (my answer…) are left alone.
                 shutil.copytree(source, target, dirs_exist_ok=True)
         except OSError as error:
-            QMessageBox.warning(self, "Demo exercises", f"Could not copy the demo "
-                                f"exercises to {target}:\n\n{error}")
+            QMessageBox.warning(self, name, f"Could not copy “{name}” to {target}:\n\n{error}")
             return
-        self._set_setting("exercises/demo_copy", str(target))
+        self._set_setting(setting, str(target))
         self.open_exercise(target)
+
+    def open_demo_exercises(self) -> None:
+        """Copy the demo exercises (once, where you say) and do them."""
+        self.open_bundled_pack("demo")
+
+    def open_lessons(self) -> None:
+        """Learn ▸ Introduction to Process Mining: twelve lessons from the first event log on."""
+        self.open_bundled_pack("lessons")
 
     def open_exercise(self, folder: str | Path) -> bool:
         """Do the exercises in ``folder`` (a pack, or one exercise of one) in
