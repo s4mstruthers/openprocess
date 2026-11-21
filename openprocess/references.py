@@ -248,7 +248,7 @@ TOPICS: tuple[tuple[str, tuple[Topic, ...]], ...] = (
         Topic("Boundedness, liveness, deadlocks, reversibility, termination",
               "Decided on the reachability graph, or the coverability graph for unbounded "
               "nets. A bounded net terminates iff its reachability graph has no cycle, and an "
-              "unbounded net never does.", ("murata1989", "karp1969", "desel2019"),
+              "unbounded net never does.", ("murata1989", "karp1969", "desel1995", "desel2019"),
               "openprocess.mining.analysis"),
         Topic("Incidence matrix and invariants", "P- and T-invariants.", ("murata1989",),
               "openprocess.mining.invariants"),

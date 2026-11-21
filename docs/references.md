@@ -41,7 +41,7 @@ Where OpenProcess's notation and algorithms come from. Each topic names the work
 
 - **Soundness of WF-nets** — Option to complete, proper completion, no dead transitions, and the short-circuited net $\overline{N}$. [19] *(`openprocess.mining.analysis`)*
 - **Free-choice, well-structured, S-coverable** — Structural properties and the handles behind a problem. [19], [22] *(`openprocess.mining.structure`)*
-- **Boundedness, liveness, deadlocks, reversibility, termination** — Decided on the reachability graph, or the coverability graph for unbounded nets. A bounded net terminates iff its reachability graph has no cycle, and an unbounded net never does. [20], [21], [23] *(`openprocess.mining.analysis`)*
+- **Boundedness, liveness, deadlocks, reversibility, termination** — Decided on the reachability graph, or the coverability graph for unbounded nets. A bounded net terminates iff its reachability graph has no cycle, and an unbounded net never does. [20], [21], [22], [23] *(`openprocess.mining.analysis`)*
 - **Incidence matrix and invariants** — P- and T-invariants. [20] *(`openprocess.mining.invariants`)*
 - **CPN simulation and state spaces** — Bindings, enabling and the state space report. [26] *(`openprocess.sim, openprocess.analysis`)*
 

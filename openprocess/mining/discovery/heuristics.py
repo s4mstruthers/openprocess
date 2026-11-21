@@ -23,6 +23,20 @@ Length-two loop (``a b a`` patterns, counted as ``|a >> b|``)::
 
     a ⇒2 b = (|a >> b| + |b >> a|) / (|a >> b| + |b >> a| + 1)
 
+When it reaches the *length-two loop threshold*, ``a`` and ``b`` form a pair
+and both ``a → b`` and ``b → a`` are kept, **unless ``a`` or ``b`` is a
+length-one loop**.  The paper (Weijters, van der Aalst & Alves de Medeiros
+2006, Section 2.1, footnote 3): "A length-one loop C in combination with a
+concurrent process A can easily produce patterns like CAC.  To prevent the
+HeuristicsMiner for this trap a length-two dependency relation (A ⇒2 C)
+between A and C only holds if A and C are not length one loops.  In short, we
+first calculate equation (2) and then (3)."  An activity is a length-one
+loop here when its own edge ``a → a`` was kept, that is, when ``a ⇒ a``
+reaches the dependency threshold with enough observations.  (PM4Py's rule
+is another one: it adds the pair only when neither ``a ⇒ b`` nor ``b ⇒ a``
+reaches the dependency threshold, and does not look at length-one loops, so
+its dependency graphs can differ from these.)
+
 An edge ``a → b`` is kept when ``a ⇒ b`` reaches the *dependency threshold*
 and ``|a > b|`` reaches the *positive observations* threshold.  With
 *all tasks connected* on (the default), every activity additionally keeps its
@@ -111,9 +125,13 @@ def heuristics_miner(log: SimpleLog, dependency_threshold: float = 0.5,
         if value >= dependency_threshold and count >= min_observations:
             graph.edges[(a, b)] = (value, count)
 
-    # Length-two loops: a b a with both a⇒a and b⇒b weak (otherwise they are
-    # already length-one loops) keeps both directions a→b and b→a.
+    # Length-two loops: a b a keeps both directions a→b and b→a, but only when
+    # neither a nor b is a length-one loop (the paper's footnote 3: a
+    # length-one loop beside a concurrent activity gives a b a patterns too).
+    # The length-one loops are known by now: their edges a→a were kept above.
     for (a, b), count in two_loops.items():
+        if (a, a) in graph.edges or (b, b) in graph.edges:
+            continue
         mutual = count + two_loops.get((b, a), 0)
         value = mutual / (mutual + 1)
         if value >= loop_two_threshold:

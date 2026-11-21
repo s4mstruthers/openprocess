@@ -177,7 +177,7 @@ Deadlock-free is weaker than live: a net can keep firing in a loop while some tr
 
 Builds on: [Reachable markings](#reachable-markings), [Short-circuited net](#short-circuited-net).
 
-*Source: course lecture on Petri net properties.*
+*Source: J. Desel and J. Esparza, Free Choice Petri Nets, Cambridge Tracts in Theoretical Computer Science 40, Cambridge University Press (1995), Definition 2.16 (p. 25).*
 
 ### Dead transition
 
@@ -215,7 +215,7 @@ $$
 
 Builds on: [Reachable markings](#reachable-markings).
 
-*Source: course lecture on Petri net properties.*
+*Source: T. Murata, Petri Nets: Properties, Analysis and Applications, Proceedings of the IEEE 77(4) (1989), Section IV-D (p. 548).*
 
 ## Workflow nets and soundness
 
@@ -713,3 +713,5 @@ Builds on: [Minimal region](#minimal-region), [Pre-region and post-region](#pre-
 - W.M.P. van der Aalst, *Process Mining: Data Science in Action* (2016).
 - J. Cortadella, M. Kishinevsky, L. Lavagno and A. Yakovlev, *Deriving Petri Nets from Finite Transition Systems*, IEEE Transactions on Computers 47(8) (1998).
 - J. Desel, *Can a Single Transition Stop an Entire Petri Net?* (ATAED 2019, CEUR-WS Vol. 2371, pp. 23–35).
+- J. Desel and J. Esparza, *Free Choice Petri Nets*, Cambridge Tracts in Theoretical Computer Science 40, Cambridge University Press (1995).
+- T. Murata, *Petri Nets: Properties, Analysis and Applications*, Proceedings of the IEEE 77(4) (1989).

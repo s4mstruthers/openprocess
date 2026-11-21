@@ -76,6 +76,8 @@ SECTIONS = [
 
 MURATA_1989 = ("T. Murata, *Petri Nets: Properties, Analysis and Applications*, "
                "Proceedings of the IEEE 77(4) (1989)")
+DESEL_ESPARZA_1995 = ("J. Desel and J. Esparza, *Free Choice Petri Nets*, Cambridge Tracts in "
+                      "Theoretical Computer Science 40, Cambridge University Press (1995)")
 CORTADELLA_1998 = ("J. Cortadella, M. Kishinevsky, L. Lavagno and A. Yakovlev, *Deriving Petri "
                    "Nets from Finite Transition Systems*, IEEE Transactions on Computers 47(8) "
                    "(1998)")
@@ -175,7 +177,7 @@ DEFINITIONS: tuple[Definition, ...] = (
          "Deadlock-free is weaker than live: a net can keep firing in a loop while some "
          "transition is dead. Live implies deadlock-free (when $T \\neq \\emptyset$), "
          "not the other way round."),
-        "course lecture on Petri net properties", "behaviour",
+        f"{DESEL_ESPARZA_1995}, Definition 2.16 (p. 25)", "behaviour",
         ("reachability", "short_circuit")),
     Definition(
         "dead_transition", "Dead transition",
@@ -199,7 +201,7 @@ DEFINITIONS: tuple[Definition, ...] = (
         (r"(N, M_0) \text{ is reversible} \iff \forall M \in R(N, M_0) \colon "
          r"M \xrightarrow{*} M_0",),
         (),
-        "course lecture on Petri net properties", "behaviour", ("reachability",)),
+        f"{MURATA_1989}, Section IV-D (p. 548)", "behaviour", ("reachability",)),
 
     # -- workflow nets and soundness ---------------------------------------------------
     Definition(
@@ -577,7 +579,8 @@ def markdown() -> str:
             if definition.source:
                 lines += [f"*Source: {definition.source.replace('*', '')}.*", ""]
     lines += ["## Sources", "",
-              f"- {AALST_2000}.", f"- {AALST_2016}.", f"- {CORTADELLA_1998}.", f"- {DESEL_2019}.", ""]
+              f"- {AALST_2000}.", f"- {AALST_2016}.", f"- {CORTADELLA_1998}.", f"- {DESEL_2019}.",
+              f"- {DESEL_ESPARZA_1995}.", f"- {MURATA_1989}.", ""]
     return "\n".join(lines)
 
 

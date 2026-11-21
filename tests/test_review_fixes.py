@@ -306,3 +306,31 @@ def test_a_cpn_priority_or_code_segment_is_reported_as_not_used():
     transition.priority_text = "P_NORMAL"
     transition.code_text = ""
     assert net.compile() == [] and not net.warnings
+
+
+def test_a_length_two_loop_needs_two_activities_that_are_not_length_one_loops():
+    """Weijters, van der Aalst & Alves de Medeiros 2006, footnote 3: a
+    length-one loop c beside a concurrent d gives c d c patterns too, and
+    must not be read as a length-two loop of c and d (issue #73)."""
+    from openprocess.mining.discovery.heuristics import heuristics_miner
+    from openprocess.mining.log import parse_simple_log
+
+    # A real length-two loop: c d c d c.  Neither repeats itself.
+    real = heuristics_miner(parse_simple_log("[<a,c,d,c,d,c,b>^5, <a,c,b>^5]"), dependency_threshold=0.9)
+    assert ("c", "d") in real.edges and ("d", "c") in real.edges
+    assert real.edges[("c", "d")][0] == pytest.approx(15 / 16)          # |c>>d| = 10, |d>>c| = 5
+    assert ("c", "c") not in real.edges and ("d", "d") not in real.edges
+
+    # c repeats itself (a length-one loop) and d happens somewhere beside it.
+    beside = heuristics_miner(parse_simple_log("[<a,c,d,c,b>^5, <a,d,c,c,b>^5, <a,c,c,d,b>^5]"),
+                              dependency_threshold=0.9, all_tasks_connected=False)
+    assert ("c", "c") in beside.edges                                   # c ⇒ c = 10 / 11
+    assert beside.all_dependencies[("c", "d")] < 0.9 and beside.all_dependencies[("d", "c")] < 0.9
+    assert ("c", "d") not in beside.edges and ("d", "c") not in beside.edges
+
+    # Both in one log: the pair e f loops, c loops on itself beside d.
+    both = heuristics_miner(parse_simple_log(
+        "[<a,c,d,c,e,f,e,b>^5, <a,d,c,c,e,f,e,f,e,b>^5, <a,c,c,d,e,b>^5]"),
+        dependency_threshold=0.9, all_tasks_connected=False)
+    assert ("e", "f") in both.edges and ("f", "e") in both.edges
+    assert ("c", "d") not in both.edges and ("d", "c") not in both.edges

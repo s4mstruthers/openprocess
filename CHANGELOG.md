@@ -36,6 +36,14 @@ earlier version computed has changed.
   long tokens stay in each place, the most waiting first. It shows where
   cases queue up and where a join waits for its slower branch, and says how
   many tokens could not be timed because the log did not fit there.
+- **The Heuristics Miner no longer takes a self-loop beside another
+  activity for a loop of two.** When an activity repeats itself (*c, c*) and
+  another happens somewhere around it (*c, d, c*), both arrows *c → d* and
+  *d → c* were added as a length-two loop. The paper rules that out: a
+  length-two loop holds only between two activities that are not
+  length-one loops. **A dependency graph of a log with repeating
+  activities can have fewer arcs after this update**, and a recorded
+  Heuristics Miner result of such a log will show as different.
 - **A result table keeps the order its box gave it.** Every table in a
   result panel and in the Report was re-sorted by its first column,
   largest first, the moment it was shown, so "most frequent first" was
@@ -58,7 +66,9 @@ earlier version computed has changed.
   `gui/studio/app.py` into modules of their own. The README shows the AI
   changes dialog and a BPMN result (`docs/make_screenshots.py` makes both),
   and `tests/cross_check_inductive_miner.py` takes a noise threshold to
-  compare IMf with PM4Py's.
+  compare IMf with PM4Py's. The definitions of *deadlock-free* and
+  *reversible* cite where they are defined (Desel & Esparza 1995,
+  Definition 2.16; Murata 1989, Section IV-D).
 
 ## 0.16.3
 
